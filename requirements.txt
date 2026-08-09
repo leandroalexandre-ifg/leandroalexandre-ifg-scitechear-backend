@@ -33,5 +33,7 @@ soundfile==0.14.0  # leitura de WAV; torchaudio.load() exige torchcodec+FFmpeg d
 # ler o áudio, então isso só importa se algo tentar decodificar via torchaudio.
 pyannote.audio==4.0.7
 
-# --- Pipeline de IA (a instalar por fase, só no runtime com GPU) ---
-# requests                 # Fase 5 — cliente HTTP da API do Ollama
+# --- Perguntas via LLM (Fase 5) ---
+# Cliente HTTP da API do Ollama (não usa a lib oficial 'ollama' — o legado já
+# chamava /api/generate direto via requests, preservado aqui).
+requests==2.34.2
