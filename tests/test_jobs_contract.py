@@ -1,7 +1,25 @@
 import json
+from pathlib import Path
 
-from app.api.jobs import _JOBS, _JobRecord
-from app.models.result import MeetingResult
+import pytest
+
+import app.api.jobs as jobs_module
+from app.config import get_settings
+from app.models.job import JobError, JobStatusValue
+from app.models.participant import Participant
+from app.models.result import MeetingResult, Question, QuestionType, ResultMetadata, Segment
+from app.repositories.job_repository import get_job_repository
+from app.repositories.result_repository import ResultRepository
+from app.repositories.storage_repository import StorageRepository
+
+
+@pytest.fixture(autouse=True)
+def no_op_executor(monkeypatch):
+    """Os testes de contrato validam o wiring HTTP, não o pipeline pesado
+    (isso já é coberto por tests/test_pipeline_facade.py, com mocks das
+    etapas). Sem isso, todo /upload dispararia WhisperX/pyannote/SpeechBrain
+    de verdade numa thread de fundo."""
+    monkeypatch.setattr(jobs_module._executor, "submit", lambda job_id: None)
 
 
 def _upload(client, wav_bytes, participants=None, title="Reunião de teste", expected_speaker_count=None):
@@ -45,32 +63,89 @@ def test_resultado_job_inexistente_retorna_404(client):
     assert response.status_code == 404
 
 
-def test_resultado_antes_de_done_retorna_409(client):
-    # Fase 1 não tem PipelineFacade: simula um job ainda em andamento inserindo
-    # diretamente no store em memória (o cenário real de status != done chega
-    # com os estágios de verdade na Fase 6).
-    job_id = "job-em-andamento"
-    _JOBS[job_id] = _JobRecord(job_id=job_id, title=None, participants=[])
-    try:
-        response = client.get(f"/resultado/{job_id}")
-        assert response.status_code == 409
-    finally:
-        _JOBS.pop(job_id, None)
+def test_status_apos_upload_fica_queued_sem_pipeline_disparado(client, wav_bytes):
+    # com o executor mockado (no_op_executor), nada processa o job — o status
+    # real só avança quando o PipelineFacade roda de verdade (fora deste teste).
+    job_id = _upload(client, wav_bytes).json()["job_id"]
+
+    response = client.get(f"/status/{job_id}")
+    assert response.status_code == 200
+    assert response.json()["status"] == "queued"
 
 
-def test_resultado_apos_upload_valida_contra_o_schema(client, wav_bytes):
-    upload_response = _upload(client, wav_bytes)
-    job_id = upload_response.json()["job_id"]
+def test_resultado_antes_de_done_retorna_409(client, wav_bytes):
+    job_id = _upload(client, wav_bytes).json()["job_id"]
 
-    status_response = client.get(f"/status/{job_id}")
+    response = client.get(f"/resultado/{job_id}")
+    assert response.status_code == 409
+
+
+def test_resultado_apos_pipeline_concluido_valida_contra_schema(client):
+    # Simula o PipelineFacade já tendo concluído: job DONE + resultado
+    # persistido via os repositories reais (sem rodar WhisperX/pyannote/etc.).
+    job_repo = get_job_repository()
+    job_repo.create(
+        job_id="job-done-1",
+        title="Reunião concluída",
+        participants=[Participant(id="p1", name="Leandro")],
+        expected_speaker_count=None,
+    )
+    job_repo.update_status("job-done-1", JobStatusValue.DONE)
+
+    storage = StorageRepository(Path(get_settings().storage_root))
+    resultado = MeetingResult(
+        job_id="job-done-1",
+        segments=[
+            Segment(
+                id="seg_0001",
+                cluster="SPEAKER_00",
+                participant_id="p1",
+                speaker="Leandro",
+                identified=True,
+                confidence=0.9,
+                start=0.0,
+                end=2.0,
+                text="Bom dia.",
+            )
+        ],
+        questions=[
+            Question(
+                id="P1",
+                type=QuestionType.EXPLICIT,
+                text="Qual é o prazo?",
+                participant_id="p1",
+                speaker="Leandro",
+                time=1.0,
+                source_segment_ids=["seg_0001"],
+            )
+        ],
+        metadata=ResultMetadata(stub=False),
+    )
+    ResultRepository(storage).save(resultado)
+
+    response = client.get("/resultado/job-done-1")
+    assert response.status_code == 200
+
+    body = MeetingResult.model_validate(response.json())
+    assert body.job_id == "job-done-1"
+    assert body.metadata.stub is False
+    assert body.segments[0].participant_id == "p1"
+
+
+def test_resultado_apos_erro_continua_409_com_status_error(client):
+    job_repo = get_job_repository()
+    job_repo.create(job_id="job-com-erro", title=None, participants=[], expected_speaker_count=None)
+    job_repo.update_status(
+        "job-com-erro",
+        JobStatusValue.ERROR,
+        error=JobError(code="TRANSCRIPTION_ERROR", message="modelo indisponível"),
+    )
+
+    status_response = client.get("/status/job-com-erro")
     assert status_response.status_code == 200
-    assert status_response.json()["status"] == "done"
+    body = status_response.json()
+    assert body["status"] == "error"
+    assert body["error"]["code"] == "TRANSCRIPTION_ERROR"
 
-    result_response = client.get(f"/resultado/{job_id}")
-    assert result_response.status_code == 200
-
-    result = MeetingResult.model_validate(result_response.json())
-    assert result.job_id == job_id
-    assert result.metadata.stub is True
-    assert len(result.segments) > 0
-    assert any(q.type.value == "implicit" and q.speaker is None and q.time is None for q in result.questions)
+    result_response = client.get("/resultado/job-com-erro")
+    assert result_response.status_code == 409

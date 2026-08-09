@@ -1,86 +1,53 @@
 import json
 import uuid
-from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from pathlib import Path
+from typing import List, Optional
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi import status as http_status
 from pydantic import TypeAdapter, ValidationError
 
-from app.models.job import JobError, JobStatusResponse, JobStatusValue, UploadResponse
+from app.config import get_settings
+from app.models.job import JobStatusResponse, JobStatusValue, UploadResponse
 from app.models.participant import Participant
-from app.models.result import MeetingResult, Question, QuestionType, ResultMetadata, Segment
+from app.models.result import MeetingResult
+from app.repositories.job_repository import get_job_repository
+from app.repositories.result_repository import ResultRepository
+from app.repositories.storage_repository import StorageRepository
+from app.repositories.voice_repository import VoiceRepository
+from app.services.job_executor import InProcessJobExecutor
+from app.services.pipeline_facade import MeetingPipelineFacade
 
 router = APIRouter(tags=["jobs"])
 
 _PARTICIPANTS_ADAPTER = TypeAdapter(List[Participant])
 
 
-class _JobRecord:
-    def __init__(self, job_id: str, title: Optional[str], participants: List[Participant]):
-        self.job_id = job_id
-        self.title = title
-        self.participants = participants
-        self.status: JobStatusValue = JobStatusValue.QUEUED
-        self.error: Optional[JobError] = None
-        self.result: Optional[MeetingResult] = None
-        self.updated_at = datetime.now(timezone.utc)
+def _storage_repository() -> StorageRepository:
+    return StorageRepository(Path(get_settings().storage_root))
 
 
-# Fase 1: store em memória, só para validar o contrato HTTP sem PipelineFacade.
-# Substituído por app/repositories/job_repository.py (+ result_repository.py) na Fase 6.
-_JOBS: Dict[str, _JobRecord] = {}
+def _result_repository() -> ResultRepository:
+    return ResultRepository(_storage_repository())
 
 
-def _build_stub_result(job_id: str) -> MeetingResult:
-    return MeetingResult(
-        job_id=job_id,
-        segments=[
-            Segment(
-                id="seg_0001",
-                cluster="SPEAKER_00",
-                participant_id=None,
-                speaker=None,
-                identified=False,
-                confidence=None,
-                start=0.0,
-                end=4.2,
-                text="[stub] Bom dia a todos.",
-            ),
-            Segment(
-                id="seg_0002",
-                cluster="SPEAKER_01",
-                participant_id=None,
-                speaker=None,
-                identified=False,
-                confidence=None,
-                start=4.2,
-                end=7.8,
-                text="[stub] Vamos começar a reunião, qual é o prazo?",
-            ),
-        ],
-        questions=[
-            Question(
-                id="P1",
-                type=QuestionType.EXPLICIT,
-                text="[stub] Qual é o prazo?",
-                participant_id=None,
-                speaker=None,
-                time=6.0,
-                source_segment_ids=["seg_0002"],
-            ),
-            Question(
-                id="I1",
-                type=QuestionType.IMPLICIT,
-                text="[stub] Quais critérios serão usados para validar a qualidade?",
-                participant_id=None,
-                speaker=None,
-                time=None,
-                source_segment_ids=[],
-            ),
-        ],
-        metadata=ResultMetadata(stub=True, generated_at=datetime.now(timezone.utc)),
+def _build_facade() -> MeetingPipelineFacade:
+    voices_root = Path(get_settings().storage_root) / "voices"
+    return MeetingPipelineFacade(
+        job_repository=get_job_repository(),
+        result_repository=_result_repository(),
+        storage_repository=_storage_repository(),
+        voice_repository=VoiceRepository(voices_root),
     )
+
+
+def _executar_job(job_id: str) -> None:
+    _build_facade().executar(job_id)
+
+
+# V1: executor in-process (thread). Interface pronta para trocar por uma fila
+# real (Celery/Redis) sem mudar as rotas — ver app/services/job_executor.py.
+_executor = InProcessJobExecutor(_executar_job)
 
 
 def _validate_wav(file: UploadFile) -> None:
@@ -120,24 +87,26 @@ async def upload_meeting(
         )
 
     job_id = str(uuid.uuid4())
-    record = _JobRecord(job_id=job_id, title=title, participants=parsed_participants)
+    content = await file.read()
+    _storage_repository().save_audio(job_id, content, file.filename or "reuniao.wav")
 
-    # Fase 1: sem PipelineFacade ainda. O job "conclui" na hora com um resultado
-    # fixture, só para o Flutter integrar contra o contrato real cedo. A partir
-    # da Fase 6, os estágios reais (transcribing -> ... -> done/error) passam a
-    # ser percorridos de verdade.
-    record.status = JobStatusValue.DONE
-    record.result = _build_stub_result(job_id)
-    record.updated_at = datetime.now(timezone.utc)
+    get_job_repository().create(
+        job_id=job_id,
+        title=title,
+        participants=parsed_participants,
+        expected_speaker_count=expected_speaker_count,
+    )
 
-    _JOBS[job_id] = record
+    # Responde rápido; o PipelineFacade percorre os estágios reais em
+    # background (transcribing -> ... -> done/error).
+    _executor.submit(job_id)
 
     return UploadResponse(job_id=job_id, status=JobStatusValue.QUEUED)
 
 
 @router.get("/status/{job_id}", response_model=JobStatusResponse)
 async def get_job_status(job_id: str) -> JobStatusResponse:
-    record = _JOBS.get(job_id)
+    record = get_job_repository().get(job_id)
     if record is None:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Job não encontrado.")
 
@@ -151,25 +120,29 @@ async def get_job_status(job_id: str) -> JobStatusResponse:
 
 @router.get("/resultado/{job_id}", response_model=MeetingResult)
 async def get_job_result(job_id: str) -> MeetingResult:
-    record = _JOBS.get(job_id)
+    record = get_job_repository().get(job_id)
     if record is None:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Job não encontrado.")
 
-    if record.status != JobStatusValue.DONE or record.result is None:
+    if record.status != JobStatusValue.DONE:
         raise HTTPException(
             status_code=http_status.HTTP_409_CONFLICT,
             detail=f"Resultado ainda não disponível (status atual: {record.status.value}).",
         )
 
-    return record.result
+    resultado = _result_repository().load(job_id)
+    if resultado is None:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Resultado não encontrado.")
+
+    return resultado
 
 
 @router.websocket("/ws/{job_id}")
 async def job_progress_ws(websocket: WebSocket, job_id: str) -> None:
-    # Stub da Fase 1: aceita, informa o status atual uma vez e fecha. Push real
-    # de progresso (e o fallback de polling continua obrigatório) chega na Fase 8.
+    # Stub: aceita, informa o status atual uma vez e fecha. Push real de
+    # progresso (e o fallback de polling continua obrigatório) chega na Fase 8.
     await websocket.accept()
-    record = _JOBS.get(job_id)
+    record = get_job_repository().get(job_id)
     if record is None:
         await websocket.close(code=4404)
         return

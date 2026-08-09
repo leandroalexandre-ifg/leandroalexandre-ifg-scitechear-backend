@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from app.config import get_settings
 from app.main import app
+from app.repositories.job_repository import get_job_repository
 from app.services import voice_service
 
 
@@ -52,3 +53,13 @@ def stub_voice_embedding(monkeypatch):
 
     monkeypatch.setattr(voice_service, "extrair_embedding", _fake_extrair_embedding)
     yield
+
+
+@pytest.fixture(autouse=True)
+def reset_job_repository():
+    """get_job_repository() é um singleton compartilhado entre requisições
+    (precisa sobreviver entre POST /upload e GET /status) — mas isso não pode
+    vazar estado de um teste para o outro."""
+    get_job_repository()._jobs.clear()
+    yield
+    get_job_repository()._jobs.clear()
