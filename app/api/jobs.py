@@ -1,0 +1,182 @@
+import json
+import uuid
+from datetime import datetime, timezone
+from typing import Dict, List, Optional
+
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import status as http_status
+from pydantic import TypeAdapter, ValidationError
+
+from app.models.job import JobError, JobStatusResponse, JobStatusValue, UploadResponse
+from app.models.participant import Participant
+from app.models.result import MeetingResult, Question, QuestionType, ResultMetadata, Segment
+
+router = APIRouter(tags=["jobs"])
+
+_PARTICIPANTS_ADAPTER = TypeAdapter(List[Participant])
+
+
+class _JobRecord:
+    def __init__(self, job_id: str, title: Optional[str], participants: List[Participant]):
+        self.job_id = job_id
+        self.title = title
+        self.participants = participants
+        self.status: JobStatusValue = JobStatusValue.QUEUED
+        self.error: Optional[JobError] = None
+        self.result: Optional[MeetingResult] = None
+        self.updated_at = datetime.now(timezone.utc)
+
+
+# Fase 1: store em memória, só para validar o contrato HTTP sem PipelineFacade.
+# Substituído por app/repositories/job_repository.py (+ result_repository.py) na Fase 6.
+_JOBS: Dict[str, _JobRecord] = {}
+
+
+def _build_stub_result(job_id: str) -> MeetingResult:
+    return MeetingResult(
+        job_id=job_id,
+        segments=[
+            Segment(
+                id="seg_0001",
+                cluster="SPEAKER_00",
+                participant_id=None,
+                speaker=None,
+                identified=False,
+                confidence=None,
+                start=0.0,
+                end=4.2,
+                text="[stub] Bom dia a todos.",
+            ),
+            Segment(
+                id="seg_0002",
+                cluster="SPEAKER_01",
+                participant_id=None,
+                speaker=None,
+                identified=False,
+                confidence=None,
+                start=4.2,
+                end=7.8,
+                text="[stub] Vamos começar a reunião, qual é o prazo?",
+            ),
+        ],
+        questions=[
+            Question(
+                id="P1",
+                type=QuestionType.EXPLICIT,
+                text="[stub] Qual é o prazo?",
+                participant_id=None,
+                speaker=None,
+                time=6.0,
+                source_segment_ids=["seg_0002"],
+            ),
+            Question(
+                id="I1",
+                type=QuestionType.IMPLICIT,
+                text="[stub] Quais critérios serão usados para validar a qualidade?",
+                participant_id=None,
+                speaker=None,
+                time=None,
+                source_segment_ids=[],
+            ),
+        ],
+        metadata=ResultMetadata(stub=True, generated_at=datetime.now(timezone.utc)),
+    )
+
+
+def _validate_wav(file: UploadFile) -> None:
+    filename = (file.filename or "").lower()
+    content_type = (file.content_type or "").lower()
+    is_wav_name = filename.endswith(".wav")
+    is_wav_type = content_type in {"audio/wav", "audio/x-wav", "audio/wave", "audio/vnd.wave"}
+    if not (is_wav_name or is_wav_type):
+        raise HTTPException(
+            status_code=http_status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Arquivo de áudio deve ser WAV (16 kHz mono).",
+        )
+
+
+@router.post("/upload", response_model=UploadResponse, status_code=http_status.HTTP_202_ACCEPTED)
+async def upload_meeting(
+    file: UploadFile = File(...),
+    title: Optional[str] = Form(None),
+    participants: str = Form(...),
+    expected_speaker_count: Optional[int] = Form(None),
+) -> UploadResponse:
+    _validate_wav(file)
+
+    try:
+        participants_data = json.loads(participants)
+        parsed_participants = _PARTICIPANTS_ADAPTER.validate_python(participants_data)
+    except (json.JSONDecodeError, ValidationError) as exc:
+        raise HTTPException(
+            status_code=http_status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"Campo 'participants' inválido: {exc}",
+        ) from exc
+
+    if expected_speaker_count is not None and expected_speaker_count < 1:
+        raise HTTPException(
+            status_code=http_status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="expected_speaker_count deve ser >= 1.",
+        )
+
+    job_id = str(uuid.uuid4())
+    record = _JobRecord(job_id=job_id, title=title, participants=parsed_participants)
+
+    # Fase 1: sem PipelineFacade ainda. O job "conclui" na hora com um resultado
+    # fixture, só para o Flutter integrar contra o contrato real cedo. A partir
+    # da Fase 6, os estágios reais (transcribing -> ... -> done/error) passam a
+    # ser percorridos de verdade.
+    record.status = JobStatusValue.DONE
+    record.result = _build_stub_result(job_id)
+    record.updated_at = datetime.now(timezone.utc)
+
+    _JOBS[job_id] = record
+
+    return UploadResponse(job_id=job_id, status=JobStatusValue.QUEUED)
+
+
+@router.get("/status/{job_id}", response_model=JobStatusResponse)
+async def get_job_status(job_id: str) -> JobStatusResponse:
+    record = _JOBS.get(job_id)
+    if record is None:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Job não encontrado.")
+
+    return JobStatusResponse(
+        job_id=record.job_id,
+        status=record.status,
+        error=record.error,
+        updated_at=record.updated_at,
+    )
+
+
+@router.get("/resultado/{job_id}", response_model=MeetingResult)
+async def get_job_result(job_id: str) -> MeetingResult:
+    record = _JOBS.get(job_id)
+    if record is None:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Job não encontrado.")
+
+    if record.status != JobStatusValue.DONE or record.result is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_409_CONFLICT,
+            detail=f"Resultado ainda não disponível (status atual: {record.status.value}).",
+        )
+
+    return record.result
+
+
+@router.websocket("/ws/{job_id}")
+async def job_progress_ws(websocket: WebSocket, job_id: str) -> None:
+    # Stub da Fase 1: aceita, informa o status atual uma vez e fecha. Push real
+    # de progresso (e o fallback de polling continua obrigatório) chega na Fase 8.
+    await websocket.accept()
+    record = _JOBS.get(job_id)
+    if record is None:
+        await websocket.close(code=4404)
+        return
+
+    try:
+        await websocket.send_json({"job_id": record.job_id, "status": record.status.value})
+    except WebSocketDisconnect:
+        pass
+    finally:
+        await websocket.close()
