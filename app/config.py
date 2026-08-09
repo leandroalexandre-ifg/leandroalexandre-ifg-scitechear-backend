@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     diarization_model: str = Field(
         default="pyannote/speaker-diarization-community-1", alias="DIARIZATION_MODEL"
     )
+    # Substituem os MIN_SPEAKERS=4/MAX_SPEAKERS=7 fixos do legado — defaults
+    # calibráveis, usados quando o job não pede um número exato de falantes.
+    diarization_min_speakers: int = Field(default=1, alias="DIARIZATION_MIN_SPEAKERS")
+    diarization_max_speakers: int = Field(default=10, alias="DIARIZATION_MAX_SPEAKERS")
 
     voice_model: str = Field(default="speechbrain/spkrec-ecapa-voxceleb", alias="VOICE_MODEL")
     voice_identification_threshold: float = Field(default=0.30, alias="VOICE_IDENTIFICATION_THRESHOLD")
