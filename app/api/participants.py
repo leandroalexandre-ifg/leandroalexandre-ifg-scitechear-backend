@@ -1,27 +1,21 @@
-from datetime import datetime, timezone
-from typing import Dict, Optional
+from pathlib import Path
+from typing import Optional
 
-from fastapi import APIRouter, File, Form, Response, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Response, UploadFile
 from fastapi import status as http_status
 
 from app.api.jobs import _validate_wav
 from app.config import get_settings
 from app.models.participant import VoiceProfile, VoiceSampleUploadResponse
+from app.repositories.voice_repository import VoiceRepository
+from app.services.voice_enrollment_service import VoiceEnrollmentService
 
 router = APIRouter(tags=["participants"])
 
 
-class _VoiceProfileRecord:
-    def __init__(self, participant_id: str):
-        self.participant_id = participant_id
-        self.sample_count = 0
-        self.model_version: Optional[str] = None
-        self.updated_at: Optional[datetime] = None
-
-
-# Fase 1: store em memória, só para validar o contrato HTTP. Substituído por
-# app/repositories/voice_repository.py (chave participant_id) na Fase 2.
-_VOICE_PROFILES: Dict[str, _VoiceProfileRecord] = {}
+def _enrollment_service() -> VoiceEnrollmentService:
+    voices_root = Path(get_settings().storage_root) / "voices"
+    return VoiceEnrollmentService(VoiceRepository(voices_root))
 
 
 @router.post("/participants/{participant_id}/voice-samples", response_model=VoiceSampleUploadResponse)
@@ -31,38 +25,47 @@ async def upload_voice_sample(
     name: Optional[str] = Form(None),
 ) -> VoiceSampleUploadResponse:
     _validate_wav(file)
+    content = await file.read()
 
-    record = _VOICE_PROFILES.setdefault(participant_id, _VoiceProfileRecord(participant_id))
-    # Fase 1: só conta a amostra recebida. O recálculo real do embedding
-    # consolidado (SpeechBrain ECAPA) chega na Fase 2, via VoiceEnrollmentService.
-    record.sample_count += 1
-    record.model_version = get_settings().voice_model
-    record.updated_at = datetime.now(timezone.utc)
+    service = _enrollment_service()
+    try:
+        profile = service.add_sample(
+            participant_id=participant_id,
+            content=content,
+            filename_hint=file.filename or "amostra.wav",
+            display_name=name,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=http_status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
+        ) from exc
 
     return VoiceSampleUploadResponse(
-        participant_id=participant_id,
-        sample_count=record.sample_count,
-        model_version=record.model_version,
-        updated_at=record.updated_at,
+        participant_id=profile.participant_id,
+        sample_count=profile.sample_count,
+        model_version=profile.model_version,
+        updated_at=profile.updated_at,
     )
 
 
 @router.get("/participants/{participant_id}/voice-profile", response_model=VoiceProfile)
 async def get_voice_profile(participant_id: str) -> VoiceProfile:
-    record = _VOICE_PROFILES.get(participant_id)
-    if record is None:
+    service = _enrollment_service()
+    profile = service.get_profile(participant_id)
+    if profile is None:
         return VoiceProfile(participant_id=participant_id, exists=False, sample_count=0)
 
     return VoiceProfile(
         participant_id=participant_id,
         exists=True,
-        sample_count=record.sample_count,
-        model_version=record.model_version,
-        updated_at=record.updated_at,
+        sample_count=profile.sample_count,
+        model_version=profile.model_version,
+        updated_at=profile.updated_at,
     )
 
 
 @router.delete("/participants/{participant_id}/voice-profile", status_code=http_status.HTTP_204_NO_CONTENT)
 async def delete_voice_profile(participant_id: str) -> Response:
-    _VOICE_PROFILES.pop(participant_id, None)
+    service = _enrollment_service()
+    service.delete_profile(participant_id)
     return Response(status_code=http_status.HTTP_204_NO_CONTENT)

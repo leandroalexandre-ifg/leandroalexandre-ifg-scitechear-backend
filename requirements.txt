@@ -13,10 +13,15 @@ python-multipart==0.0.20
 pytest==8.4.2
 httpx==0.28.1
 
+# --- Biometria de voz (Fase 2) ---
+# CPU/MPS aqui no Mac (dev/testes); no runtime com GPU real, trocar por
+# build de torch com suporte a CUDA antes de instalar o restante.
+torch==2.13.0
+torchaudio==2.11.0
+speechbrain==1.1.0
+soundfile==0.14.0  # leitura de WAV; torchaudio.load() exige torchcodec+FFmpeg do sistema
+
 # --- Pipeline de IA (a instalar por fase, só no runtime com GPU) ---
-# torch                    # Fase 3+ (WhisperX, SpeechBrain)
-# torchaudio               # Fase 3+
 # whisperx                 # Fase 3 — TranscriptionService
-# pyannote.audio           # Fase 4 — DiarizationService
-# speechbrain              # Fase 4 — VoiceIdentityService / VoiceEnrollmentService
+# pyannote.audio           # Fase 4 — DiarizationService (junto com torch/torchaudio acima)
 # requests                 # Fase 5 — cliente HTTP da API do Ollama

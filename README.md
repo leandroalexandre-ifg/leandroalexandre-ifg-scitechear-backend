@@ -27,8 +27,14 @@ Claude Code. O plano de execução por fases está em `docs/PLANO_CLAUDE_CODE.md
 ## Primeiros passos
 
 1. `cp .env.example .env` e preencha o `HF_TOKEN`.
-2. Trabalhe em uma branch de integração (nunca na `main`).
-3. Siga a ordem de fases de `docs/PLANO_CLAUDE_CODE.md`. Os serviços em
+2. Python **3.13** (via `brew install python@3.13`): `python3.13 -m venv .venv &&
+   source .venv/bin/activate && pip install -r requirements.txt`. WhisperX,
+   pyannote.audio e SpeechBrain exigem Python 3.10+; 3.13 já vinha instalado
+   via Homebrew neste Mac e tem wheels prontos para todo o stack (torch,
+   torchaudio, ctranslate2, numba) — ver decisão registrada no relatório da
+   Fase 2.
+3. Trabalhe em uma branch de integração (nunca na `main`).
+4. Siga a ordem de fases de `docs/PLANO_CLAUDE_CODE.md`. Os serviços em
    `app/services/` são extraídos dos protótipos em `legacy/`.
 
 ## Regras que não mudam
