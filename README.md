@@ -1,0 +1,39 @@
+# SciTech Ear — Backend
+
+Backend Python/IA do SciTech Ear: recebe o áudio de uma reunião, transcreve
+(WhisperX), separa os falantes (pyannote), identifica quem é cada um por
+biometria de voz (SpeechBrain ECAPA) e extrai as perguntas explícitas e
+implícitas (LLM via Ollama). Expõe uma API FastAPI consumida pelo app Flutter,
+que vive em um repositório separado.
+
+## Fonte de verdade
+
+`SciTech_Ear_Especificacao_Final_Implementacao_Claude.docx` (na raiz) é o contrato
+de implementação. `CLAUDE.md` resume as regras que valem em toda sessão do
+Claude Code. O plano de execução por fases está em `docs/PLANO_CLAUDE_CODE.md`.
+
+## Estrutura
+
+    app/            # aplicação (a implementar): api, models, services, repositories
+    prompts/        # prompts de LLM versionados
+    legacy/         # protótipos originais (notebooks + scripts) — NÃO executar em produção
+      notebooks/    # transcricao / diarizacao / llm (usam Colab/Drive; só referência)
+      scripts/      # etapa2b_diarizacao, etapa3_biometria, cadastro_vozes, pipeline
+      banco_vozes/  # banco legado (não versionado; será recriado por participant_id)
+    storage/        # artefatos por job (dev/teste; não versionado)
+    tests/          # testes
+    docs/           # baseline, plano de execução
+
+## Primeiros passos
+
+1. `cp .env.example .env` e preencha o `HF_TOKEN`.
+2. Trabalhe em uma branch de integração (nunca na `main`).
+3. Siga a ordem de fases de `docs/PLANO_CLAUDE_CODE.md`. Os serviços em
+   `app/services/` são extraídos dos protótipos em `legacy/`.
+
+## Regras que não mudam
+
+Cliente fino no app; a API é a única fronteira; identidade de falante é do
+backend (biometria), nunca por posição; `participant_id` é a chave; erro real
+nunca vira resultado fictício; nada de Colab/Drive no caminho de execução;
+segredos só via ambiente. Detalhes no `CLAUDE.md` e na especificação.

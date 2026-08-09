@@ -1,0 +1,1 @@
+"""SciTech Ear backend — pacote."""
