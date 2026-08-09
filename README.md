@@ -33,8 +33,17 @@ Claude Code. O plano de execução por fases está em `docs/PLANO_CLAUDE_CODE.md
    via Homebrew neste Mac e tem wheels prontos para todo o stack (torch,
    torchaudio, ctranslate2, numba) — ver decisão registrada no relatório da
    Fase 2.
-3. Trabalhe em uma branch de integração (nunca na `main`).
-4. Siga a ordem de fases de `docs/PLANO_CLAUDE_CODE.md`. Os serviços em
+3. FFmpeg (necessário para `whisperx.load_audio`, que chama o binário `ffmpeg`
+   via subprocess): `brew install ffmpeg`.
+4. Só para a Fase 4 (diarização/pyannote): o `torchcodec` usado por
+   `pyannote.audio`/`torchaudio` só suporta FFmpeg 4–7, mas `brew install
+   ffmpeg` traz a versão mais recente (8+). Instale também `brew install
+   ffmpeg@7` (keg-only) e exporte
+   `DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/opt/ffmpeg@7/lib` no shell antes
+   de rodar a API/testes — sem isso, `import pyannote.audio` funciona mas com
+   aviso de que a decodificação embutida de áudio vai falhar.
+5. Trabalhe em uma branch de integração (nunca na `main`).
+6. Siga a ordem de fases de `docs/PLANO_CLAUDE_CODE.md`. Os serviços em
    `app/services/` são extraídos dos protótipos em `legacy/`.
 
 ## Regras que não mudam
