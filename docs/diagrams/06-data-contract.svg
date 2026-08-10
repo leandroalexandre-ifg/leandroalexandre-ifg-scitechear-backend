@@ -1,0 +1,45 @@
+<svg width="900" height="480" viewBox="0 0 900 480" xmlns="http://www.w3.org/2000/svg" font-family="Arial, Helvetica, sans-serif">
+<rect width="900" height="480" fill="#FFFFFF"/>
+<text x="30" y="32" font-size="18" font-weight="bold" fill="#111827">Contrato de Dados Canônico — GET /resultado/{job_id}</text>
+<text x="30" y="52" font-size="12" fill="#5F5E5A">Fonte: app/models/result.py (backend) ↔ lib/models/meeting_result.dart (frontend)</text>
+
+<!-- MeetingResult -->
+<rect x="30" y="72" width="840" height="46" rx="10" fill="#EEEDFE" stroke="#534AB7" stroke-width="1.2"/>
+<text x="50" y="100" font-size="13.5" font-weight="bold" fill="#26215C">MeetingResult { job_id, status, segments[], questions[], metadata }</text>
+
+<!-- Segment -->
+<rect x="30" y="140" width="400" height="230" rx="10" fill="#E6F1FB" stroke="#185FA5" stroke-width="1.2"/>
+<text x="50" y="164" font-size="13.5" font-weight="bold" fill="#042C53">TranscriptSegment</text>
+<g font-size="11.6" fill="#0C447C">
+<text x="50" y="188">id: string</text>
+<text x="50" y="208">cluster: string  <tspan fill="#6B7280" font-size="10">(SPEAKER_00 — do pyannote)</tspan></text>
+<text x="50" y="228">participant_id: string?  <tspan fill="#6B7280" font-size="10">(se identificado)</tspan></text>
+<text x="50" y="248">speaker: string?  <tspan fill="#6B7280" font-size="10">(nome, se identificado)</tspan></text>
+<text x="50" y="268">identified: bool</text>
+<text x="50" y="288">confidence: float?  <tspan fill="#B45309" font-size="10">(sempre presente,</tspan></text>
+<text x="66" y="304" fill="#B45309" font-size="10">mesmo se identified=false)</text>
+<text x="50" y="326">start: float · end: float</text>
+<text x="50" y="346">text: string  <tspan fill="#6B7280" font-size="10">(literal, nunca corrigido)</tspan></text>
+</g>
+
+<!-- Question -->
+<rect x="470" y="140" width="400" height="230" rx="10" fill="#FAECE7" stroke="#993C1D" stroke-width="1.2"/>
+<text x="490" y="164" font-size="13.5" font-weight="bold" fill="#4A1B0C">Question</text>
+<g font-size="11.6" fill="#993C1D">
+<text x="490" y="188">id: string</text>
+<text x="490" y="208">type: "explicit" | "implicit"</text>
+<text x="490" y="228">text: string  <tspan fill="#6B7280" font-size="10">(literal do segmento/LLM)</tspan></text>
+<text x="490" y="248">participant_id: string?</text>
+<text x="490" y="268">speaker: string?</text>
+<text x="490" y="288">time: float?</text>
+<text x="506" y="306" fill="#B45309" font-size="10">implícitas: sempre null</text>
+<text x="490" y="326">source_segment_ids: string[]</text>
+<text x="490" y="346">  <tspan fill="#6B7280" font-size="10">rastreabilidade até a origem</tspan></text>
+</g>
+
+<!-- Regras -->
+<rect x="30" y="388" width="840" height="70" rx="10" fill="#FBE9E7" stroke="#B42318" stroke-width="1"/>
+<text x="50" y="410" font-size="12.5" font-weight="bold" fill="#7A160C">Invariantes do contrato (nunca violar)</text>
+<text x="50" y="430" font-size="11" fill="#7A160C">1) confidence é preenchido mesmo com identified=false — nunca inferir identidade pela presença de confidence.</text>
+<text x="50" y="446" font-size="11" fill="#7A160C">2) Perguntas implícitas nunca têm participant_id/speaker/time inventados — sempre null quando não resolvidos pelo formatter.</text>
+</svg>

@@ -1,0 +1,68 @@
+<svg width="920" height="360" viewBox="0 0 920 360" xmlns="http://www.w3.org/2000/svg" font-family="Arial, Helvetica, sans-serif">
+<defs>
+<marker id="arrow3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M2 1L8 5L2 9" fill="none" stroke="#5F5E5A" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+</marker>
+<marker id="arrowRed" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M2 1L8 5L2 9" fill="none" stroke="#B42318" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+</marker>
+</defs>
+<rect width="920" height="360" fill="#FFFFFF"/>
+<text x="30" y="34" font-size="18" font-weight="bold" fill="#111827">Máquina de Estados do Job — 8 estados exatos</text>
+<text x="30" y="54" font-size="12" fill="#5F5E5A">Cada estágio real do pipeline atualiza o job_repository; qualquer falha vai para "error" com code + message (nunca resultado fictício).</text>
+
+<!-- states row -->
+<g font-size="12" font-weight="bold" text-anchor="middle">
+<rect x="30" y="120" width="100" height="56" rx="10" fill="#F1EFE8" stroke="#5F5E5A"/>
+<text x="80" y="153" fill="#2C2C2A">queued</text>
+
+<rect x="160" y="120" width="110" height="56" rx="10" fill="#EAF3DE" stroke="#3B6D11"/>
+<text x="215" y="153" fill="#173404">transcribing</text>
+
+<rect x="300" y="120" width="100" height="56" rx="10" fill="#EAF3DE" stroke="#3B6D11"/>
+<text x="350" y="153" fill="#173404">diarizing</text>
+
+<rect x="430" y="120" width="100" height="56" rx="10" fill="#E6F1FB" stroke="#185FA5"/>
+<text x="480" y="153" fill="#042C53">identifying</text>
+
+<rect x="560" y="120" width="105" height="56" rx="10" fill="#FAECE7" stroke="#993C1D"/>
+<text x="612" y="153" fill="#4A1B0C">summarizing</text>
+
+<rect x="695" y="120" width="100" height="56" rx="10" fill="#FAECE7" stroke="#993C1D"/>
+<text x="745" y="153" fill="#4A1B0C">extracting</text>
+
+<rect x="825" y="120" width="70" height="56" rx="10" fill="#E1F5EE" stroke="#0F6E56"/>
+<text x="860" y="153" fill="#04342C">done</text>
+</g>
+
+<!-- horizontal arrows -->
+<line x1="130" y1="148" x2="158" y2="148" stroke="#5F5E5A" stroke-width="1.6" marker-end="url(#arrow3)"/>
+<line x1="270" y1="148" x2="298" y2="148" stroke="#5F5E5A" stroke-width="1.6" marker-end="url(#arrow3)"/>
+<line x1="400" y1="148" x2="428" y2="148" stroke="#5F5E5A" stroke-width="1.6" marker-end="url(#arrow3)"/>
+<line x1="530" y1="148" x2="558" y2="148" stroke="#5F5E5A" stroke-width="1.6" marker-end="url(#arrow3)"/>
+<line x1="665" y1="148" x2="693" y2="148" stroke="#5F5E5A" stroke-width="1.6" marker-end="url(#arrow3)"/>
+<line x1="795" y1="148" x2="823" y2="148" stroke="#5F5E5A" stroke-width="1.6" marker-end="url(#arrow3)"/>
+
+<!-- services responsible, below -->
+<g font-size="10" text-anchor="middle" fill="#6B7280">
+<text x="215" y="196">WhisperX</text>
+<text x="350" y="196">pyannote</text>
+<text x="480" y="196">SpeechBrain</text>
+<text x="612" y="196">Ollama (sumário)</text>
+<text x="745" y="196">Ollama (perguntas)</text>
+</g>
+
+<!-- error state -->
+<rect x="380" y="260" width="160" height="60" rx="10" fill="#FBE9E7" stroke="#B42318" stroke-width="1.4"/>
+<text x="460" y="286" font-size="13" font-weight="bold" text-anchor="middle" fill="#7A160C">error</text>
+<text x="460" y="304" font-size="10.5" text-anchor="middle" fill="#B42318">code + message</text>
+
+<!-- red arrows from every stage down to error -->
+<line x1="215" y1="176" x2="440" y2="258" stroke="#B42318" stroke-width="1.3" stroke-dasharray="4,3" marker-end="url(#arrowRed)"/>
+<line x1="350" y1="176" x2="450" y2="258" stroke="#B42318" stroke-width="1.3" stroke-dasharray="4,3" marker-end="url(#arrowRed)"/>
+<line x1="480" y1="176" x2="465" y2="258" stroke="#B42318" stroke-width="1.3" stroke-dasharray="4,3" marker-end="url(#arrowRed)"/>
+<line x1="612" y1="176" x2="490" y2="258" stroke="#B42318" stroke-width="1.3" stroke-dasharray="4,3" marker-end="url(#arrowRed)"/>
+<line x1="745" y1="176" x2="510" y2="258" stroke="#B42318" stroke-width="1.3" stroke-dasharray="4,3" marker-end="url(#arrowRed)"/>
+
+<text x="30" y="340" font-size="11" fill="#6B7280">Regra invariável: erro real do backend nunca vira resultado fictício. O cliente exibe error.message e oferece "tentar novamente" / "voltar".</text>
+</svg>
