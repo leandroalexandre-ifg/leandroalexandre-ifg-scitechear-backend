@@ -63,15 +63,14 @@ mesmo sem contexto prévio do projeto, consiga entender o sistema do zero.
 Inclui um glossário de termos, o raciocínio por trás de cada decisão
 (não só "o quê", mas "por quê"), e diagramas do fluxo completo.
 
-![Contexto geral do sistema](docs/diagrams/01-system-context.svg)
+![Fluxo de telas e serviços do frontend](docs/diagrams/05-frontend-architecture.svg)
 
 | Documento | Conteúdo |
 |---|---|
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Visão geral do sistema, glossário, contexto e motivação, máquina de estados do job, contrato de dados |
-| [`docs/BACKEND_ARCHITECTURE.md`](docs/BACKEND_ARCHITECTURE.md) | Camadas (API/Services/Repositories/Models), cada serviço explicado, `legacy/`, `prompts/`, como rodar localmente |
-| [`docs/PENDENCIAS.md`](docs/PENDENCIAS.md) | Pendências de calibração em acompanhamento |
+| [`docs/FRONTEND_ARCHITECTURE.md`](docs/FRONTEND_ARCHITECTURE.md) | Cada tela e serviço explicados, modelos de dados, configuração via `--dart-define`, como rodar localmente |
 
 Se você é novo neste projeto, comece por
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — a introdução e o glossário
 já dão uma visão de 80% do sistema antes de entrar nos detalhes de cada
-camada.
+tela e serviço.
