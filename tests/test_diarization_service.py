@@ -1,8 +1,13 @@
+import io
+import wave
+
 import pytest
+import torch
 
 from app.config import get_settings
 from app.services import diarization_service
 from app.services.diarization_service import _atribuir_clusters
+from app.services.diarization_service import _carregar_waveform as _carregar_waveform_real
 from app.services.transcription_service import TranscribedSegment, TranscriptionMetadata, TranscriptionResult
 
 
@@ -11,6 +16,19 @@ def reset_pipeline_cache():
     diarization_service._pipeline = None
     yield
     diarization_service._pipeline = None
+
+
+@pytest.fixture(autouse=True)
+def stub_carregar_waveform(monkeypatch):
+    """`diarizar()` agora lê o áudio (soundfile) antes de chamar o pipeline —
+    os testes de orquestração usam um caminho fake ("reuniao.wav"), então
+    isolamos a leitura real de arquivo aqui. O carregamento em si tem teste
+    dedicado com um WAV de verdade (test_carregar_waveform_*)."""
+    monkeypatch.setattr(
+        diarization_service,
+        "_carregar_waveform",
+        lambda caminho_audio: {"waveform": torch.zeros(1, 16000), "sample_rate": 16000},
+    )
 
 
 class _FakeSegment:
@@ -37,8 +55,10 @@ class _FakePipeline:
     def __init__(self, tracks):
         self._tracks = tracks
         self.last_call_kwargs = None
+        self.last_audio_input = None
 
-    def __call__(self, audio_path, **kwargs):
+    def __call__(self, audio_input, **kwargs):
+        self.last_audio_input = audio_input
         self.last_call_kwargs = kwargs
         return _FakeDiarizeOutput(self._tracks)
 
@@ -157,3 +177,45 @@ def test_import_do_modulo_nao_exige_hf_token():
     # configurado — se o import tivesse carregado o pipeline, este teste
     # nem chegaria a rodar.
     assert diarization_service._pipeline is None
+
+
+def test_diarizar_passa_dict_waveform_para_o_pipeline_nao_caminho_de_arquivo(monkeypatch):
+    # Regressão: pipeline(str(caminho)) faz o pyannote tentar ler o arquivo
+    # via torchcodec (exige FFmpeg 4-7 linkado) e falha em qualquer ambiente
+    # sem essa lib. pipeline({"waveform":...,"sample_rate":...}) evita isso.
+    fake_pipeline = _FakePipeline(tracks=[(0.0, 2.5, "SPEAKER_00"), (4.5, 7.5, "SPEAKER_00")])
+    monkeypatch.setattr(diarization_service, "carregar_pipeline", lambda: fake_pipeline)
+
+    diarization_service.diarizar("reuniao.wav", _transcricao_com_dois_segmentos())
+
+    assert isinstance(fake_pipeline.last_audio_input, dict)
+    assert set(fake_pipeline.last_audio_input.keys()) == {"waveform", "sample_rate"}
+    assert not isinstance(fake_pipeline.last_audio_input, (str,))
+
+
+def _wav_bytes_mono_16k(duracao_s: float = 0.5) -> bytes:
+    buffer = io.BytesIO()
+    n_amostras = int(16000 * duracao_s)
+    with wave.open(buffer, "wb") as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(16000)
+        wav_file.writeframes(b"\x00\x00" * n_amostras)
+    return buffer.getvalue()
+
+
+def test_carregar_waveform_le_wav_real_sem_torchcodec(tmp_path):
+    # _carregar_waveform usa soundfile (não torchaudio.load/torchcodec) —
+    # este teste roda com um WAV de verdade em disco, sem mockar a leitura.
+    # Usa a referência capturada ANTES do monkeypatch autouse (que substitui
+    # o atributo no módulo, não o objeto função original importado aqui).
+    caminho = tmp_path / "amostra.wav"
+    caminho.write_bytes(_wav_bytes_mono_16k(duracao_s=0.5))
+
+    waveform_dict = _carregar_waveform_real(caminho)
+
+    assert set(waveform_dict.keys()) == {"waveform", "sample_rate"}
+    assert waveform_dict["sample_rate"] == 16000
+    assert isinstance(waveform_dict["waveform"], torch.Tensor)
+    assert waveform_dict["waveform"].shape[0] == 1  # (canal, tempo), mono
+    assert waveform_dict["waveform"].shape[1] == 8000  # 0.5s * 16000

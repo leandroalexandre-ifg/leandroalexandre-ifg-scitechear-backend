@@ -10,7 +10,15 @@ segmentos de transcrição (WhisperX). Diferenças em relação ao legado:
   vêm de config/env (`DIARIZATION_MIN_SPEAKERS`/`DIARIZATION_MAX_SPEAKERS`);
   `expected_speaker_count` (pista opcional do job) vira `max_speakers` por
   padrão, e só vira `num_speakers` exato quando `exact_speaker_count=True`
-  for pedido explicitamente pelo chamador.
+  for pedido explicitamente pelo chamador;
+- o áudio é carregado via `soundfile` e passado ao pipeline como
+  `{"waveform": tensor, "sample_rate": sr}` em vez do caminho do arquivo.
+  `pyannote.audio.core.io.Audio` só evita depender de `torchcodec` (que
+  precisa de FFmpeg 4-7 linkado no sistema) quando recebe esse dict pronto;
+  passando uma string de caminho, ele tenta ler o arquivo via torchcodec e
+  falha em qualquer ambiente sem essa lib compatível — foi exatamente o que
+  aconteceu num job real. Mesma abordagem já usada em voice_service.py
+  (Fase 2): soundfile em vez de torchaudio.load()/torchcodec.
 
 Diarização produz CLUSTER (SPEAKER_00, SPEAKER_01, ...) — não identidade.
 A identificação por participant_id é responsabilidade do voice_service
@@ -20,6 +28,7 @@ import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Union
 
+import soundfile as sf
 import torch
 from pydantic import BaseModel, Field
 from pyannote.audio import Pipeline
@@ -62,6 +71,15 @@ def carregar_pipeline() -> Pipeline:
     return _pipeline
 
 
+def _carregar_waveform(caminho_audio: Union[str, Path]) -> Dict[str, object]:
+    """Carrega o áudio via soundfile no formato {'waveform','sample_rate'}
+    que o pyannote aceita sem tocar em torchcodec. waveform sai como
+    (canal, tempo) — a forma exigida pelo pyannote.audio.core.io.Audio."""
+    dados, sample_rate = sf.read(str(caminho_audio), dtype="float32", always_2d=True)  # (amostras, canais)
+    waveform = torch.from_numpy(dados.T)  # (canais, amostras)
+    return {"waveform": waveform, "sample_rate": sample_rate}
+
+
 def _atribuir_clusters(
     segmentos_transcricao: List[dict], segmentos_diarizados: List[dict]
 ) -> List[str]:
@@ -97,14 +115,15 @@ def diarizar(
     """
     settings = get_settings()
     pipeline = carregar_pipeline()
+    audio_input = _carregar_waveform(caminho_audio)
 
     if exact_speaker_count and expected_speaker_count is not None:
-        diarization_output = pipeline(str(caminho_audio), num_speakers=expected_speaker_count)
+        diarization_output = pipeline(audio_input, num_speakers=expected_speaker_count)
     else:
         min_speakers = settings.diarization_min_speakers
         max_speakers = expected_speaker_count or settings.diarization_max_speakers
         diarization_output = pipeline(
-            str(caminho_audio), min_speakers=min_speakers, max_speakers=max_speakers
+            audio_input, min_speakers=min_speakers, max_speakers=max_speakers
         )
 
     diarization = diarization_output.speaker_diarization

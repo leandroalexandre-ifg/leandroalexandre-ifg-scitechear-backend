@@ -27,10 +27,10 @@ speechbrain==1.1.0
 soundfile==0.14.0  # leitura de WAV; torchaudio.load() exige torchcodec+FFmpeg do sistema
 
 # --- Diarização (Fase 4) ---
-# torchcodec (dependência de pyannote.audio/torchaudio) só decodifica áudio
-# com FFmpeg 4-7 — ver README ("brew install ffmpeg@7" + DYLD_FALLBACK_LIBRARY_PATH).
-# DiarizationService usa o pipeline pyannote diretamente (não torchcodec) para
-# ler o áudio, então isso só importa se algo tentar decodificar via torchaudio.
+# diarization_service.py carrega o áudio via soundfile e passa
+# {"waveform": tensor, "sample_rate": sr} pro pipeline — evita depender do
+# torchcodec (que só decodifica com FFmpeg 4-7) pra ler o WAV. Não precisa
+# de ffmpeg@7/DYLD_FALLBACK_LIBRARY_PATH (nota antiga removida do README).
 pyannote.audio==4.0.7
 
 # --- Perguntas via LLM (Fase 5) ---

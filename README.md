@@ -35,13 +35,16 @@ Claude Code. O plano de execução por fases está em `docs/PLANO_CLAUDE_CODE.md
    Fase 2.
 3. FFmpeg (necessário para `whisperx.load_audio`, que chama o binário `ffmpeg`
    via subprocess): `brew install ffmpeg`.
-4. Só para a Fase 4 (diarização/pyannote): o `torchcodec` usado por
-   `pyannote.audio`/`torchaudio` só suporta FFmpeg 4–7, mas `brew install
-   ffmpeg` traz a versão mais recente (8+). Instale também `brew install
-   ffmpeg@7` (keg-only) e exporte
-   `DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/opt/ffmpeg@7/lib` no shell antes
-   de rodar a API/testes — sem isso, `import pyannote.audio` funciona mas com
-   aviso de que a decodificação embutida de áudio vai falhar.
+4. ~~`ffmpeg@7` + `DYLD_FALLBACK_LIBRARY_PATH` para o `torchcodec` do
+   pyannote~~ — **obsoleto**, não é mais necessário. `diarization_service.py`
+   carrega o áudio via `soundfile` e passa `{"waveform": tensor,
+   "sample_rate": sr}` para o pipeline do pyannote, em vez do caminho do
+   arquivo — isso evita completamente o `pyannote.audio.core.io.Audio`
+   precisar do `torchcodec` para ler o WAV (mesma abordagem já usada em
+   `voice_service.py` desde a Fase 2). Um job real rodado sem
+   `DYLD_FALLBACK_LIBRARY_PATH` setado confirmou que a diarização completa
+   normalmente. Se `brew install ffmpeg@7` já tiver sido feito antes, pode
+   remover (`brew uninstall ffmpeg@7`) — nada mais depende dele.
 5. Trabalhe em uma branch de integração (nunca na `main`).
 6. Siga a ordem de fases de `docs/PLANO_CLAUDE_CODE.md`. Os serviços em
    `app/services/` são extraídos dos protótipos em `legacy/`.
