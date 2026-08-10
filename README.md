@@ -58,12 +58,20 @@ segredos só via ambiente. Detalhes no `CLAUDE.md` e na especificação.
 
 ## Arquitetura
 
-Documentação completa da arquitetura, com diagramas, em [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (visão geral do sistema) e [`docs/BACKEND_ARCHITECTURE.md`](docs/BACKEND_ARCHITECTURE.md) (camadas, serviços, repositórios e legado deste repositório).
+Documentação completa da arquitetura — pensada para que qualquer pessoa,
+mesmo sem contexto prévio do projeto, consiga entender o sistema do zero.
+Inclui um glossário de termos, o raciocínio por trás de cada decisão
+(não só "o quê", mas "por quê"), e diagramas do fluxo completo.
 
 ![Contexto geral do sistema](docs/diagrams/01-system-context.svg)
 
 | Documento | Conteúdo |
 |---|---|
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Contexto geral, máquina de estados do job, sequência ponta a ponta, contrato de dados |
-| [`docs/BACKEND_ARCHITECTURE.md`](docs/BACKEND_ARCHITECTURE.md) | Camadas (API/Services/Repositories/Models), `legacy/`, `prompts/` |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Visão geral do sistema, glossário, contexto e motivação, máquina de estados do job, contrato de dados |
+| [`docs/BACKEND_ARCHITECTURE.md`](docs/BACKEND_ARCHITECTURE.md) | Camadas (API/Services/Repositories/Models), cada serviço explicado, `legacy/`, `prompts/`, como rodar localmente |
 | [`docs/PENDENCIAS.md`](docs/PENDENCIAS.md) | Pendências de calibração em acompanhamento |
+
+Se você é novo neste projeto, comece por
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — a introdução e o glossário
+já dão uma visão de 80% do sistema antes de entrar nos detalhes de cada
+camada.
