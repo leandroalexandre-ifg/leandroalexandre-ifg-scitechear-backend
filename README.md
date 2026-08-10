@@ -55,3 +55,15 @@ Cliente fino no app; a API é a única fronteira; identidade de falante é do
 backend (biometria), nunca por posição; `participant_id` é a chave; erro real
 nunca vira resultado fictício; nada de Colab/Drive no caminho de execução;
 segredos só via ambiente. Detalhes no `CLAUDE.md` e na especificação.
+
+## Arquitetura
+
+Documentação completa da arquitetura, com diagramas, em [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (visão geral do sistema) e [`docs/BACKEND_ARCHITECTURE.md`](docs/BACKEND_ARCHITECTURE.md) (camadas, serviços, repositórios e legado deste repositório).
+
+![Contexto geral do sistema](docs/diagrams/01-system-context.svg)
+
+| Documento | Conteúdo |
+|---|---|
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Contexto geral, máquina de estados do job, sequência ponta a ponta, contrato de dados |
+| [`docs/BACKEND_ARCHITECTURE.md`](docs/BACKEND_ARCHITECTURE.md) | Camadas (API/Services/Repositories/Models), `legacy/`, `prompts/` |
+| [`docs/PENDENCIAS.md`](docs/PENDENCIAS.md) | Pendências de calibração em acompanhamento |
