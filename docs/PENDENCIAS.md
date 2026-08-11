@@ -135,3 +135,29 @@ poderia, em tese, citar 1 linha real e inventar contexto ao redor dela para
 burlar a maioria estrita — a validação atual não elimina esse caso
 extremo, é uma redução de risco, não uma prova formal. Não bloqueia fases
 seguintes.
+
+**Validação adicional — v4 não ficou conservador demais:** rodado contra
+uma segunda transcrição sintética, dessa vez substantiva (decisões reais:
+ajuste de threshold de biometria, bug de alinhamento do WhisperX em fala
+sobreposta, instabilidade da GPU do Colab, decisão WebSocket vs. polling,
+responsabilidade por `DEMO_MODE=false` em staging). Resultado: `qwen3:4b`
+gerou 3 perguntas implícitas legítimas e ancoradas; `qwen3:14b` gerou 15,
+todas com `linhas_evidencia` reais (100% mantidas na validação
+programática) e genuinamente relacionadas ao conteúdo discutido — nenhum
+roteiro genérico desconectado, ao contrário do caso trivial do carro.
+Confirma que a correção suprime confabulação sem suprimir perguntas
+legítimas quando o conteúdo sustenta.
+
+**Achado novo, fora do escopo desta calibração — redundância em
+`qwen3:14b`:** nas 15 perguntas geradas para a reunião substantiva, há
+sobreposição temática real entre itens (ex.: duas perguntas quase
+idênticas sobre a decisão de manter polling em vez de WebSocket; duas
+sobre o mesmo ponto de monitorar o threshold 0.35; duas sobre plano de
+contingência da GPU). O prompt já pede explicitamente "não repetitivas ou
+redundantes", mas o modelo maior não filtrou isso quando o volume de
+conteúdo se aproxima do teto de 15. Isso é uma questão de qualidade/
+deduplicação, distinta da confabulação (as perguntas têm evidência real,
+só se repetem) — registrado aqui como pendência separada, não implementado
+ainda; possível endereçamento futuro seria pós-processamento de
+similaridade textual entre `pergunta`s antes de retornar o resultado, ou
+reforço adicional no prompt.
