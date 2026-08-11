@@ -12,10 +12,17 @@ semanticamente intactos. Únicas mudanças de comportamento:
   resolvida pelo TranscriptFormatter (nunca por inferência do LLM) para
   obter participant_id/speaker/time/source_segment_ids — o texto da
   pergunta permanece literal, nunca corrigido.
-- IMPLÍCITAS: migradas para prompts/implicit_questions_v3.txt, que pede
-  saída em JSON em vez do texto numerado do v2 — sem alterar critérios
-  semânticos (máx. 15, não inventar fatos, etc.). speaker/time NUNCA são
-  inventados: ficam null (type=implicit).
+- IMPLÍCITAS: prompts/implicit_questions_v4.txt (saída JSON, sem alterar
+  critérios semânticos: máx. 15 como teto absoluto — não meta —, não
+  inventar fatos, etc.). Cada pergunta implícita deve citar
+  `linhas_evidencia` (linhas reais da transcrição que fundamentam a
+  inferência); `extract_implicit_questions` valida isso programaticamente
+  e descarta perguntas cuja maioria das linhas citadas não exista na
+  transcrição (não confia só na instrução do prompt — mesmo espírito do
+  mapa linha->segmento do TranscriptFormatter usado nas explícitas).
+  speaker/participant_id/time NUNCA são inventados: ficam null
+  (type=implicit); só `source_segment_ids` é preenchido, a partir das
+  linhas de evidência válidas.
 - SUMARIZAÇÃO: artefato interno (prompts/meeting_summary_v1.txt); não é
   contrato do Flutter, continua texto.
 - REFINAMENTO (prompts/implicit_refiner_v1.txt): implementado mas em
@@ -26,7 +33,7 @@ import json
 import logging
 import re
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 import requests
 from pydantic import BaseModel, Field
@@ -40,7 +47,7 @@ logger = logging.getLogger(__name__)
 PROMPTS_DIR = Path(__file__).resolve().parents[2] / "prompts"
 EXPLICIT_QUESTIONS_PROMPT = "explicit_questions_v4.json"
 MEETING_SUMMARY_PROMPT = "meeting_summary_v1.txt"
-IMPLICIT_QUESTIONS_PROMPT = "implicit_questions_v3.txt"
+IMPLICIT_QUESTIONS_PROMPT = "implicit_questions_v4.txt"
 IMPLICIT_REFINER_PROMPT = "implicit_refiner_v1.txt"
 
 
@@ -60,6 +67,7 @@ class ExplicitQuestionsResponse(BaseModel):
 class ImplicitQuestionRaw(BaseModel):
     id: str
     pergunta: str
+    linhas_evidencia: List[int] = Field(default_factory=list)
 
 
 class ImplicitQuestionsResponse(BaseModel):
@@ -156,9 +164,46 @@ def summarize_meeting(formatter: TranscriptFormatter) -> str:
     return _chamar_ollama(prompt_final)
 
 
+def _resolver_evidencia_implicita(
+    item: ImplicitQuestionRaw, formatter: TranscriptFormatter
+) -> Optional[List[str]]:
+    """Valida `linhas_evidencia` contra a transcrição real (não confia só na
+    instrução do prompt). Descarta a pergunta (retorna None) se não houver
+    nenhuma linha citada ou se a maioria das linhas citadas não existir na
+    transcrição — tolera erro de contagem pontual do modelo (ex.: off-by-one),
+    não uma pergunta majoritariamente inventada que só "ancorou" numa linha
+    real de forma oportunista. Quando mantida, retorna só os segment_ids das
+    linhas válidas (as minoritárias inválidas são ignoradas)."""
+    total_citadas = len(item.linhas_evidencia)
+    if total_citadas == 0:
+        logger.warning("Pergunta implícita %s descartada: sem linhas_evidencia.", item.id)
+        return None
+
+    linhas_validas = [formatter.get_line(n) for n in item.linhas_evidencia]
+    linhas_validas = [linha for linha in linhas_validas if linha is not None]
+
+    if 2 * len(linhas_validas) <= total_citadas:
+        logger.warning(
+            "Pergunta implícita %s descartada: %d/%d linhas_evidencia inexistentes na transcrição.",
+            item.id,
+            total_citadas - len(linhas_validas),
+            total_citadas,
+        )
+        return None
+
+    segment_ids: List[str] = []
+    for linha in linhas_validas:
+        if linha.segment_id not in segment_ids:
+            segment_ids.append(linha.segment_id)
+    return segment_ids
+
+
 def extract_implicit_questions(formatter: TranscriptFormatter, summary: str) -> List[Question]:
-    """Perguntas implícitas (prompts/implicit_questions_v3.txt — sumário +
-    transcrição, saída JSON). speaker/time NUNCA são inventados: ficam null."""
+    """Perguntas implícitas (prompts/implicit_questions_v4.txt — sumário +
+    transcrição, saída JSON). speaker/participant_id/time NUNCA são
+    inventados: ficam null. `linhas_evidencia` é validada contra a
+    transcrição real via TranscriptFormatter; perguntas sem lastro
+    majoritariamente real são descartadas antes de chegar ao resultado."""
     prompt = _carregar_prompt(IMPLICIT_QUESTIONS_PROMPT)
     prompt_final = f"{prompt}\n\n{summary}\n\n{formatter.render()}"
 
@@ -166,18 +211,23 @@ def extract_implicit_questions(formatter: TranscriptFormatter, summary: str) -> 
     dados = _extrair_json(resposta_bruta)
     validado = ImplicitQuestionsResponse.model_validate(dados)
 
-    return [
-        Question(
-            id=item.id,
-            type=QuestionType.IMPLICIT,
-            text=item.pergunta,
-            participant_id=None,
-            speaker=None,
-            time=None,
-            source_segment_ids=[],
+    perguntas: List[Question] = []
+    for item in validado.perguntas_implicitas:
+        segment_ids = _resolver_evidencia_implicita(item, formatter)
+        if segment_ids is None:
+            continue
+        perguntas.append(
+            Question(
+                id=item.id,
+                type=QuestionType.IMPLICIT,
+                text=item.pergunta,
+                participant_id=None,
+                speaker=None,
+                time=None,
+                source_segment_ids=segment_ids,
+            )
         )
-        for item in validado.perguntas_implicitas
-    ]
+    return perguntas
 
 
 def _parse_lista_numerada(texto: str) -> List[str]:

@@ -8,9 +8,10 @@ devem ser mínimas e versionadas (ver especificação).
 | `explicit_questions_v4.json` | PromptDeExtracaoDePerguntasExplicitasV4.json | Perguntas explícitas (só sentenças terminadas em `?`). |
 | `meeting_summary_v1.txt` | PromptSumarizacaoV1.txt | Sumarização (artefato interno). |
 | `implicit_questions_v2.txt` | PromptGerador.txt | **Superado por v3** — preservado só para rastreabilidade (saída em texto numerado, não JSON). |
-| `implicit_questions_v3.txt` | implicit_questions_v2.txt (Fase 5) | **Ativo.** Perguntas implícitas (sumário + transcrição), mesmos critérios semânticos do v2, saída migrada para JSON (`type=implicit`, sem `falante`/tempo). Usado por `app/services/question_service.py`. |
-| `implicit_refiner_v1.txt` | PromptRefinadorPerguntas.txt | Refinamento (desativado por default: `ENABLE_IMPLICIT_REFINEMENT=false`). |
+| `implicit_questions_v3.txt` | implicit_questions_v2.txt (Fase 5) | **Superado por v4** — preservado só para rastreabilidade. Saída JSON sem campo de evidência; causou confabulação de perguntas implícitas sem lastro na transcrição (ver `docs/PENDENCIAS.md`). |
+| `implicit_questions_v4.txt` | implicit_questions_v3.txt | **Ativo.** Mesmos critérios semânticos do v3 (linguagem formal, não redundância, foco em tomada de decisão). Duas mudanças: (1) exige campo `linhas_evidencia` por pergunta, rastreando a inferência até linhas reais da transcrição — validado programaticamente em `question_service.py`, que descarta perguntas sem evidência majoritariamente real; (2) reformula o teto de 15 perguntas como limite absoluto, não meta — lista vazia é saída válida. Usado por `app/services/question_service.py`. |
+| `implicit_refiner_v1.txt` | PromptRefinadorPerguntas.txt | Refinamento (desativado por default: `ENABLE_IMPLICIT_REFINEMENT=false`). Reescreve/consolida perguntas já extraídas; não audita evidência e hoje descarta `source_segment_ids` ao reconstruir as perguntas — limitação conhecida, sem impacto enquanto a flag estiver desligada (ver `docs/PENDENCIAS.md`). |
 
-Perguntas implícitas usam a v3 (saída JSON) desde a Fase 5. A v2 fica no
-repositório apenas como referência histórica — não é mais chamada pelo
-serviço.
+Perguntas implícitas usam a v4 (saída JSON + evidência) desde a calibração
+de confabulação (2026-08-11). A v2 e a v3 ficam no repositório apenas como
+referência histórica — não são mais chamadas pelo serviço.

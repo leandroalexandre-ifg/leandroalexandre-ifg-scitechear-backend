@@ -137,6 +137,7 @@ def test_extract_explicit_questions_schema_invalido_levanta_erro(monkeypatch):
 
 # ---------------------------------------------------------------------------
 # extract_implicit_questions — campos opcionais (speaker/time nunca inventados)
+# e validação obrigatória de linhas_evidencia contra a transcrição real
 # ---------------------------------------------------------------------------
 
 
@@ -144,8 +145,8 @@ def test_extract_implicit_questions_speaker_e_time_ficam_none(monkeypatch):
     resposta = json.dumps(
         {
             "perguntas_implicitas": [
-                {"id": "I1", "pergunta": "Quais critérios validam a qualidade?"},
-                {"id": "I2", "pergunta": "Quais riscos técnicos existem?"},
+                {"id": "I1", "pergunta": "Quais critérios validam a qualidade?", "linhas_evidencia": [1]},
+                {"id": "I2", "pergunta": "Quais riscos técnicos existem?", "linhas_evidencia": [2]},
             ],
             "total_perguntas": 2,
         }
@@ -160,7 +161,6 @@ def test_extract_implicit_questions_speaker_e_time_ficam_none(monkeypatch):
         assert pergunta.participant_id is None
         assert pergunta.speaker is None
         assert pergunta.time is None
-        assert pergunta.source_segment_ids == []
 
 
 def test_extract_implicit_questions_schema_invalido_levanta_erro(monkeypatch):
@@ -169,6 +169,96 @@ def test_extract_implicit_questions_schema_invalido_levanta_erro(monkeypatch):
 
     with pytest.raises(ValidationError):
         question_service.extract_implicit_questions(_formatter(), summary="resumo")
+
+
+def test_extract_implicit_questions_evidencia_valida_preenche_source_segment_ids(monkeypatch):
+    resposta = json.dumps(
+        {
+            "perguntas_implicitas": [
+                {"id": "I1", "pergunta": "Pergunta com lastro real?", "linhas_evidencia": [1, 2]},
+            ],
+            "total_perguntas": 1,
+        }
+    )
+    monkeypatch.setattr(question_service, "_chamar_ollama", lambda prompt: resposta)
+
+    perguntas = question_service.extract_implicit_questions(_formatter(), summary="resumo")
+
+    assert len(perguntas) == 1
+    assert perguntas[0].source_segment_ids == ["seg_0001", "seg_0002"]
+
+
+def test_extract_implicit_questions_sem_linhas_evidencia_e_descartada(monkeypatch):
+    resposta = json.dumps(
+        {
+            "perguntas_implicitas": [
+                {"id": "I1", "pergunta": "Pergunta sem nenhuma evidência citada?", "linhas_evidencia": []},
+            ],
+            "total_perguntas": 1,
+        }
+    )
+    monkeypatch.setattr(question_service, "_chamar_ollama", lambda prompt: resposta)
+
+    perguntas = question_service.extract_implicit_questions(_formatter(), summary="resumo")
+
+    assert perguntas == []
+
+
+def test_extract_implicit_questions_maioria_das_linhas_invalida_descarta_pergunta_inteira(monkeypatch):
+    # 1 linha real (2) e 1 fora do range (999) -> 50%, não é maioria estrita -> descarta tudo.
+    resposta = json.dumps(
+        {
+            "perguntas_implicitas": [
+                {"id": "I1", "pergunta": "Pergunta majoritariamente inventada?", "linhas_evidencia": [2, 999]},
+            ],
+            "total_perguntas": 1,
+        }
+    )
+    monkeypatch.setattr(question_service, "_chamar_ollama", lambda prompt: resposta)
+
+    perguntas = question_service.extract_implicit_questions(_formatter(), summary="resumo")
+
+    assert perguntas == []
+
+
+def test_extract_implicit_questions_maioria_das_linhas_valida_mantem_so_as_validas(monkeypatch):
+    # 2 linhas reais (1, 2) e 1 fora do range (999) -> maioria válida -> mantém, mas só com as reais.
+    resposta = json.dumps(
+        {
+            "perguntas_implicitas": [
+                {"id": "I1", "pergunta": "Pergunta com erro de contagem pontual?", "linhas_evidencia": [1, 2, 999]},
+            ],
+            "total_perguntas": 1,
+        }
+    )
+    monkeypatch.setattr(question_service, "_chamar_ollama", lambda prompt: resposta)
+
+    perguntas = question_service.extract_implicit_questions(_formatter(), summary="resumo")
+
+    assert len(perguntas) == 1
+    assert perguntas[0].source_segment_ids == ["seg_0001", "seg_0002"]
+
+
+def test_extract_implicit_questions_regressao_descarta_maioria_alucinada(monkeypatch):
+    """Espelha o incidente real: poucas perguntas com evidência real devem
+    sobreviver, o resto (roteiro genérico sem lastro) deve ser descartado."""
+    perguntas_geradas = [
+        {"id": "I1", "pergunta": "Pergunta com lastro real (linha 1)?", "linhas_evidencia": [1]},
+        {"id": "I2", "pergunta": "Pergunta com lastro real (linha 2)?", "linhas_evidencia": [2]},
+    ] + [
+        {"id": f"I{i}", "pergunta": f"Pergunta de roteiro genérico {i}?", "linhas_evidencia": [900 + i]}
+        for i in range(3, 20)
+    ]
+    resposta = json.dumps({"perguntas_implicitas": perguntas_geradas, "total_perguntas": len(perguntas_geradas)})
+    monkeypatch.setattr(question_service, "_chamar_ollama", lambda prompt: resposta)
+
+    perguntas = question_service.extract_implicit_questions(_formatter(), summary="resumo")
+
+    assert len(perguntas) == 2
+    assert {p.text for p in perguntas} == {
+        "Pergunta com lastro real (linha 1)?",
+        "Pergunta com lastro real (linha 2)?",
+    }
 
 
 # ---------------------------------------------------------------------------
