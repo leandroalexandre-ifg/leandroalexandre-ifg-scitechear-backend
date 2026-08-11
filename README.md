@@ -75,3 +75,18 @@ Se você é novo neste projeto, comece por
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — a introdução e o glossário
 já dão uma visão de 80% do sistema antes de entrar nos detalhes de cada
 camada.
+
+## Rodando com o app em dispositivo físico (Android)
+
+Ao testar o app em um tablet/celular físico via USB (ver README do frontend),
+suba o backend assim:
+
+```bash
+source .venv/bin/activate
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+`--host 0.0.0.0` é necessário para o servidor aceitar conexões de fora do
+`localhost`. O app se conecta via `adb reverse tcp:8000 tcp:8000` (configurado
+no lado do frontend), então não é preciso descobrir o IP da máquina nem lidar
+com isolamento de rede Wi-Fi entre os aparelhos.
