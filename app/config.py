@@ -23,7 +23,16 @@ class Settings(BaseSettings):
     diarization_max_speakers: int = Field(default=10, alias="DIARIZATION_MAX_SPEAKERS")
 
     voice_model: str = Field(default="speechbrain/spkrec-ecapa-voxceleb", alias="VOICE_MODEL")
-    voice_identification_threshold: float = Field(default=0.30, alias="VOICE_IDENTIFICATION_THRESHOLD")
+    # 0.75 (era 0.30) — 0.30 permitia falso positivo grave: participante nunca
+    # cadastrado identificado com confiança como outra pessoa (ver
+    # docs/PENDENCIAS.md). Recalibrado com dados reais de embeddings ECAPA
+    # (TTS sintético, ver tests/fixtures/voice_identification_real_embeddings.json):
+    # piso de match genuíno observado = 0.9157 (15 amostras, 3 pessoas), teto
+    # de impostor não-outlier = 0.6214 (6 amostras). 0.75 fica no meio dessa
+    # folga, mais perto do piso genuíno por design (falso negativo é preferível
+    # a falso positivo). PROVISÓRIO: calibrado só com TTS, pendente de
+    # revalidação com gravações humanas reais antes de produção.
+    voice_identification_threshold: float = Field(default=0.75, alias="VOICE_IDENTIFICATION_THRESHOLD")
     voice_min_margin: float = Field(default=0.05, alias="VOICE_MIN_MARGIN")
     voice_outlier_threshold: float = Field(default=0.45, alias="VOICE_OUTLIER_THRESHOLD")
 

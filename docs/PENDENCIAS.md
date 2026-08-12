@@ -161,3 +161,76 @@ só se repetem) — registrado aqui como pendência separada, não implementado
 ainda; possível endereçamento futuro seria pós-processamento de
 similaridade textual entre `pergunta`s antes de retornar o resultado, ou
 reforço adicional no prompt.
+
+## Aberta — Identificação biométrica: falso positivo com `VOICE_IDENTIFICATION_THRESHOLD=0.30`, recalibrado para 0.75; risco residual documentado
+
+**Onde:** `app/services/voice_service.identificar_speaker` /
+`VOICE_IDENTIFICATION_THRESHOLD` (`app/config.py`, `.env`, `.env.example`).
+
+**Incidente:** em teste real com 4 participantes (3 cadastraram voz, 1 nunca
+cadastrou nenhuma amostra), o participante não-cadastrado apareceu no
+resultado identificado como um dos outros três — falso positivo de
+identificação, mais grave que um falso negativo (atribuir a fala de uma
+pessoa a outra é problema de confiança/privacidade, não só de qualidade).
+
+**Investigação (dados reais, não hipotéticos):** reproduzido com áudio TTS
+sintético (macOS `say`, pt-BR/pt-PT) — 3 participantes cadastrados de
+verdade no `VoiceRepository` (embeddings ECAPA reais), 1 nunca cadastrado.
+Rodando `identificar_speaker`/`aplicar_biometria` de produção:
+
+- O pool de comparação (`banco`) já estava corretamente restrito aos
+  participantes daquela reunião com embedding cadastrado
+  (`pipeline_facade._carregar_banco_e_nomes`) — **não** compara contra todo
+  o `VoiceRepository`. Essa hipótese foi descartada.
+- Não é bug de lógica de decisão: threshold e margem funcionam exatamente
+  como documentado. O problema é calibração: com `THRESHOLD=0.30`, testei o
+  falante não-cadastrado contra o banco de 3 perfis e depois testei mais 6
+  falantes não-cadastrados diferentes contra o mesmo banco — **6 de 7**
+  deram falso positivo, a maioria com margem folgada (não foram rejeições
+  "quase certas" que passaram raspando).
+- Coletei o piso real de match GENUÍNO com mais amostras (15 = 3 pessoas
+  cadastradas x 5 frases novas cada, comparadas contra o próprio perfil):
+  **mínimo 0.9157, máximo 0.9543, média 0.9369.**
+- Teto de score de impostor, desconsiderando 1 outlier suspeito (ver
+  abaixo): **0.6214.**
+
+**Correção aplicada:** `VOICE_IDENTIFICATION_THRESHOLD` alterado de **0.30**
+para **0.75** — comfortavelmente abaixo do piso genuíno observado (folga de
+0.166) e acima do teto de impostor não-outlier (folga de 0.129), deliberadamente
+mais perto do piso genuíno do que do teto de impostor (risco assimétrico:
+falso negativo é preferível a falso positivo). `VOICE_MIN_MARGIN` (0.05)
+mantido como defesa secundária, não a única — a decisão real que barra a
+maioria dos impostores agora é o threshold, a margem cobre o caso de dois
+candidatos cadastrados muito parecidos entre si.
+
+**PROVISÓRIO — pendente de revalidação:** 0.75 foi calibrado inteiramente
+com embeddings de voz sintética (TTS), não gravações humanas reais. Antes de
+produção, revalidar com um conjunto de vozes humanas reais (idealmente
+incluindo pares foneticamente parecidos) para confirmar que o piso genuíno e
+o teto de impostor observados aqui se sustentam.
+
+**Risco residual em aberto, NÃO resolvido por este threshold:** um dos 7
+impostores testados (voz "Reed" do macOS, nunca cadastrada) obteve score
+**0.9555** contra o perfil cadastrado de "Eddy" — margem de 0.899 para o
+segundo colocado. Esse score cai **dentro** da própria faixa de match
+genuíno observada (piso 0.9157), então nenhum threshold plausível de
+similaridade de cosseno bloqueia esse caso sem também rejeitar matches
+genuínos legítimos. Suspeita (não confirmada): Eddy/Reed são vozes
+"novelty" do macOS que aparentemente compartilham o mesmo motor de síntese
+base com efeito de pitch/formante por cima, o que infla artificialmente a
+similaridade — mas o risco estrutural (duas vozes humanas naturalmente
+parecidas, ou parentes) não é hipotético e não tem solução só de threshold.
+Esse teste está travado propositalmente como "falha esperada, não
+corrigida" em
+`tests/test_voice_identification_real_regression.py::test_outlier_reed_eddy_NAO_e_bloqueado_pelo_threshold_075_limitacao_conhecida`
+— não deve ser "consertado" trocando o threshold sem antes discutir uma
+mudança estrutural (ex.: normalização de score, verificação adicional,
+revisão humana para casos limítrofes).
+
+**Regressão:** `tests/test_voice_identification_real_regression.py` usa
+embeddings ECAPA reais (não sintéticos/aleatórios) congelados em
+`tests/fixtures/voice_identification_real_embeddings.json` — reprodutíveis
+via os scripts usados nesta investigação (áudio TTS + `VoiceRepository` +
+`voice_service.gerar_embedding`). Trava: os 6 impostores não-outlier
+rejeitados, as 15 amostras genuínas identificadas corretamente, e o outlier
+Reed/Eddy **não** rejeitado (limitação conhecida).
