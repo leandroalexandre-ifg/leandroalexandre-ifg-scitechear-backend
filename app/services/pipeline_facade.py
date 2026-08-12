@@ -80,7 +80,13 @@ class MeetingPipelineFacade:
 
         try:
             self._jobs.update_status(job_id, JobStatusValue.SUMMARIZING)
-            resumo = question_service.summarize_meeting(formatter)
+            # Sumarização só existe como insumo interno de extract_implicit_questions
+            # (nenhum outro consumidor) — pulada junto quando a etapa de
+            # implícitas está desligada, para não chamar o Ollama à toa.
+            if get_settings().enable_implicit_questions:
+                resumo = question_service.summarize_meeting(formatter)
+            else:
+                resumo = ""
         except Exception as exc:  # noqa: BLE001
             self._marcar_erro(job_id, "SUMMARIZATION_ERROR", str(exc))
             return
@@ -115,6 +121,14 @@ class MeetingPipelineFacade:
     def _extrair_perguntas(self, formatter: TranscriptFormatter, resumo: str) -> List[Question]:
         settings = get_settings()
         explicitas = question_service.extract_explicit_questions(formatter)
+
+        # Etapa inteira de implícitas desligada por ENABLE_IMPLICIT_QUESTIONS
+        # (default False, temporário — ver docs/PENDENCIAS.md). Diferente do
+        # refinador: aqui não chamamos extract_implicit_questions nenhuma vez,
+        # não só o refinamento por cima dela.
+        if not settings.enable_implicit_questions:
+            return explicitas
+
         implicitas = question_service.extract_implicit_questions(formatter, resumo)
         if settings.enable_implicit_refinement:
             implicitas = question_service.refine_implicit_questions(implicitas, formatter)

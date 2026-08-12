@@ -162,6 +162,40 @@ ainda; possível endereçamento futuro seria pós-processamento de
 similaridade textual entre `pergunta`s antes de retornar o resultado, ou
 reforço adicional no prompt.
 
+**Atualização (2026-08-12) — etapa inteira temporariamente desativada por
+decisão do usuário:** apesar da correção acima (prompt v4 + validação
+programática de evidência), a extração de perguntas implícitas foi
+desligada por padrão via nova flag `ENABLE_IMPLICIT_QUESTIONS` (default
+`false`, `app/config.py`) — não confundir com `ENABLE_IMPLICIT_REFINEMENT`
+(já desligado antes, continua desligado). Motivo: isolar o comportamento do
+restante do sistema (transcrição, diarização, biometria, perguntas
+explícitas) enquanto a qualidade da extração implícita é validada
+separadamente — a confabulação original foi corrigida e parcialmente
+validada (ver acima, branch `fix/perguntas-implicitas-evidencia`), mas
+ainda não em volume/diversidade suficiente de reuniões reais para confiar
+nela em produção. Quando `ENABLE_IMPLICIT_QUESTIONS=false`:
+
+- `pipeline_facade._extrair_perguntas` não chama
+  `question_service.extract_implicit_questions` nem, por consequência,
+  `refine_implicit_questions` (que só faz sentido sobre uma saída implícita
+  que não existe).
+- `question_service.summarize_meeting` também não é chamado — hoje ela só
+  existe como insumo interno para as implícitas, sem outro consumidor no
+  pipeline; pular as duas juntas evita uma chamada ao Ollama sem uso.
+  Estágios de job continuam passando por `summarizing` e `extracting`
+  normalmente (contrato de estados inalterado); só o trabalho real dessas
+  etapas é pulado.
+- `MeetingResult.questions` passa a conter só perguntas `explicit` — sem
+  itens vazios ou placeholder no lugar das implícitas.
+- **Nada do trabalho já feito foi removido**: `extract_implicit_questions`,
+  o prompt v4 e a validação de evidência continuam intactos em
+  `question_service.py`, só não são chamados. Reativar é trocar a flag para
+  `true` (`.env` ou `.env.example`).
+- Regressão: `tests/test_pipeline_facade.py::test_pipeline_pula_etapa_implicita_quando_flag_desligada`
+  trava que, com a flag desligada, nem `summarize_meeting` nem
+  `extract_implicit_questions` são chamados e o resultado final só tem
+  perguntas explícitas.
+
 ## Aberta — Identificação biométrica: falso positivo com `VOICE_IDENTIFICATION_THRESHOLD=0.30`, recalibrado para 0.75; risco residual documentado
 
 **Onde:** `app/services/voice_service.identificar_speaker` /

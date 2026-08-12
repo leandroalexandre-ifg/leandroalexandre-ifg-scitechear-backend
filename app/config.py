@@ -39,6 +39,13 @@ class Settings(BaseSettings):
     ollama_base_url: str = Field(default="http://127.0.0.1:11434", alias="OLLAMA_BASE_URL")
     ollama_model: str = Field(default="qwen3:14b", alias="OLLAMA_MODEL")
 
+    # Desliga a ETAPA inteira de perguntas implícitas (não o refinador acima
+    # — esse já fica de fora por padrão). Temporário: isola o comportamento
+    # do sistema enquanto a qualidade da extração implícita (confabulação)
+    # é validada separadamente (ver docs/PENDENCIAS.md). Sumarização também
+    # é pulada quando desligado — ela só existe como insumo interno para as
+    # implícitas, não tem outro consumidor.
+    enable_implicit_questions: bool = Field(default=False, alias="ENABLE_IMPLICIT_QUESTIONS")
     enable_implicit_refinement: bool = Field(default=False, alias="ENABLE_IMPLICIT_REFINEMENT")
     demo_mode: bool = Field(default=False, alias="DEMO_MODE")
 

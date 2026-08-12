@@ -111,11 +111,21 @@ def _mock_estagios_felizes(monkeypatch):
 
 
 def test_pipeline_completo_persiste_resultado_e_marca_done(tmp_path, monkeypatch):
+    from app.config import get_settings
+
     facade, storage = _nova_facade(tmp_path)
     _preparar_job(facade, storage)
     _mock_estagios_felizes(monkeypatch)
 
-    facade.executar("job-1")
+    # Caminho feliz completo (explícitas + implícitas combinadas) — precisa
+    # da etapa de implícitas ligada explicitamente, já que o default passou
+    # a ser desligado (ENABLE_IMPLICIT_QUESTIONS=false, ver docs/PENDENCIAS.md).
+    monkeypatch.setenv("ENABLE_IMPLICIT_QUESTIONS", "true")
+    get_settings.cache_clear()
+    try:
+        facade.executar("job-1")
+    finally:
+        get_settings.cache_clear()
 
     job = facade._jobs.get("job-1")
     assert job.status == JobStatusValue.DONE
@@ -131,8 +141,15 @@ def test_pipeline_completo_persiste_resultado_e_marca_done(tmp_path, monkeypatch
 
 
 def test_pipeline_percorre_estagios_na_ordem_correta(tmp_path, monkeypatch):
+    from app.config import get_settings
+
     facade, storage = _nova_facade(tmp_path)
     _preparar_job(facade, storage)
+
+    # Testa a ordem completa dos 6 estágios internos, incluindo summarize/
+    # extract_implicit — precisa da flag ligada (default agora é desligado).
+    monkeypatch.setenv("ENABLE_IMPLICIT_QUESTIONS", "true")
+    get_settings.cache_clear()
 
     sequencia = []
 
@@ -170,7 +187,10 @@ def test_pipeline_percorre_estagios_na_ordem_correta(tmp_path, monkeypatch):
     monkeypatch.setattr(question_service, "extract_explicit_questions", fake_extract_explicit)
     monkeypatch.setattr(question_service, "extract_implicit_questions", fake_extract_implicit)
 
-    facade.executar("job-1")
+    try:
+        facade.executar("job-1")
+    finally:
+        get_settings.cache_clear()
 
     nomes_estagios = [nome for nome, _ in sequencia]
     status_por_estagio = [status for _, status in sequencia]
@@ -210,6 +230,10 @@ def test_pipeline_chama_refinamento_so_quando_flag_ativa(tmp_path, monkeypatch):
 
     monkeypatch.setattr(question_service, "refine_implicit_questions", fake_refine)
 
+    # Refinamento só é alcançado quando a etapa de implícitas está ligada —
+    # sem isso, extract_implicit_questions nem roda (default agora é
+    # desligado, ver docs/PENDENCIAS.md).
+    monkeypatch.setenv("ENABLE_IMPLICIT_QUESTIONS", "true")
     monkeypatch.setenv("ENABLE_IMPLICIT_REFINEMENT", "false")
     from app.config import get_settings
 
@@ -228,6 +252,73 @@ def test_pipeline_chama_refinamento_so_quando_flag_ativa(tmp_path, monkeypatch):
         assert any(q.text == "refinada" for q in resultado.questions)
     finally:
         get_settings.cache_clear()
+
+
+def test_pipeline_pula_etapa_implicita_quando_flag_desligada(tmp_path, monkeypatch):
+    """ENABLE_IMPLICIT_QUESTIONS=false (default): não chama summarize_meeting
+    nem extract_implicit_questions — pipeline completa normalmente com DONE e
+    o resultado só tem perguntas explícitas, sem itens vazios/placeholder no
+    lugar das implícitas. Ver docs/PENDENCIAS.md."""
+    from app.config import get_settings
+
+    facade, storage = _nova_facade(tmp_path)
+    _preparar_job(facade, storage)
+
+    chamado = {"summarize": False, "extract_implicit": False}
+
+    def fake_summarize_nao_deveria_ser_chamado(formatter):
+        chamado["summarize"] = True
+        return "resumo"
+
+    def fake_extract_implicit_nao_deveria_ser_chamado(formatter, summary):
+        chamado["extract_implicit"] = True
+        return [Question(id="I1", type=QuestionType.IMPLICIT, text="não deveria existir", source_segment_ids=[])]
+
+    monkeypatch.setattr(transcription_service, "transcribe", lambda audio_path, language=None: _transcricao_fake())
+    monkeypatch.setattr(
+        diarization_service,
+        "diarizar",
+        lambda audio_path, transcricao, expected_speaker_count=None, exact_speaker_count=False: _diarizacao_fake(),
+    )
+    monkeypatch.setattr(
+        voice_service, "aplicar_biometria", lambda audio_path, diarizacao, banco, nomes=None, **kw: _segments_fake()
+    )
+    monkeypatch.setattr(question_service, "summarize_meeting", fake_summarize_nao_deveria_ser_chamado)
+    monkeypatch.setattr(
+        question_service,
+        "extract_explicit_questions",
+        lambda formatter: [
+            Question(
+                id="P1",
+                type=QuestionType.EXPLICIT,
+                text="Qual é o prazo?",
+                participant_id="p1",
+                speaker="Leandro",
+                time=0.0,
+                source_segment_ids=["seg_0001"],
+            )
+        ],
+    )
+    monkeypatch.setattr(question_service, "extract_implicit_questions", fake_extract_implicit_nao_deveria_ser_chamado)
+
+    monkeypatch.setenv("ENABLE_IMPLICIT_QUESTIONS", "false")
+    get_settings.cache_clear()
+    try:
+        facade.executar("job-1")
+    finally:
+        get_settings.cache_clear()
+
+    assert chamado["summarize"] is False
+    assert chamado["extract_implicit"] is False
+
+    job = facade._jobs.get("job-1")
+    assert job.status == JobStatusValue.DONE
+    assert job.error is None
+
+    resultado = facade._results.load("job-1")
+    assert resultado is not None
+    assert len(resultado.questions) == 1
+    assert all(q.type == QuestionType.EXPLICIT for q in resultado.questions)
 
 
 # ---------------------------------------------------------------------------

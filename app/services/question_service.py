@@ -25,8 +25,14 @@ semanticamente intactos. Únicas mudanças de comportamento:
   linhas de evidência válidas.
 - SUMARIZAÇÃO: artefato interno (prompts/meeting_summary_v1.txt); não é
   contrato do Flutter, continua texto.
+- IMPLÍCITAS (etapa inteira): temporariamente desligada por padrão via
+  ENABLE_IMPLICIT_QUESTIONS=false (gate em pipeline_facade, não aqui —
+  extract_implicit_questions continua intacta para quando for reativada).
+  Ver docs/PENDENCIAS.md.
 - REFINAMENTO (prompts/implicit_refiner_v1.txt): implementado mas em
-  standby — só é chamado se ENABLE_IMPLICIT_REFINEMENT=true.
+  standby — só é chamado se ENABLE_IMPLICIT_REFINEMENT=true (e só quando
+  ENABLE_IMPLICIT_QUESTIONS também está true, já que não há o que refinar
+  sem extração implícita).
 - RAG: não implementado nesta V1 (decisão da spec).
 """
 import json
