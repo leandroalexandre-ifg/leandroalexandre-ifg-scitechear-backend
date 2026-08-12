@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta, timezone
+
 from app.models.job import JobError, JobStatusValue
 from app.models.participant import Participant
 from app.repositories.job_repository import JobRepository, get_job_repository
@@ -56,3 +58,43 @@ def test_update_status_job_inexistente_nao_quebra():
 
 def test_get_job_repository_e_singleton():
     assert get_job_repository() is get_job_repository()
+
+
+# ---------------------------------------------------------------------------
+# stage_durations — instrumentação de performance (Fase 1, docs/PENDENCIAS.md)
+# ---------------------------------------------------------------------------
+
+
+def test_stage_durations_calcula_a_partir_do_historico_de_transicoes():
+    repo = JobRepository()
+    record = repo.create(job_id="j1", title=None, participants=[], expected_speaker_count=None)
+
+    # Congela timestamps artificiais no próprio histórico para não depender
+    # de tempo real de execução do teste.
+    t0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    record.status_history = [
+        (JobStatusValue.QUEUED, t0),
+        (JobStatusValue.TRANSCRIBING, t0 + timedelta(seconds=1)),
+        (JobStatusValue.DIARIZING, t0 + timedelta(seconds=11)),  # transcribing = 10s
+        (JobStatusValue.IDENTIFYING, t0 + timedelta(seconds=16)),  # diarizing = 5s
+        (JobStatusValue.DONE, t0 + timedelta(seconds=16.5)),  # identifying = 0.5s
+    ]
+
+    duracoes = repo.stage_durations("j1")
+
+    assert duracoes["transcribing"] == 10.0
+    assert duracoes["diarizing"] == 5.0
+    assert duracoes["identifying"] == 0.5
+    assert "done" not in duracoes  # terminal, sem duração própria
+
+
+def test_stage_durations_job_recem_criado_sem_transicoes_suficientes():
+    repo = JobRepository()
+    repo.create(job_id="j1", title=None, participants=[], expected_speaker_count=None)
+
+    assert repo.stage_durations("j1") == {}
+
+
+def test_stage_durations_job_inexistente_retorna_vazio():
+    repo = JobRepository()
+    assert repo.stage_durations("nao-existe") == {}

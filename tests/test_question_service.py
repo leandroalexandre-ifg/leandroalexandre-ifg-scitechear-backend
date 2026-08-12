@@ -81,7 +81,7 @@ def test_extract_explicit_questions_resolve_via_formatter_nao_via_llm(monkeypatc
             "total_perguntas": 1,
         }
     )
-    monkeypatch.setattr(question_service, "_chamar_ollama", lambda prompt: resposta)
+    monkeypatch.setattr(question_service, "_chamar_ollama", lambda prompt, **kwargs: resposta)
 
     perguntas = question_service.extract_explicit_questions(_formatter())
 
@@ -110,7 +110,7 @@ def test_extract_explicit_questions_linha_fora_do_range_fica_com_campos_nulos(mo
             "total_perguntas": 1,
         }
     )
-    monkeypatch.setattr(question_service, "_chamar_ollama", lambda prompt: resposta)
+    monkeypatch.setattr(question_service, "_chamar_ollama", lambda prompt, **kwargs: resposta)
 
     perguntas = question_service.extract_explicit_questions(_formatter())
 
@@ -121,7 +121,7 @@ def test_extract_explicit_questions_linha_fora_do_range_fica_com_campos_nulos(mo
 
 
 def test_extract_explicit_questions_json_invalido_levanta_erro(monkeypatch):
-    monkeypatch.setattr(question_service, "_chamar_ollama", lambda prompt: "não é json")
+    monkeypatch.setattr(question_service, "_chamar_ollama", lambda prompt, **kwargs: "não é json")
 
     with pytest.raises(ValueError):
         question_service.extract_explicit_questions(_formatter())
@@ -129,10 +129,53 @@ def test_extract_explicit_questions_json_invalido_levanta_erro(monkeypatch):
 
 def test_extract_explicit_questions_schema_invalido_levanta_erro(monkeypatch):
     resposta = json.dumps({"perguntas": [{"id": "P1"}], "total_perguntas": 1})  # faltam campos
-    monkeypatch.setattr(question_service, "_chamar_ollama", lambda prompt: resposta)
+    monkeypatch.setattr(question_service, "_chamar_ollama", lambda prompt, **kwargs: resposta)
 
     with pytest.raises(ValidationError):
         question_service.extract_explicit_questions(_formatter())
+
+
+def test_extract_explicit_questions_mantem_think_ligado(monkeypatch):
+    """think=False foi TESTADO para extract_explicit_questions e revertido:
+    comparação antes/depois com a mesma transcrição real (docs/PERFORMANCE.md)
+    mostrou diferença de CONTEÚDO (não só velocidade) — perdeu uma pergunta
+    genuína e ganhou uma frase que não terminava em "?". Este teste trava que
+    a chamada continua com o default think=True até haver mitigação
+    validada. Não "consertar" trocando para False sem repetir a validação."""
+    resposta = json.dumps({"perguntas": [], "total_perguntas": 0})
+    chamadas = []
+
+    def fake_chamar_ollama(prompt, contexto=None, think=True):
+        chamadas.append({"contexto": contexto, "think": think})
+        return resposta
+
+    monkeypatch.setattr(question_service, "_chamar_ollama", fake_chamar_ollama)
+
+    question_service.extract_explicit_questions(_formatter())
+
+    assert len(chamadas) == 1
+    assert chamadas[0]["contexto"] == "extract_explicit_questions"
+    assert chamadas[0]["think"] is True
+
+
+def test_summarize_e_implicitas_continuam_com_think_ligado_por_padrao(monkeypatch):
+    """Nenhuma chamada ao Ollama teve think desligado nesta rodada de
+    calibração — sumarização e implícitas (mesmo desligadas por
+    ENABLE_IMPLICIT_QUESTIONS) continuam no default think=True."""
+    chamadas = []
+
+    def fake_chamar_ollama(prompt, contexto=None, think=True):
+        chamadas.append({"contexto": contexto, "think": think})
+        return json.dumps({"perguntas_implicitas": [], "total_perguntas": 0})
+
+    monkeypatch.setattr(question_service, "_chamar_ollama", fake_chamar_ollama)
+
+    question_service.summarize_meeting(_formatter())
+    question_service.extract_implicit_questions(_formatter(), summary="resumo")
+
+    assert len(chamadas) == 2
+    assert all(c["think"] is True for c in chamadas)
+    assert {c["contexto"] for c in chamadas} == {"summarize_meeting", "extract_implicit_questions"}
 
 
 # ---------------------------------------------------------------------------
@@ -151,7 +194,7 @@ def test_extract_implicit_questions_speaker_e_time_ficam_none(monkeypatch):
             "total_perguntas": 2,
         }
     )
-    monkeypatch.setattr(question_service, "_chamar_ollama", lambda prompt: resposta)
+    monkeypatch.setattr(question_service, "_chamar_ollama", lambda prompt, **kwargs: resposta)
 
     perguntas = question_service.extract_implicit_questions(_formatter(), summary="resumo qualquer")
 
@@ -165,7 +208,7 @@ def test_extract_implicit_questions_speaker_e_time_ficam_none(monkeypatch):
 
 def test_extract_implicit_questions_schema_invalido_levanta_erro(monkeypatch):
     resposta = json.dumps({"perguntas": [{"id": "I1", "pergunta": "x"}]})  # chave errada
-    monkeypatch.setattr(question_service, "_chamar_ollama", lambda prompt: resposta)
+    monkeypatch.setattr(question_service, "_chamar_ollama", lambda prompt, **kwargs: resposta)
 
     with pytest.raises(ValidationError):
         question_service.extract_implicit_questions(_formatter(), summary="resumo")
@@ -180,7 +223,7 @@ def test_extract_implicit_questions_evidencia_valida_preenche_source_segment_ids
             "total_perguntas": 1,
         }
     )
-    monkeypatch.setattr(question_service, "_chamar_ollama", lambda prompt: resposta)
+    monkeypatch.setattr(question_service, "_chamar_ollama", lambda prompt, **kwargs: resposta)
 
     perguntas = question_service.extract_implicit_questions(_formatter(), summary="resumo")
 
@@ -197,7 +240,7 @@ def test_extract_implicit_questions_sem_linhas_evidencia_e_descartada(monkeypatc
             "total_perguntas": 1,
         }
     )
-    monkeypatch.setattr(question_service, "_chamar_ollama", lambda prompt: resposta)
+    monkeypatch.setattr(question_service, "_chamar_ollama", lambda prompt, **kwargs: resposta)
 
     perguntas = question_service.extract_implicit_questions(_formatter(), summary="resumo")
 
@@ -214,7 +257,7 @@ def test_extract_implicit_questions_maioria_das_linhas_invalida_descarta_pergunt
             "total_perguntas": 1,
         }
     )
-    monkeypatch.setattr(question_service, "_chamar_ollama", lambda prompt: resposta)
+    monkeypatch.setattr(question_service, "_chamar_ollama", lambda prompt, **kwargs: resposta)
 
     perguntas = question_service.extract_implicit_questions(_formatter(), summary="resumo")
 
@@ -231,7 +274,7 @@ def test_extract_implicit_questions_maioria_das_linhas_valida_mantem_so_as_valid
             "total_perguntas": 1,
         }
     )
-    monkeypatch.setattr(question_service, "_chamar_ollama", lambda prompt: resposta)
+    monkeypatch.setattr(question_service, "_chamar_ollama", lambda prompt, **kwargs: resposta)
 
     perguntas = question_service.extract_implicit_questions(_formatter(), summary="resumo")
 
@@ -250,7 +293,7 @@ def test_extract_implicit_questions_regressao_descarta_maioria_alucinada(monkeyp
         for i in range(3, 20)
     ]
     resposta = json.dumps({"perguntas_implicitas": perguntas_geradas, "total_perguntas": len(perguntas_geradas)})
-    monkeypatch.setattr(question_service, "_chamar_ollama", lambda prompt: resposta)
+    monkeypatch.setattr(question_service, "_chamar_ollama", lambda prompt, **kwargs: resposta)
 
     perguntas = question_service.extract_implicit_questions(_formatter(), summary="resumo")
 
@@ -267,7 +310,7 @@ def test_extract_implicit_questions_regressao_descarta_maioria_alucinada(monkeyp
 
 
 def test_summarize_meeting_retorna_texto_bruto(monkeypatch):
-    monkeypatch.setattr(question_service, "_chamar_ollama", lambda prompt: "1. Contexto\nObjetivo: ...")
+    monkeypatch.setattr(question_service, "_chamar_ollama", lambda prompt, **kwargs: "1. Contexto\nObjetivo: ...")
 
     resumo = question_service.summarize_meeting(_formatter())
 

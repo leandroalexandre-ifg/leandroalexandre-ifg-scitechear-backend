@@ -9,7 +9,7 @@ API nem no PipelineFacade.
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from app.models.job import JobError, JobStatusValue
 from app.models.participant import Participant
@@ -25,6 +25,11 @@ class JobRecord:
     error: Optional[JobError] = None
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    # Histórico de transições (status, timestamp de quando ENTROU nesse
+    # status) — usado só para medir tempo por estágio (instrumentação de
+    # performance, ver docs/PENDENCIAS.md). Não faz parte do contrato HTTP
+    # (JobStatusResponse continua só com o status atual).
+    status_history: List[Tuple[JobStatusValue, datetime]] = field(default_factory=list)
 
 
 class JobRepository:
@@ -45,6 +50,7 @@ class JobRepository:
             participants=participants,
             expected_speaker_count=expected_speaker_count,
         )
+        record.status_history.append((record.status, record.created_at))
         with self._lock:
             self._jobs[job_id] = record
         return record
@@ -63,6 +69,25 @@ class JobRepository:
             record.status = status
             record.error = error
             record.updated_at = datetime.now(timezone.utc)
+            record.status_history.append((status, record.updated_at))
+
+    def stage_durations(self, job_id: str) -> Dict[str, float]:
+        """Segundos gastos em cada estágio, calculado a partir do próprio
+        `status_history` de transições já registrado — não uma medição
+        paralela. Chave é o estágio que estava ATIVO durante aquele
+        intervalo (ex.: "transcribing" = tempo entre entrar em TRANSCRIBING
+        e entrar no próximo status). O último estágio (DONE/ERROR) não tem
+        duração — é terminal, não um trabalho em si."""
+        with self._lock:
+            record = self._jobs.get(job_id)
+            if record is None or len(record.status_history) < 2:
+                return {}
+            historico = list(record.status_history)
+
+        return {
+            status.value: (proximo_ts - ts).total_seconds()
+            for (status, ts), (_, proximo_ts) in zip(historico, historico[1:])
+        }
 
 
 _job_repository_singleton: Optional[JobRepository] = None

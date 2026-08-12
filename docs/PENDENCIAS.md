@@ -268,3 +268,16 @@ via os scripts usados nesta investigação (áudio TTS + `VoiceRepository` +
 `voice_service.gerar_embedding`). Trava: os 6 impostores não-outlier
 rejeitados, as 15 amostras genuínas identificadas corretamente, e o outlier
 Reed/Eddy **não** rejeitado (limitação conhecida).
+
+## Aberta — Performance do pipeline: extração de perguntas explícitas é ~42% do tempo total; think=False testado e revertido
+
+**Onde:** `app/services/question_service.py` (`_chamar_ollama`,
+`extract_explicit_questions`), `app/repositories/job_repository.py`
+(instrumentação de tempo por estágio).
+
+**Ver `docs/PERFORMANCE.md`** para a medição completa (tempo por estágio,
+breakdown load/prompt_eval/eval do Ollama) e o teste antes/depois de
+`think=False` para `extract_explicit_questions`: reduziu o tempo em 77,3%,
+mas mudou o CONTEÚDO extraído (perdeu uma pergunta genuína, ganhou uma
+frase que não era pergunta) — revertido, `think=True` mantido. Testado com
+uma única transcrição sintética; não repetido com dados diversos.

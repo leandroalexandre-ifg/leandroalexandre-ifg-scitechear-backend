@@ -85,13 +85,13 @@ def _carregar_prompt(nome_arquivo: str) -> str:
     return (PROMPTS_DIR / nome_arquivo).read_text(encoding="utf-8")
 
 
-def _chamar_ollama(prompt: str) -> str:
+def _chamar_ollama(prompt: str, contexto: str = "chamada_ollama", think: bool = True) -> str:
     settings = get_settings()
     payload = {
         "model": settings.ollama_model,
         "prompt": prompt,
         "stream": False,
-        "think": True,
+        "think": think,
         "options": {
             "temperature": 0,
             "top_p": 1,
@@ -105,7 +105,32 @@ def _chamar_ollama(prompt: str) -> str:
     response = requests.post(f"{settings.ollama_base_url}/api/generate", json=payload, timeout=None)
     response.raise_for_status()
     dados = response.json()
+    _log_duracao_ollama(contexto, dados)
     return dados.get("response", "")
+
+
+def _log_duracao_ollama(contexto: str, dados: dict) -> None:
+    """Instrumentação de performance (Fase 1, ver docs/PENDENCIAS.md): a API
+    do Ollama devolve load_duration/prompt_eval_duration/eval_duration em
+    nanossegundos — distingue 3 causas de lentidão bem diferentes (recarregar
+    o modelo vs. processar um prompt grande vs. gerar a resposta/thinking).
+    Só loga, não altera nada no payload/comportamento."""
+    load_s = dados.get("load_duration", 0) / 1e9
+    prompt_eval_s = dados.get("prompt_eval_duration", 0) / 1e9
+    eval_s = dados.get("eval_duration", 0) / 1e9
+    prompt_eval_tokens = dados.get("prompt_eval_count")
+    eval_tokens = dados.get("eval_count")
+    total_s = dados.get("total_duration", 0) / 1e9
+    logger.info(
+        "Ollama[%s]: load=%.2fs prompt_eval=%.2fs (%s tokens) eval=%.2fs (%s tokens) total=%.2fs",
+        contexto,
+        load_s,
+        prompt_eval_s,
+        prompt_eval_tokens,
+        eval_s,
+        eval_tokens,
+        total_s,
+    )
 
 
 def _extrair_json(texto: str) -> dict:
@@ -135,7 +160,13 @@ def extract_explicit_questions(formatter: TranscriptFormatter) -> List[Question]
     prompt = _carregar_prompt(EXPLICIT_QUESTIONS_PROMPT)
     prompt_final = f"{prompt}\n\n{formatter.render()}"
 
-    resposta_bruta = _chamar_ollama(prompt_final)
+    # think=False foi TESTADO aqui e revertido: comparação antes/depois com
+    # a mesma transcrição (docs/PERFORMANCE.md) mostrou diferença real de
+    # conteúdo, não só velocidade — com think=False a extração perdeu uma
+    # pergunta genuína (terminada em "?") e ganhou uma frase que não é
+    # pergunta. Mantido think=True (default do parâmetro _chamar_ollama)
+    # até haver uma mitigação validada (ver docs/PERFORMANCE.md).
+    resposta_bruta = _chamar_ollama(prompt_final, contexto="extract_explicit_questions")
     dados = _extrair_json(resposta_bruta)
     validado = ExplicitQuestionsResponse.model_validate(dados)
 
@@ -167,7 +198,7 @@ def summarize_meeting(formatter: TranscriptFormatter) -> str:
     PromptSumarizacaoV1 semanticamente; saída continua texto."""
     prompt = _carregar_prompt(MEETING_SUMMARY_PROMPT)
     prompt_final = f"{prompt}\n\n{formatter.render()}"
-    return _chamar_ollama(prompt_final)
+    return _chamar_ollama(prompt_final, contexto="summarize_meeting")
 
 
 def _resolver_evidencia_implicita(
@@ -213,7 +244,7 @@ def extract_implicit_questions(formatter: TranscriptFormatter, summary: str) -> 
     prompt = _carregar_prompt(IMPLICIT_QUESTIONS_PROMPT)
     prompt_final = f"{prompt}\n\n{summary}\n\n{formatter.render()}"
 
-    resposta_bruta = _chamar_ollama(prompt_final)
+    resposta_bruta = _chamar_ollama(prompt_final, contexto="extract_implicit_questions")
     dados = _extrair_json(resposta_bruta)
     validado = ImplicitQuestionsResponse.model_validate(dados)
 
@@ -257,7 +288,7 @@ def refine_implicit_questions(perguntas: List[Question], formatter: TranscriptFo
     perguntas_numeradas = "\n".join(f"{i + 1}. {q.text}" for i, q in enumerate(perguntas))
     prompt_final = f"{prompt}\n\n{perguntas_numeradas}\n\n{formatter.render()}"
 
-    resposta_bruta = _chamar_ollama(prompt_final)
+    resposta_bruta = _chamar_ollama(prompt_final, contexto="refine_implicit_questions")
     textos_refinados = _parse_lista_numerada(resposta_bruta)
 
     return [

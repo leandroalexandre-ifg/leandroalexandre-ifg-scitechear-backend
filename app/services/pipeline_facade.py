@@ -101,6 +101,7 @@ class MeetingPipelineFacade:
         resultado = self._montar_resultado(job_id, segments, perguntas)
         self._results.save(resultado)
         self._jobs.update_status(job_id, JobStatusValue.DONE)
+        self._log_duracao_por_estagio(job_id)
 
     def _carregar_banco_e_nomes(
         self, participants: List[Participant]
@@ -153,3 +154,15 @@ class MeetingPipelineFacade:
     def _marcar_erro(self, job_id: str, code: str, message: str) -> None:
         logger.error("Job %s falhou em %s: %s", job_id, code, message)
         self._jobs.update_status(job_id, JobStatusValue.ERROR, error=JobError(code=code, message=message))
+        self._log_duracao_por_estagio(job_id)
+
+    def _log_duracao_por_estagio(self, job_id: str) -> None:
+        """Instrumentação de performance (não faz parte do contrato HTTP):
+        loga o tempo gasto em cada estágio, calculado a partir do próprio
+        status_history de transições já registrado no JobRepository — não
+        uma medição paralela. Ver docs/PENDENCIAS.md."""
+        duracoes = self._jobs.stage_durations(job_id)
+        if not duracoes:
+            return
+        formatado = " ".join(f"{estagio}={segundos:.2f}s" for estagio, segundos in duracoes.items())
+        logger.info("Job %s — tempo por estágio: %s | total=%.2fs", job_id, formatado, sum(duracoes.values()))
