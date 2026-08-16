@@ -269,6 +269,54 @@ via os scripts usados nesta investigação (áudio TTS + `VoiceRepository` +
 rejeitados, as 15 amostras genuínas identificadas corretamente, e o outlier
 Reed/Eddy **não** rejeitado (limitação conhecida).
 
+**Revalidação com voz humana real — EM ANDAMENTO (2026-08-13):** primeiro
+caso real reportado — reunião de 1 falante com voz cadastrada apareceu como
+NÃO IDENTIFICADO. Diagnóstico (sem reprocessar pipeline; score lido do
+`result.json` já persistido e reproduzido isoladamente via
+`voice_service` contra os embeddings salvos):
+
+- Job `873111cc-0ada-413f-8742-3f11b10d74a8` (12/08 20:21): score **0.7304**,
+  abaixo do threshold 0.75 → rejeitado corretamente pela lógica atual (não é
+  bug de decisão). 5 de 7 segmentos qualificaram para o embedding (≥1.5s,
+  ~27s concatenados, nenhum outlier) — não é caso de poucos segmentos.
+- Dois outros jobs de 1 falante rodados **depois** do fix do threshold
+  (commit `86d6c99`, 12/08 19:37) com a mesma pessoa: job `189e5d28`
+  (11/08) = 0.7684 (identificado); job `75d7669d` (12/08 19:44) = 0.7621
+  (identificado, por pouco).
+- **Os 3 scores genuínos reais pós-fix caem em 0.73–0.77** — bem abaixo do
+  piso genuíno medido com TTS (0.9157–0.9543). A folga entre o piso
+  genuíno real observado e o teto de impostor sintético (0.6214) caiu de
+  0.166 (TTS) para **~0.11**. Ainda não há sobreposição confirmada, mas a
+  margem de segurança encolheu, como era de se esperar ao trocar TTS por
+  voz humana real.
+- **Achado colateral corrigido:** o `VoiceRepository` tinha 4 perfis
+  "Leandro"/"leandro" duplicados (`participant_id` = timestamp gerado no
+  momento do cadastro — cada teste manual do endpoint de enrollment criou
+  um participante novo em vez de reutilizar um existente). Confirmado que
+  **não é bug de backend**: este serviço não gera `participant_id`, ele é
+  puramente definido por quem chama `POST /participants/{participant_id}
+  /voice-samples` (contrato do CLAUDE.md, regra 4) — os IDs eram lixo de
+  testes manuais do endpoint, anteriores à integração com um cliente
+  estável. Um dos duplicados batia como 2º colocado (0.7077, margem 0.0227
+  para o 1º) no caso acima, o que teria acionado rejeição por
+  `VOICE_MIN_MARGIN` mesmo se o threshold fosse reduzido — duplicatas
+  distorcem a margem e não podem entrar em dados de calibração. Os 3
+  perfis mais antigos foram removidos via `VoiceRepository.delete_profile`
+  em 2026-08-13, mantendo só o mais recente (`1786574452078827`). Os
+  outros 4 perfis cadastrados (Mãe, Maria, Pedro, Samuel) são pessoas
+  reais distintas, sem duplicação.
+
+**Decisão atual: threshold MANTIDO em 0.75.** Ainda não há dados
+suficientes para recalibrar com segurança — só uma pessoa real testada até
+agora (3 amostras dela mesma), e falta testar impostor real (pessoa A
+contra perfil de pessoa B, via microfone, não TTS). Aceitar o falso
+negativo específico documentado acima é consistente com a prioridade
+assimétrica já definida (falso negativo é preferível a falso positivo).
+Pendente: gravar 2-3 frases de pelo menos mais uma pessoa real distinta
+para (a) confirmar o piso genuíno humano com mais de 1 amostra/pessoa e
+(b) medir impostor real. Só então decidir um novo número, com o mesmo
+rigor da calibração anterior.
+
 ## Aberta — Performance do pipeline: extração de perguntas explícitas é ~42% do tempo total; think=False testado e revertido
 
 **Onde:** `app/services/question_service.py` (`_chamar_ollama`,
@@ -281,3 +329,103 @@ breakdown load/prompt_eval/eval do Ollama) e o teste antes/depois de
 mas mudou o CONTEÚDO extraído (perdeu uma pergunta genuína, ganhou uma
 frase que não era pergunta) — revertido, `think=True` mantido. Testado com
 uma única transcrição sintética; não repetido com dados diversos.
+
+## Aberta — Diarização mistura falantes em áudio distante/ruidoso/sobreposto; não é problema de threshold nem de min/max speakers
+
+**Onde:** `app/services/diarization_service.diarizar` (pyannote pipeline
+`pyannote/speaker-diarization-community-1`, `VBxClustering`).
+
+**Incidente (2026-08-16):** reunião informal de 3 pessoas (Leandro, mãe,
+terceiro falante), gravada com tablet longe da boca dos falantes, ambiente
+ruidoso e fala frequentemente sobreposta. Job
+`30343d67-76d1-47ad-a313-8552fa094b87`. Os 3 clusters (`SPEAKER_00/01/02`)
+saíram da identificação biométrica com scores muito baixos e uniformes
+(0.14–0.33) — bem abaixo tanto do threshold atual (0.75) quanto da faixa
+0.73–0.77 já documentada acima como "genuíno real, mas abaixo do
+threshold". A uniformidade e a magnitude dos scores sugeriam outra causa,
+não simplesmente calibração de threshold.
+
+**Investigação (áudio real ouvido pelo usuário, não hipotético):**
+extraídos e concatenados, por cluster, todos os trechos de áudio daquele
+cluster (script ad hoc com `soundfile`, não versionado — cada cluster virou
+um WAV próprio). O usuário ouviu os 3 arquivos e confirmou por escuta:
+**os 3 clusters têm vozes misturadas** — não é um caso isolado, é
+generalizado nesta reunião. Confirma que o problema é de diarização
+(agrupamento errado, antes até da comparação de embedding), não de
+threshold de identificação.
+
+**Descartada a hipótese de min/max speakers mal configurado:**
+reprocessada só a etapa de diarização (sem re-rodar WhisperX) com
+`num_speakers=3` explícito (`exact_speaker_count=True`, contornando o
+range default `DIARIZATION_MIN_SPEAKERS=1`/`DIARIZATION_MAX_SPEAKERS=10`).
+Resultado: clusters **idênticos** aos do job original — mesmas fronteiras,
+mesmas durações por cluster (SPEAKER_00: 9 segmentos/8.69s; SPEAKER_01: 7
+segmentos/15.27s; SPEAKER_02: 12 segmentos/53.63s). O pyannote já
+convergia para 3 falantes sozinho dentro do range default; forçar o número
+exato não mudou a atribuição. O problema não é o pipeline errar a
+CONTAGEM de falantes, é errar QUEM fala em cada trecho.
+
+**Overlap detection já ativo:** inspecionado o pipeline instanciado —
+`embedding_exclude_overlap = True` (default), ou seja, a mitigação padrão
+para fala sobreposta na extração de embedding de clustering já estava
+ligada. Parâmetros de clustering default: VBx `threshold=0.6`, `Fa=0.07`,
+`Fb=0.8`; `segmentation.min_duration_off=0.0` — não ajustados (fora do
+escopo aprovado para esta rodada).
+
+**Achado auxiliar:** só 1 dos 3 clusters teve mais de 1 segmento válido
+(≥1.5s) disponível para gerar o embedding de identificação biométrica —
+`SPEAKER_00` teve exatamente 1 candidato (1.98s), `SPEAKER_01` teve
+exatamente 1 candidato (12.21s), `SPEAKER_02` teve 5. Como
+`_remover_outliers` só age com ≥3 embeddings, nem `SPEAKER_00` nem
+`SPEAKER_01` passaram por filtragem de outlier — mas isso é consequência
+da diarização já ter misturado/fragmentado os falantes, não a causa raiz.
+
+**Avaliação:** os dados apontam para uma limitação estrutural do modelo de
+diarização diante de áudio de campo distante, ruidoso e com fala rápida
+sobreposta — cenário estruturalmente mais adverso que os testes anteriores
+(voz próxima, pouca sobreposição, silêncio de fundo), não um bug de
+configuração corrigível trocando threshold/min-max. Não foi testado:
+calibração fina de `clustering.threshold`/`Fa`/`Fb` do VBx, nem
+pré-processamento (redução de ruído, normalização de volume) antes da
+diarização — ambos ficaram fora do escopo desta investigação, por decisão
+do usuário.
+
+**Status:** aberta, investigação encerrada por ora sem correção aplicada.
+Nenhuma mudança de comportamento foi feita — só diagnóstico. Próximo passo
+(quando retomado) provavelmente exige mais dados de reuniões reais com
+esse perfil de gravação (distante/ruidosa) antes de decidir entre
+calibração de clustering, orientação de captura (aproximar o dispositivo)
+ou aceitar a limitação como conhecida.
+
+## Aberta — `expected_speaker_count` do job nunca vira `num_speakers` exato na diarização (bug de baixo risco, não urgente)
+
+**Onde:** `app/services/pipeline_facade.py` (chamada a
+`diarization_service.diarizar`).
+
+**O quê:** `diarizar()` suporta `exact_speaker_count: bool = False` —
+quando `True` e `expected_speaker_count` está presente, usa
+`pipeline(audio_input, num_speakers=expected_speaker_count)` (contagem
+exata) em vez do range `min_speakers`/`max_speakers`. Mas
+`pipeline_facade.executar` chama `diarization_service.diarizar(audio_path,
+transcricao, expected_speaker_count=job.expected_speaker_count)` sem
+passar `exact_speaker_count=True` — então mesmo quando o app envia
+`expected_speaker_count` no upload, ele hoje só vira **teto**
+(`max_speakers`), nunca contagem exata. O parâmetro exato existe no
+serviço mas está inacessível pelo caminho real do pipeline.
+
+**Como foi encontrado:** durante a investigação da limitação de
+diarização acima (2026-08-16), ao reproduzir manualmente
+`diarizar(..., exact_speaker_count=True)` para o experimento com
+`num_speakers=3`.
+
+**Risco:** baixo — hoje o app Flutter ainda não coleta
+`expected_speaker_count` na UI (fica `null` na prática), então o bug não
+afeta nenhum fluxo em produção agora. Passa a importar quando essa coleta
+for implementada no app.
+
+**Correção (não aplicada agora, por decisão do usuário — só documentação
+nesta rodada):** passar `exact_speaker_count=True` em `pipeline_facade.py`
+quando `job.expected_speaker_count` não for `None`.
+
+**Status:** aberta, não bloqueia fases seguintes, correção trivial quando
+priorizada.
