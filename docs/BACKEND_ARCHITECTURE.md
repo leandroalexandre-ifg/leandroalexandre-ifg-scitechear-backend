@@ -91,6 +91,43 @@ retrabalho durante o desenvolvimento:
   uma pista para o algoritmo — nunca como um valor forçado, a menos que
   explicitamente solicitado via `exact_speaker_count`.
 
+**Bug conhecido, baixo risco, não corrigido:** `exact_speaker_count` existe
+como parâmetro de `diarizar()`, mas `pipeline_facade.py` nunca o passa como
+`True` — só encaminha `expected_speaker_count`, que vira `max_speakers`
+(teto), nunca contagem exata. Na prática, hoje não há caminho no pipeline
+real que force `num_speakers` exato no pyannote, mesmo quando o app
+informa a contagem de falantes. Risco baixo porque o app ainda não coleta
+esse campo na UI; passa a importar quando essa coleta existir. Ver
+[`docs/PENDENCIAS.md`](./PENDENCIAS.md) para o registro completo.
+
+**Limitação conhecida — áudio distante, ruidoso ou com fala muito
+sobreposta pode degradar a qualidade do clustering.** Confirmado por
+escuta direta (não hipótese): numa reunião informal de 3 pessoas, gravada
+com o dispositivo longe da boca dos falantes, os três clusters produzidos
+misturavam vozes de pessoas diferentes. Duas hipóteses mais baratas foram
+descartadas antes de concluir isso:
+
+- **Não é `min_speakers`/`max_speakers` mal calibrado.** Reprocessar só a
+  diarização com `num_speakers=3` explícito (contagem exata, contornando o
+  range default) produziu clusters idênticos aos do range default — o
+  pyannote já convergia sozinho para 3 falantes; o erro está em *quem* cada
+  cluster representa, não em *quantos* clusters existem.
+- **Não é falta de tratamento de fala sobreposta.** O pipeline
+  (`pyannote/speaker-diarization-community-1`, `VBxClustering`) já roda com
+  `embedding_exclude_overlap=True` por padrão — a mitigação padrão contra
+  sobreposição já está ativa.
+
+Avaliação atual: possível limitação estrutural do modelo diante desse
+perfil de áudio (campo distante + ruído + fala rápida sobreposta), mais
+adverso que os cenários testados anteriormente (voz próxima, pouca
+sobreposição). **Recomendação prática, até haver mais dados:** manter o
+dispositivo de gravação próximo aos falantes. Calibração fina de
+clustering (`threshold`/`Fa`/`Fb` do VBx) e pré-processamento de áudio
+(redução de ruído) não foram testados — ficam como possíveis próximos
+passos, não decisões tomadas. Ver
+[`docs/PENDENCIAS.md`](./PENDENCIAS.md) para o registro completo da
+investigação.
+
 ### 3.3. `voice_service.py` — extrair e comparar embeddings de voz
 
 Usa o SpeechBrain (modelo ECAPA-TDNN) para duas tarefas relacionadas mas
@@ -123,6 +160,23 @@ todo tipo de áudio; eles existem no `.env` justamente para poderem ser
 ajustados sem alterar código, à medida que mais dados reais de uso forem
 observados.
 
+**Histórico do `VOICE_IDENTIFICATION_THRESHOLD` — de 0.30 para 0.75, ainda
+provisório.** O valor original (0.30) causou um falso positivo grave: um
+participante nunca cadastrado foi identificado, com confiança, como outra
+pessoa (score 0.9555 contra um perfil real). Recalibrado com embeddings
+reais (piso de match genuíno via TTS: 0.9157; teto de impostor: 0.6214)
+para **0.75**, deliberadamente mais perto do piso genuíno — a prioridade é
+assimétrica: um falso negativo (não identificar alguém) é preferível a um
+falso positivo (identificar a pessoa errada). Validação posterior com voz
+humana real (não sintética) mostrou scores genuínos na faixa **0.73–0.77**
+— parte disso cai abaixo do threshold atual, um falso negativo aceito
+conscientemente em troca de manter a barreira contra falsos positivos.
+**A calibração continua em andamento**, não é um valor definitivo — ver
+[`docs/PENDENCIAS.md`](./PENDENCIAS.md) para o histórico completo,
+incluindo um caso residual conhecido (duas vozes sintéticas foneticamente
+parecidas) que nenhum threshold de similaridade de cosseno resolve
+sozinho.
+
 ### 3.4. `voice_enrollment_service.py` — cadastro de voz
 
 Responsável por criar ou atualizar o perfil de voz de um participante. Um
@@ -132,6 +186,12 @@ amostras salvas até então — nunca de forma incremental.** Isso é mais
 custoso computacionalmente do que simplesmente atualizar uma média, mas é
 mais robusto: evita que o embedding "derive" lentamente ao longo de várias
 atualizações incrementais mal calculadas.
+
+*Nota operacional:* em 2026-08-13, perfis "Leandro" duplicados (gerados por
+testes manuais do endpoint de enrollment antes da integração com um
+cliente estável) foram removidos diretamente do `VoiceRepository`. Sem
+impacto de arquitetura — o serviço nunca gerou esses IDs, só os
+persistiu; ver [`docs/PENDENCIAS.md`](./PENDENCIAS.md) para o detalhe.
 
 ### 3.5. `voice_migration.py` — ponte com o banco de vozes legado
 
@@ -175,6 +235,28 @@ sequenciais ao Ollama, cada uma usando um prompt versionado em `prompts/`:
    adicional que reformula e remove redundâncias das perguntas
    implícitas. Controlado por `ENABLE_IMPLICIT_REFINEMENT`.
 
+**Etapa de implícitas desativada por padrão hoje
+(`ENABLE_IMPLICIT_QUESTIONS=false`, `app/config.py`).** Motivo: um
+incidente real de confabulação — o modelo gerou 15 perguntas implícitas
+formando um roteiro genérico (eficiência energética, valor de revenda
+etc.) sobre uma conversa trivial que nunca tocou nesses temas. Corrigido
+em duas frentes: o prompt (`implicit_questions_v4.txt`) passou a exigir
+`linhas_evidencia` — as linhas reais da transcrição que sustentam cada
+pergunta —, e o código (`_resolver_evidencia_implicita`) valida essas
+linhas de forma programática, descartando a pergunta inteira se a maioria
+das linhas citadas não existir de fato na transcrição (não confia só na
+instrução do prompt). Apesar da correção validada, a flag mantém a etapa
+desligada por padrão — decisão deliberada de isolar o comportamento do
+resto do sistema até haver volume/diversidade suficiente de reuniões reais
+validadas. Com a flag desligada: só perguntas `explicit` são retornadas, e
+a sumarização (`summarize_meeting`) é pulada junto — hoje ela só existe
+como insumo para as implícitas, sem outro consumidor. Os estágios
+`summarizing`/`extracting` continuam existindo normalmente na máquina de
+estados do job; só o trabalho real dentro deles é pulado. Ver
+[`docs/PENDENCIAS.md`](./PENDENCIAS.md) para o histórico completo da
+investigação (incluindo validação em reunião substantiva, redundância
+residual observada em `qwen3:14b`, e o refinador testado isoladamente).
+
 ### 3.8. `pipeline_facade.py` e `job_executor.py` — orquestração
 
 `MeetingPipelineFacade` é o ponto único que conhece a ordem completa das 7
@@ -195,7 +277,13 @@ guardados fisicamente:
 - **`job_repository.py`** — mantém o estado de todos os jobs em memória,
   no processo atual. Isso significa que reiniciar o servidor limpa esse
   estado (uma limitação conhecida e aceitável para a V1, que roda como
-  processo único).
+  processo único). Também guarda `status_history` (timestamp de cada
+  transição de estado), usado só para instrumentação de performance —
+  `stage_durations()` deriva o tempo gasto por estágio a partir desse
+  histórico, sem medição paralela. Não faz parte do contrato HTTP (a
+  resposta de `GET /status/{job_id}` continua expondo só o status atual).
+  Ver [`docs/PERFORMANCE.md`](./PERFORMANCE.md) para as medições e o
+  raciocínio por trás de otimizações já testadas nessa etapa.
 - **`result_repository.py`** — persiste o resultado final de cada job como
   um arquivo JSON, permitindo que `GET /resultado/{job_id}` seja servido
   sem reprocessar nada.
@@ -255,7 +343,7 @@ silenciosamente o comportamento do sistema.
 |---|---|---|
 | `explicit_questions_v4.json` | Extrai literalmente toda sentença terminada em `?`. | O prompt é deliberadamente rígido: não pede interpretação, só varredura textual. |
 | `meeting_summary_v1.txt` | Gera o resumo estruturado usado como contexto interno. | Não é exposto ao cliente diretamente. |
-| `implicit_questions_v3.txt` | Extrai perguntas implícitas, em formato JSON. | É a evolução do `v2` (preservado só como referência histórica), cuja única mudança foi o formato de saída — de texto livre para JSON — sem alterar os critérios semânticos de extração. |
+| `implicit_questions_v4.txt` | Extrai perguntas implícitas, em formato JSON, exigindo `linhas_evidencia` (linhas reais da transcrição) por pergunta. | Evolução do `v3` (preservado como referência histórica; `v2` também preservado), corrigindo um incidente real de confabulação — o teto de "até 15 perguntas" era tratado como meta, não limite, e o modelo inventava temas nunca discutidos. `v4` reformula o teto como limite absoluto, declara lista vazia como saída válida para conteúdo trivial, e adiciona a exigência de evidência rastreável, validada em código (`question_service._resolver_evidencia_implicita`). Etapa desligada por padrão hoje (`ENABLE_IMPLICIT_QUESTIONS=false`) — ver §3.7 e `docs/PENDENCIAS.md`. |
 | `implicit_refiner_v1.txt` | Refina e consolida as perguntas implícitas. | Desativado por padrão (`ENABLE_IMPLICIT_REFINEMENT=false`); existe para uso futuro. |
 
 ## 8. Pendências de calibração conhecidas
@@ -268,7 +356,10 @@ misturados com decisões de arquitetura já fechadas. Ver
 achados — por exemplo, modelos menores do Ollama nem sempre respeitam à
 risca o formato de saída pedido no prompt de perguntas explícitas,
 comportamento que precisa ser reverificado com o modelo de produção antes
-de ser considerado resolvido ou não.
+de ser considerado resolvido ou não. Ver também
+[`docs/PERFORMANCE.md`](./PERFORMANCE.md) para medições de tempo por
+estágio do pipeline e o raciocínio por trás de otimizações já testadas
+(aplicadas ou revertidas).
 
 ## 9. Configuração e como rodar localmente
 
@@ -285,11 +376,12 @@ DIARIZATION_MODEL=pyannote/speaker-diarization-community-1
 DIARIZATION_MIN_SPEAKERS=1
 DIARIZATION_MAX_SPEAKERS=10
 VOICE_MODEL=speechbrain/spkrec-ecapa-voxceleb
-VOICE_IDENTIFICATION_THRESHOLD=0.30
+VOICE_IDENTIFICATION_THRESHOLD=0.75   # recalibrado de 0.30; ver §3.3 — ainda provisório
 VOICE_MIN_MARGIN=0.05
 VOICE_OUTLIER_THRESHOLD=0.45
 OLLAMA_BASE_URL=http://127.0.0.1:11434
 OLLAMA_MODEL=qwen3:14b
+ENABLE_IMPLICIT_QUESTIONS=false       # etapa de perguntas implícitas desligada por padrão; ver §3.7
 ENABLE_IMPLICIT_REFINEMENT=false
 DEMO_MODE=false
 ```

@@ -115,8 +115,12 @@ queued → transcribing → diarizing → identifying → summarizing → extrac
 - **`summarizing`** — o modelo de linguagem está gerando um resumo
   estruturado da reunião (usado como contexto para a etapa seguinte).
 - **`extracting`** — o modelo de linguagem está extraindo as perguntas
-  explícitas (literalmente formuladas) e implícitas (inferidas a partir do
-  conteúdo).
+  explícitas (literalmente formuladas) e, quando habilitado, implícitas
+  (inferidas a partir do conteúdo). Hoje, a extração de implícitas fica
+  desativada por padrão no backend (feature flag
+  `ENABLE_IMPLICIT_QUESTIONS`, default `false`) — enquanto isso,
+  `extracting` produz só perguntas explícitas, e o estágio de sumarização
+  é pulado junto (sem outro consumidor além das implícitas).
 - **`done`** — o resultado final foi persistido e está disponível para
   consulta.
 
@@ -253,6 +257,12 @@ diarização) quanto, quando disponível, o `participant_id` e o `speaker`
 sempre a melhor informação disponível: o nome da pessoa quando
 identificada, ou o rótulo genérico quando não.
 
+**Nota sobre `questions` e o tipo `implicit`:** por padrão hoje, `questions`
+só contém itens `type: "explicit"` — a extração de perguntas implícitas
+existe e é validada, mas fica desativada por padrão no backend (seção 5).
+O cliente não deve assumir que sempre haverá itens `implicit`; isso é
+esperado no estado atual do sistema, não um sinal de falha.
+
 **Duas invariantes que o sistema nunca viola, e que vale conhecer para não
 reintroduzi-las por engano em uma manutenção futura:**
 
@@ -304,6 +314,15 @@ app (não em runtime, para evitar ficar "esquecido ligado").
 - **RAG está fora do escopo desta V1.** A extração de perguntas usa o
   conteúdo da própria transcrição e do resumo gerado, sem um passo de
   recuperação de documentos externos.
+- **Limitação conhecida: áudio distante, ruidoso ou com fala muito
+  sobreposta pode degradar a diarização.** Confirmado por escuta direta em
+  uma reunião real gravada com o dispositivo longe dos falantes: os
+  clusters de voz produzidos misturavam pessoas diferentes. Não é um caso
+  de configuração simples de corrigir — o número de falantes já era
+  identificado corretamente; o erro está em qual voz cada cluster
+  representa. **Recomendação prática, até haver mais dados:** manter o
+  dispositivo de gravação próximo aos falantes. Detalhe técnico completo
+  em `docs/BACKEND_ARCHITECTURE.md` e `docs/PENDENCIAS.md`.
 
 ## 12. Documentos relacionados
 
