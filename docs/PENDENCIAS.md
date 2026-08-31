@@ -360,6 +360,22 @@ outra técnica) precisa de decisão explícita antes de codar, e de mais
 perfis cadastrados no banco de teste para ter um cohort estatisticamente
 razoável.
 
+**Não descartado definitivamente — critério para revisitar:** a causa raiz
+do fracasso acima (cohort de impostores pequeno e correlacionado — só 2
+pontos, derivados do mesmo dataset de teste, não de uma população de
+impostores independente) é uma pré-condição da técnica não atendida, não
+uma falha de implementação do AS-Norm em si. Critério mínimo para testar de
+novo: o `VoiceRepository` ter um cohort real de referência maior — piso
+sugerido de **8-10 perfis cadastrados**, idealmente de pessoas diferentes
+das que serão identificadas (um cohort de impostores de verdade, não os
+mesmos poucos participantes servindo de referência uns para os outros).
+Isso está ligado à pendência de calibração ampliada já registrada acima
+("Revalidação com voz humana real — EM ANDAMENTO": gravar mais pessoas
+reais) — quando ela avançar o suficiente para o banco atingir esse piso,
+reavaliar se AS-Norm volta a ser candidato. Até lá, não reabrir o
+experimento — a causa estrutural não muda e o resultado tende a se
+repetir.
+
 ## Aberta — Performance do pipeline: extração de perguntas explícitas é ~42% do tempo total; think=False testado e revertido
 
 **Onde:** `app/services/question_service.py` (`_chamar_ollama`,
