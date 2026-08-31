@@ -36,6 +36,20 @@ class Settings(BaseSettings):
     voice_min_margin: float = Field(default=0.05, alias="VOICE_MIN_MARGIN")
     voice_outlier_threshold: float = Field(default=0.45, alias="VOICE_OUTLIER_THRESHOLD")
 
+    # AS-Norm (Adaptive Score Normalization) — método alternativo de decisão em
+    # identificar_speaker, desligado por padrão. Em vez de comparar o score de
+    # cosseno bruto contra um limiar fixo, normaliza o candidato pelo z-score
+    # relativo ao cohort dos impostores mais parecidos no próprio banco.
+    # Objetivo: separar o caso Reed/Eddy (score 0.9555, cai dentro da própria
+    # faixa de match genuíno — nenhum corte de cosseno absoluto resolve isso,
+    # ver docs/PENDENCIAS.md). NÃO ativar em produção antes de validação com
+    # dados reais.
+    enable_voice_asnorm: bool = Field(default=False, alias="ENABLE_VOICE_ASNORM")
+    voice_min_absolute_score: float = Field(default=0.40, alias="VOICE_MIN_ABSOLUTE_SCORE")
+    voice_zscore_threshold: float = Field(default=2.0, alias="VOICE_ZSCORE_THRESHOLD")
+    voice_zscore_margin: float = Field(default=0.5, alias="VOICE_ZSCORE_MARGIN")
+    voice_cohort_size: int = Field(default=3, alias="VOICE_COHORT_SIZE")
+
     ollama_base_url: str = Field(default="http://127.0.0.1:11434", alias="OLLAMA_BASE_URL")
     ollama_model: str = Field(default="qwen3:14b", alias="OLLAMA_MODEL")
 
