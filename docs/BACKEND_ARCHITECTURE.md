@@ -177,6 +177,24 @@ incluindo um caso residual conhecido (duas vozes sintéticas foneticamente
 parecidas) que nenhum threshold de similaridade de cosseno resolve
 sozinho.
 
+**Método de decisão alternativo (AS-Norm) — experimental, desligado por
+padrão.** `identificar_speaker` também suporta Adaptive Score Normalization
+atrás da flag `ENABLE_VOICE_ASNORM` (default `false`): em vez de comparar o
+score de cosseno bruto contra um limiar fixo, normaliza o candidato pelo
+z-score relativo ao cohort dos `VOICE_COHORT_SIZE` impostores mais
+parecidos no próprio banco, com um piso de sanidade sobre o score bruto
+(`VOICE_MIN_ABSOLUTE_SCORE`) e limiares de z-score e margem
+(`VOICE_ZSCORE_THRESHOLD`, `VOICE_ZSCORE_MARGIN`). A interface externa de
+`identificar_speaker` (participant_id, score bruto) não muda. **Investigado
+e NÃO ativado**: contra o caso residual (Reed/Eddy, seção acima), o AS-Norm
+não rejeita o falso positivo e ainda introduz dois novos falsos positivos
+com o tamanho atual do banco (3 cadastrados) — o cohort de "impostores" de
+cada candidato acaba sendo formado pelas outras 2 pessoas cadastradas
+(não uma população externa independente), e com só 2 pontos o z-score fica
+estatisticamente instável. Ver
+[`docs/PENDENCIAS.md`](./PENDENCIAS.md) para o detalhe completo e
+`tests/test_voice_identification_real_asnorm.py` para a evidência.
+
 ### 3.4. `voice_enrollment_service.py` — cadastro de voz
 
 Responsável por criar ou atualizar o perfil de voz de um participante. Um

@@ -317,6 +317,49 @@ para (a) confirmar o piso genuíno humano com mais de 1 amostra/pessoa e
 (b) medir impostor real. Só então decidir um novo número, com o mesmo
 rigor da calibração anterior.
 
+**Tentativa de mitigação do risco residual (AS-Norm) — INVESTIGADA, NÃO
+RESOLVIDA (2026-08-31):** protótipo em `legacy/scripts/etapa3_biometria.py`
+substituiu o corte de cosseno fixo por Adaptive Score Normalization
+(z-score do candidato relativo ao cohort dos `VOICE_COHORT_SIZE` impostores
+mais parecidos no próprio banco), portado para
+`app/services/voice_service.py` atrás da flag `ENABLE_VOICE_ASNORM`
+(default `false` — **não ativado em produção**). Testado contra o mesmo
+cenário real desta investigação (`tests/fixtures/voice_identification_real_embeddings.json`):
+
+- **Outlier Reed/Eddy (score 0.9555): continua um falso positivo.** Com só
+  3 perfis cadastrados, o "cohort de impostores" de cada candidato é
+  formado pelas outras 2 pessoas cadastradas — não por uma população
+  externa de impostores. Como o score bruto de Eddy já é muito mais alto
+  que o dos outros dois cadastrados contra praticamente qualquer áudio de
+  teste deste dataset, o z-score explode a partir de só 2 pontos (~34.7),
+  mascarando o problema em vez de resolvê-lo.
+- **Pior — dois falsos positivos NOVOS:** p_grandma (bruto=0.4126) e
+  p_grandpa (bruto=0.6214), que o threshold fixo (0.75) rejeitava
+  corretamente, passam a ser aceitos sob AS-Norm pelo mesmo efeito (score
+  bruto acima do piso de sanidade de 0.40 + z-score inflado por um cohort
+  de 2 pontos). Os outros 4 impostores continuam rejeitados, mas só porque
+  o score bruto deles já fica abaixo do piso absoluto — quem barra ali
+  ainda é o piso herdado do threshold fixo, não o AS-Norm.
+- As 15 amostras genuínas continuam identificadas corretamente (sem
+  regressão nesse eixo).
+- O cohort nunca cai no fallback formal ("menos de 2 impostores" —
+  com banco de 3, sempre há exatamente 2). O problema é mais específico do
+  que "cai em fallback com frequência": mesmo sem cair em fallback, um
+  cohort de 2 pontos correlacionados ao mesmo áudio de teste (não uma
+  população de impostores fixa e independente) é estatisticamente
+  instável — é isso que gera os falsos positivos acima.
+
+**Conclusão:** AS-Norm como prototipado não ataca a causa do risco
+residual documentado acima e piora a taxa de falsos positivos com o
+tamanho atual do banco. Risco residual (Reed/Eddy) permanece **em aberto**,
+sem solução conhecida. Evidência em
+`tests/test_voice_identification_real_asnorm.py` e
+`tests/test_voice_service_asnorm.py`. Nenhuma correção adicional foi
+implementada — qualquer ajuste (cohort externo independente, cohort maior,
+outra técnica) precisa de decisão explícita antes de codar, e de mais
+perfis cadastrados no banco de teste para ter um cohort estatisticamente
+razoável.
+
 ## Aberta — Performance do pipeline: extração de perguntas explícitas é ~42% do tempo total; think=False testado e revertido
 
 **Onde:** `app/services/question_service.py` (`_chamar_ollama`,
