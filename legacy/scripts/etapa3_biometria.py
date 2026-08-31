@@ -1,4 +1,5 @@
 import os
+import statistics
 import torch
 import torchaudio
 from speechbrain.inference.speaker import EncoderClassifier
@@ -15,8 +16,13 @@ VERSAO_MODELO = "speechbrain/spkrec-ecapa-voxceleb"
 # PARÂMETROS DE DECISÃO (calibre estes valores testando com seus próprios
 # áudios — são os que mais impactam falsos positivos/negativos)
 # ---------------------------------------------------------------------------
-LIMIAR_IDENTIFICACAO = 0.30   # score mínimo para aceitar um match
-MARGEM_MINIMA = 0.05          # diferença mínima entre 1º e 2º colocado
+LIMIAR_MINIMO_ABSOLUTO = 0.40  # piso de sanidade sobre o score de cosseno bruto
+LIMIAR_ZSCORE = 2.0             # quantos desvios-padrão acima do cohort de impostores
+MARGEM_ZSCORE = 0.5             # margem mínima em z-score entre 1º e 2º colocado
+TOP_N_COHORT = 3                # nº de impostores mais parecidos usados no cohort
+                                 # (banco pequeno, 4-10 pessoas — 3 funciona bem
+                                 # tanto no piso quanto no teto dessa faixa)
+
 LIMIAR_OUTLIER = 0.45         # similaridade mínima entre trechos do mesmo speaker
 
 # Cache do modelo — carregado sob demanda, na primeira chamada que precisar
@@ -188,12 +194,52 @@ def carregar_banco_vozes(pasta_vozes="./banco_vozes"):
     return banco
 
 
+def _asnorm_scores(scores_brutos):
+    """
+    Recebe {nome: score_cosseno_bruto} e retorna {nome: score_normalizado}.
+
+    Para cada candidato, o cohort de impostores é formado pelas OUTRAS vozes
+    do banco (todo mundo menos o próprio candidato), usando só os
+    TOP_N_COHORT mais parecidos (por isso "adaptive"). O resultado é um
+    z-score: o quanto o candidato se destaca do que um impostor típico
+    teria — em vez de um valor de cosseno absoluto, que não separa bem
+    vozes parecidas (ex: dois homens com timbre próximo).
+    """
+    nomes = list(scores_brutos.keys())
+    scores_norm = {}
+
+    for candidato in nomes:
+        impostores = [scores_brutos[n] for n in nomes if n != candidato]
+
+        if len(impostores) < 2:
+            # cohort pequeno demais pra normalizar com confiança —
+            # cai de volta pro score bruto
+            scores_norm[candidato] = scores_brutos[candidato]
+            continue
+
+        cohort = sorted(impostores, reverse=True)[:TOP_N_COHORT]
+        media = statistics.mean(cohort)
+        desvio = statistics.pstdev(cohort) or 1e-6
+
+        scores_norm[candidato] = (scores_brutos[candidato] - media) / desvio
+
+    return scores_norm
+
+
 def identificar_speaker(embedding, banco):
     """
-    Compara um embedding contra o banco via similaridade de cosseno.
+    Compara um embedding contra o banco usando AS-Norm (Adaptive Score
+    Normalization) em vez de um limiar de cosseno fixo.
+
     Só aceita um match se:
-      1. o score do melhor candidato ultrapassar LIMIAR_IDENTIFICACAO, e
-      2. a diferença para o segundo colocado for >= MARGEM_MINIMA.
+      1. o z-score do melhor candidato ultrapassar LIMIAR_ZSCORE (ele se
+         destaca claramente dos impostores mais parecidos), e
+      2. a diferença de z-score para o segundo colocado for >= MARGEM_ZSCORE
+         (não está ambíguo entre dois candidatos), e
+      3. o score de cosseno BRUTO do melhor candidato ainda ultrapassa
+         LIMIAR_MINIMO_ABSOLUTO — um piso de sanidade para não aceitar um
+         match "só porque é o menos ruim" quando ninguém no banco realmente
+         se parece com o trecho.
     Caso contrário, retorna None (evita "chutar" a pessoa errada).
     """
 
@@ -202,41 +248,51 @@ def identificar_speaker(embedding, banco):
 
     embedding = _normalizar_embedding(embedding)
 
-    scores = {
+    scores_brutos = {
         nome: comparar_embeddings(embedding, emb_ref)
         for nome, emb_ref in banco.items()
     }
 
-    ranking = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+    scores_z = _asnorm_scores(scores_brutos)
+    ranking = sorted(scores_z.items(), key=lambda x: x[1], reverse=True)
 
     print("\n==============================")
-    print("Comparando um speaker:")
-    for nome, score in ranking:
-        print(f"{nome}: {score:.3f}")
+    print("Comparando um speaker (AS-Norm):")
+    for nome, z in ranking:
+        print(f"{nome}: z={z:.3f} (bruto={scores_brutos[nome]:.3f})")
 
-    melhor_nome, melhor_score = ranking[0]
-    segundo_score = ranking[1][1] if len(ranking) > 1 else -1.0
-    margem = melhor_score - segundo_score
+    melhor_nome, melhor_z = ranking[0]
+    melhor_bruto = scores_brutos[melhor_nome]
+    segundo_z = ranking[1][1] if len(ranking) > 1 else -99.0
+    margem = melhor_z - segundo_z
 
-    if melhor_score < LIMIAR_IDENTIFICACAO:
+    if melhor_bruto < LIMIAR_MINIMO_ABSOLUTO:
         print(
-            f"Rejeitado -> {melhor_nome} teve o maior score ({melhor_score:.3f}) "
-            f"mas abaixo do limiar ({LIMIAR_IDENTIFICACAO}). Marcando como "
-            f"não identificado."
+            f"Rejeitado -> {melhor_nome} tem z-score alto mas score bruto "
+            f"({melhor_bruto:.3f}) abaixo do piso de sanidade "
+            f"({LIMIAR_MINIMO_ABSOLUTO}). Provavelmente ninguém do banco "
+            f"bate com esse trecho."
         )
-        return None, melhor_score
+        return None, melhor_bruto
 
-    if margem < MARGEM_MINIMA:
+    if melhor_z < LIMIAR_ZSCORE:
         print(
-            f"Rejeitado -> {melhor_nome} ({melhor_score:.3f}) muito próximo "
-            f"de {ranking[1][0]} ({segundo_score:.3f}), margem={margem:.3f} "
-            f"< {MARGEM_MINIMA}. Ambíguo demais para decidir."
+            f"Rejeitado -> {melhor_nome} teve z={melhor_z:.3f}, abaixo do "
+            f"limiar ({LIMIAR_ZSCORE}). Marcando como não identificado."
         )
-        return None, melhor_score
+        return None, melhor_bruto
 
-    print(f"Escolhido -> {melhor_nome} ({melhor_score:.3f}, margem={margem:.3f})")
+    if margem < MARGEM_ZSCORE:
+        print(
+            f"Rejeitado -> {melhor_nome} (z={melhor_z:.3f}) muito próximo "
+            f"de {ranking[1][0]} (z={segundo_z:.3f}), margem={margem:.3f} "
+            f"< {MARGEM_ZSCORE}. Ambíguo demais para decidir."
+        )
+        return None, melhor_bruto
 
-    return melhor_nome, melhor_score
+    print(f"Escolhido -> {melhor_nome} (z={melhor_z:.3f}, margem={margem:.3f})")
+
+    return melhor_nome, melhor_bruto
 
 
 def _remover_outliers(embeddings, segmentos):
