@@ -32,6 +32,15 @@ def main() -> None:
     settings = get_settings()
     jobs = get_job_repository()
 
+    # Defesa em profundidade para a fragilidade de STORAGE_ROOT (item 4 da
+    # preparação para produção, ver app/config.py): mesmo formato de linha
+    # que a API loga na subida (app/main.py) — deixa um operador notar
+    # visualmente se os dois processos alguma vez divergirem sobre onde o
+    # storage está fisicamente.
+    logger.info(
+        "Worker iniciando — STORAGE_ROOT=%s DATABASE_URL=%s", settings.storage_root, settings.database_url_efetivo
+    )
+
     orfaos = jobs.requeue_orfaos(max_attempts=settings.worker_max_attempts_before_error)
     if orfaos:
         logger.warning(

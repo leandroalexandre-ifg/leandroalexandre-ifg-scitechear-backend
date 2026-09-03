@@ -2,15 +2,57 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Âncora para resolver STORAGE_ROOT relativo (ver validador abaixo) — a raiz
+# do repositório, não o cwd do processo. app/config.py -> .parent = app/ ->
+# .parent.parent = raiz (onde storage/ vive por convenção). Assume que o
+# backend roda a partir de um checkout do repositório (uvicorn app.main:app
+# na raiz), o modelo de deploy já documentado do projeto — não instalado
+# como pacote em site-packages.
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    # env_file ancorado em _PROJECT_ROOT, não ao cwd do processo — mesma
+    # causa raiz do STORAGE_ROOT abaixo, mas potencialmente pior: se
+    # ".env" relativo não resolvesse (processo iniciado de outro cwd), o
+    # carregamento falha em silêncio e TODAS as configs voltam ao default
+    # (não só storage_root) — ex.: JWT_SECRET_KEY vazio, quebrando auth só
+    # na hora de assinar/validar um token. Achado durante a verificação
+    # manual deste item, confirmado incluir na mesma correção.
+    model_config = SettingsConfigDict(
+        env_file=str(_PROJECT_ROOT / ".env"), env_file_encoding="utf-8", extra="ignore"
+    )
 
     hf_token: str = Field(default="", alias="HF_TOKEN")
     storage_root: str = Field(default="./storage", alias="STORAGE_ROOT")
+
+    @field_validator("storage_root")
+    @classmethod
+    def _resolver_storage_root(cls, valor: str) -> str:
+        """Item 4 da preparação para produção: STORAGE_ROOT relativo
+        resolvia contra o cwd do processo no momento em que ele iniciava —
+        inofensivo com um processo só, mas desde o worker dedicado (item 2)
+        existem dois processos que precisam concordar sobre onde o storage
+        está fisicamente. Se cada um iniciar de um cwd diferente (erro de
+        config no systemd, alguém rodando um dos dois manualmente de outra
+        pasta), os dois passam a operar sobre diretórios físicos diferentes
+        — sem erro, só arquivos "sumindo" da perspectiva de um processo e
+        não do outro. Isso também afeta o DATABASE_URL default (deriva
+        deste valor, ver database_url_efetivo abaixo).
+
+        Corrigido eliminando a dependência do cwd por completo: um valor
+        relativo é ancorado a _PROJECT_ROOT (fixo, baseado em Path(__file__),
+        nunca no cwd) em vez do cwd do processo. Um valor já absoluto (ex.:
+        configuração explícita de produção) passa direto, sem tocar em
+        symlink nenhum — zero mudança de comportamento pra quem já configura
+        um caminho absoluto."""
+        caminho = Path(valor)
+        if caminho.is_absolute():
+            return valor
+        return str((_PROJECT_ROOT / caminho).resolve())
 
     # Persistência de job_repository.py. Vazio (default) usa SQLite num
     # arquivo dentro de STORAGE_ROOT — zero infraestrutura extra. Defina
