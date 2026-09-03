@@ -12,6 +12,16 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Sem isto a linha de diagnóstico abaixo nunca chega aos logs em produção:
+    # o uvicorn configura só os loggers "uvicorn*", deixando o root sem
+    # handler, e um registro de nível INFO que propaga até lá é descartado
+    # (o lastResort do logging só emite WARNING+). O worker já faz a mesma
+    # chamada em app/worker.py — sem ela aqui, a comparação lado a lado
+    # descrita abaixo era impossível na prática: só metade do par aparecia.
+    # Constatado no primeiro deploy real (servidor NumbERS), onde o journal
+    # da API não tinha nenhuma ocorrência de "API iniciando".
+    logging.basicConfig(level=logging.INFO)
+
     # Defesa em profundidade para a fragilidade de STORAGE_ROOT (item 4 da
     # preparação para produção, ver app/config.py): mesmo com a resolução
     # já corrigida na fonte, logar os caminhos absolutos efetivos na subida
