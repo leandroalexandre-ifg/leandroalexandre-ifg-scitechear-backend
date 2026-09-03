@@ -274,16 +274,35 @@ Cada repositório abstrai uma forma de persistência, para que o resto do
 sistema não precise saber os detalhes de como e onde os dados ficam
 guardados fisicamente:
 
-- **`job_repository.py`** — mantém o estado de todos os jobs em memória,
-  no processo atual. Isso significa que reiniciar o servidor limpa esse
-  estado (uma limitação conhecida e aceitável para a V1, que roda como
-  processo único). Também guarda `status_history` (timestamp de cada
-  transição de estado), usado só para instrumentação de performance —
-  `stage_durations()` deriva o tempo gasto por estágio a partir desse
-  histórico, sem medição paralela. Não faz parte do contrato HTTP (a
-  resposta de `GET /status/{job_id}` continua expondo só o status atual).
-  Ver [`docs/PERFORMANCE.md`](./PERFORMANCE.md) para as medições e o
-  raciocínio por trás de otimizações já testadas nessa etapa.
+- **`job_repository.py`** — mantém o estado de todos os jobs em **SQLite**
+  (via SQLAlchemy), não mais em memória: reiniciar o servidor já não apaga
+  jobs em andamento (era uma limitação aceita da V1, inaceitável em
+  produção — primeiro item resolvido da preparação para produção). Duas
+  tabelas: `jobs` (estado atual de cada job) e `job_status_events`
+  (uma linha por transição de status, insert-only). A interface pública
+  (`create`/`get`/`update_status`/`stage_durations`) não mudou — nenhum
+  consumidor (`pipeline_facade.py`, `app/api/jobs.py`) precisou ser
+  alterado. Configurável via `DATABASE_URL` (`.env`); vazio usa
+  `sqlite:///<STORAGE_ROOT>/jobs.db` por padrão — zero infraestrutura
+  extra, schema criado automaticamente no primeiro uso. SQLite (com modo
+  WAL) foi escolhido em vez de Postgres justamente para manter esse
+  princípio de zero-infra; a troca para outro banco fica barata depois
+  (só mudar a URL, mesmo código SQLAlchemy) se o volume um dia justificar.
+  `status_history`/`stage_durations()` (tabela `job_status_events`) segue
+  existindo só para instrumentação de performance, não faz parte do
+  contrato HTTP (a resposta de `GET /status/{job_id}` continua expondo só
+  o status atual). Ver [`docs/PERFORMANCE.md`](./PERFORMANCE.md) para as
+  medições dessa instrumentação.
+
+  **Limitação residual conhecida:** o *registro* do job agora sobrevive a
+  um restart, mas a *execução* não — o pipeline ainda roda numa thread
+  in-process (`job_executor.py`), então um job pego em restart no meio do
+  processamento fica congelado no último estado não-terminal alcançado,
+  indefinidamente (a thread que o processava morreu com o processo
+  antigo). Corrigir isso de verdade depende do próximo item da preparação
+  para produção (fila real, ex. Celery/Redis, com execução resiliente).
+  Ver [`docs/PENDENCIAS.md`](./PENDENCIAS.md) para o detalhamento e a
+  validação empírica desse comportamento.
 - **`result_repository.py`** — persiste o resultado final de cada job como
   um arquivo JSON, permitindo que `GET /resultado/{job_id}` seja servido
   sem reprocessar nada.
@@ -296,8 +315,9 @@ guardados fisicamente:
   precisam ser recalculados se o modelo de voz for trocado no futuro).
 
 Nenhum desses repositórios depende de um provedor de nuvem — tudo é
-armazenamento local em disco, o que mantém o backend portável e simples de
-rodar em qualquer servidor Linux com GPU.
+armazenamento local (arquivo SQLite ou arquivos JSON/tensor em disco), o
+que mantém o backend portável e simples de rodar em qualquer servidor
+Linux com GPU.
 
 ## 5. `app/models` — o contrato formal
 
@@ -422,3 +442,17 @@ ainda, e WebSocket de status como um recurso complementar ao polling
 escopo, não lacunas esquecidas — a interface de cada componente já foi
 desenhada considerando essas evoluções futuras, para que não exijam
 reescrever contratos já estabelecidos.
+
+**Preparação para produção — progresso:**
+
+1. ✅ **Persistência real do estado do job** (`job_repository.py` em
+   SQLite, ver seção 4 acima) — reiniciar o servidor não apaga mais jobs
+   em andamento. Limitação residual conhecida e documentada: a execução
+   em si não é retomada após um restart (thread in-process morre com o
+   processo), só o registro sobrevive — ver
+   [`docs/PENDENCIAS.md`](./PENDENCIAS.md).
+2. ⏳ **Fila real com execução resiliente** (ex.: Celery + Redis) — próximo
+   item. Resolve a limitação residual do item 1 (retomar/reprocessar jobs
+   após um restart, em vez de só preservar o registro) e substitui
+   `InProcessJobExecutor` por workers que sobrevivem independentemente do
+   processo da API.
