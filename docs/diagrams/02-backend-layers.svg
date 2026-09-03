@@ -78,10 +78,10 @@
 <text x="368" y="364" text-anchor="middle" fill="#993C1D">prompts/ · sem RAG na V1</text>
 
 <rect x="536" y="296" width="312" height="70" rx="7" fill="#FAEEDA" stroke="#854F0B"/>
-<text x="692" y="316" text-anchor="middle" font-weight="bold" fill="#412402">pipeline_facade.py + job_executor.py</text>
+<text x="692" y="316" text-anchor="middle" font-weight="bold" fill="#412402">pipeline_facade.py + worker.py</text>
 <text x="692" y="334" text-anchor="middle" fill="#854F0B">MeetingPipelineFacade orquestra os 7 estágios;</text>
-<text x="692" y="350" text-anchor="middle" fill="#854F0B">job_executor roda em background thread</text>
-<text x="692" y="364" text-anchor="middle" fill="#854F0B">(interface pronta p/ fila futura)</text>
+<text x="692" y="350" text-anchor="middle" fill="#854F0B">worker.py roda em processo separado, consome a fila</text>
+<text x="692" y="364" text-anchor="middle" fill="#854F0B">(SQLite, sem Celery/Redis)</text>
 </g>
 
 <line x1="450" y1="398" x2="450" y2="424" stroke="#5F5E5A" stroke-width="1.6" marker-end="url(#arrow2)"/>

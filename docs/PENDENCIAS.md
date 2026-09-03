@@ -430,7 +430,7 @@ quando `job.expected_speaker_count` não for `None`.
 **Status:** aberta, não bloqueia fases seguintes, correção trivial quando
 priorizada.
 
-## Aberta — Job fica congelado num estado intermediário para sempre se o servidor reiniciar durante o processamento (efeito colateral conhecido da persistência em banco)
+## Resolvida — Job fica congelado num estado intermediário para sempre se o servidor reiniciar durante o processamento (efeito colateral conhecido da persistência em banco)
 
 **Onde:** `app/repositories/job_repository.py` (persistência em SQLite,
 substituiu o dict em memória) + `app/services/job_executor.py` (execução
@@ -477,3 +477,39 @@ item 2 do roadmap corre esse risco.
 **Status:** aberta, comportamento esperado e documentado — não bloqueia
 esta fase, mas fica pendente até a fila real/execução resiliente (item 2
 do roadmap) resolver de fato.
+
+**Atualização — resolvida pelo item 2 (fila real com worker dedicado):**
+`InProcessJobExecutor` foi removido. `/upload` não dispara mais
+processamento nenhum diretamente — só grava o job (`queued`) no banco.
+Quem processa é `app/worker.py`, um **processo separado** da API,
+consumindo a fila via `JobRepository.next_queued()`. No boot, o worker
+chama `JobRepository.requeue_orfaos()`: qualquer job num estágio
+não-terminal só pode ter sido deixado por uma instância anterior do
+próprio worker que morreu no meio do processamento — é reenfileirado
+automaticamente (volta a `queued`), reprocessado do zero (seguro, já que
+`pipeline_facade` não faz checkpoint parcial).
+
+Proteção adicional contra "job veneno" (um job que sistematicamente
+derruba o worker, ex.: um bug acionado por um áudio específico): coluna
+`attempts` em `jobs`, incrementada a cada vez que o job é encontrado
+órfão; excede `WORKER_MAX_ATTEMPTS_BEFORE_ERROR` (default 3) → vai direto
+para `error` (`WORKER_MAX_TENTATIVAS_EXCEDIDO`) em vez de reenfileirar
+para sempre.
+
+**Validado empiricamente (teste manual do item 2):** upload real com
+worker rodando; `kill -9` no worker com o job em `extracting`; novo
+worker aponta pro mesmo banco, loga `"1 job(s) órfão(s) ... tratado(s)"`,
+reenfileira e reprocessa do zero — job chega a `done`, com `attempts=1`
+preservado (evidência de que passou pela recuperação). API derrubada no
+meio do processamento não afeta o worker (processos independentes).
+
+Tecnologia: fila no próprio SQLite (reaproveita o banco do item 1), não
+Celery/Redis — decisão deliberada, ver `docs/BACKEND_ARCHITECTURE.md`
+§3.8/§11 para o raciocínio completo (pipeline GPU-bound, um único worker
+dedicado por servidor simplifica o problema o suficiente para não
+justificar um broker externo). Teto conhecido: não escala entre máquinas
+diferentes (SQLite não é seguro em filesystem compartilhado) — migraria
+para Postgres ou um broker real se isso um dia for necessário.
+
+**Status final:** resolvida. Job não fica mais congelado indefinidamente
+em nenhum cenário testado (restart da API, crash do worker, job veneno).

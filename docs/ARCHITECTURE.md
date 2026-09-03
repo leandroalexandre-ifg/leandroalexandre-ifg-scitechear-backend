@@ -150,9 +150,10 @@ Detalhando um pouco mais o que acontece tecnicamente em cada passo:
    contador nem qualquer forma de reaproveitamento entre jobs), salva o
    áudio em disco associado a esse ID, e devolve `202 Accepted` com o
    `job_id` e status `queued`.
-3. Um executor de jobs (`job_executor.py`) dispara o processamento em uma
-   thread separada, para não bloquear a resposta HTTP nem outras
-   requisições que cheguem enquanto esse job roda.
+3. O job fica na fila (gravado em `job_repository`, aguardando
+   `queued`); quem processa é um **worker dedicado** (`app/worker.py`),
+   rodando num processo separado da API — `/upload` só grava e responde,
+   não bloqueia a requisição nem espera o processamento.
 4. O orquestrador do pipeline (`pipeline_facade.py`) chama, em sequência
    estrita, cada um dos serviços responsáveis por uma etapa, atualizando o
    estado do job no repositório de jobs a cada transição.

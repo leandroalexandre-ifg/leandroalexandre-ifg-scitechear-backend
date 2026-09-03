@@ -257,16 +257,51 @@ estados do job; só o trabalho real dentro deles é pulado. Ver
 investigação (incluindo validação em reunião substantiva, redundância
 residual observada em `qwen3:14b`, e o refinador testado isoladamente).
 
-### 3.8. `pipeline_facade.py` e `job_executor.py` — orquestração
+### 3.8. `pipeline_facade.py`, `job_runner.py` e `app/worker.py` — orquestração e execução
 
 `MeetingPipelineFacade` é o ponto único que conhece a ordem completa das 7
 etapas e chama cada serviço na sequência correta, atualizando o estado do
-job a cada transição. `job_executor.py` é a camada mais fina em torno
-disso: hoje, executa o pipeline em uma thread de background por job — uma
-solução simples, adequada ao volume da V1, mas desenhada com uma interface
-que já comporta a substituição futura por uma fila real (Celery + Redis,
-por exemplo) sem exigir mudanças nas rotas HTTP ou no `pipeline_facade.py`
-em si.
+job a cada transição — isso não mudou.
+
+O que mudou foi *quem* dispara essa execução. Até a V1, `/upload` disparava
+o pipeline numa thread do próprio processo da API (`InProcessJobExecutor`,
+removido). Isso tinha dois problemas, descobertos ao preparar o backend
+para produção: reiniciar a API matava qualquer processamento em andamento,
+e a cada upload uma thread nova era criada **sem nenhum limite de
+concorrência** — várias reuniões enviadas em sequência rápida disputariam a
+mesma GPU ao mesmo tempo (o pipeline é GPU-bound: WhisperX, pyannote e
+SpeechBrain usam CUDA quando disponível).
+
+Agora:
+
+- **`app/services/job_runner.py`** monta os repositories e a
+  `MeetingPipelineFacade` a partir de `get_settings()` — extraído de
+  `app/api/jobs.py` para um módulo que não depende da camada HTTP, usado
+  tanto pelas rotas (`/upload`, `/resultado`) quanto pelo worker.
+- **`app/worker.py`** é um **processo separado** da API (`python -m
+  app.worker`), dedicado a consumir a fila de jobs. `/upload` só grava o
+  job no banco (`job_repository.create()`) e responde — não dispara nada.
+  O worker faz *polling* (`JobRepository.next_queued()`, intervalo
+  `WORKER_POLL_INTERVAL_SECONDS`) e processa um job de cada vez,
+  sequencialmente — decisão deliberada, não uma limitação: não há
+  paralelismo real a ganhar processando dois jobs pesados ao mesmo tempo na
+  mesma GPU, então serializar corrige de quebra a contenção de GPU
+  descrita acima.
+- **A fila é o próprio banco** (`job_repository`, SQLite) — nada de
+  Celery/Redis. Ver seção 4 e [`docs/PENDENCIAS.md`](./PENDENCIAS.md) para
+  o raciocínio completo por trás dessa escolha (o pipeline GPU-bound com um
+  único worker dedicado simplifica o problema o suficiente para não
+  justificar um broker externo).
+- **Resiliência a crash do worker:** no boot, `app/worker.py` chama
+  `JobRepository.requeue_orfaos()` — qualquer job num estágio não-terminal
+  só pode ter sido deixado por uma instância anterior do worker que morreu
+  no meio do processamento (pressuposto: um único worker por vez).
+  Reprocessar do zero é seguro (`pipeline_facade` não faz checkpoint
+  parcial), então o padrão é reenfileirar. Proteção contra "job veneno": um
+  contador `attempts` (coluna em `jobs`) limita quantas vezes um mesmo job
+  pode ser reenfileirado (`WORKER_MAX_ATTEMPTS_BEFORE_ERROR`, default 3) —
+  excedido isso, o job vai para `error` (`WORKER_MAX_TENTATIVAS_EXCEDIDO`)
+  em vez de travar a fila para sempre num loop de crash.
 
 ## 4. `app/repositories` — onde os dados moram
 
@@ -276,33 +311,33 @@ guardados fisicamente:
 
 - **`job_repository.py`** — mantém o estado de todos os jobs em **SQLite**
   (via SQLAlchemy), não mais em memória: reiniciar o servidor já não apaga
-  jobs em andamento (era uma limitação aceita da V1, inaceitável em
-  produção — primeiro item resolvido da preparação para produção). Duas
-  tabelas: `jobs` (estado atual de cada job) e `job_status_events`
-  (uma linha por transição de status, insert-only). A interface pública
-  (`create`/`get`/`update_status`/`stage_durations`) não mudou — nenhum
-  consumidor (`pipeline_facade.py`, `app/api/jobs.py`) precisou ser
-  alterado. Configurável via `DATABASE_URL` (`.env`); vazio usa
-  `sqlite:///<STORAGE_ROOT>/jobs.db` por padrão — zero infraestrutura
-  extra, schema criado automaticamente no primeiro uso. SQLite (com modo
-  WAL) foi escolhido em vez de Postgres justamente para manter esse
-  princípio de zero-infra; a troca para outro banco fica barata depois
-  (só mudar a URL, mesmo código SQLAlchemy) se o volume um dia justificar.
-  `status_history`/`stage_durations()` (tabela `job_status_events`) segue
-  existindo só para instrumentação de performance, não faz parte do
-  contrato HTTP (a resposta de `GET /status/{job_id}` continua expondo só
-  o status atual). Ver [`docs/PERFORMANCE.md`](./PERFORMANCE.md) para as
-  medições dessa instrumentação.
+  jobs em andamento. Três tabelas: `jobs` (estado atual de cada job,
+  incluindo `attempts` — contador de tentativas usado pela proteção contra
+  "job veneno", ver seção 3.8), `job_status_events` (uma linha por
+  transição de status, insert-only, alimenta `stage_durations()`). A
+  interface pública (`create`/`get`/`update_status`/`stage_durations`,
+  mais `next_queued`/`requeue_orfaos` da fila) não exigiu mudanças em quem
+  já a consumia (`pipeline_facade.py`, `app/api/jobs.py`). Configurável via
+  `DATABASE_URL` (`.env`); vazio usa `sqlite:///<STORAGE_ROOT>/jobs.db` por
+  padrão — zero infraestrutura extra, schema criado automaticamente no
+  primeiro uso. SQLite (com modo WAL) foi escolhido em vez de Postgres
+  justamente para manter esse princípio de zero-infra — inclusive como
+  fila real (seção 3.8), não só como armazenamento de estado; a troca para
+  outro banco fica barata depois (só mudar a URL, mesmo código SQLAlchemy)
+  se o volume um dia justificar. `status_history`/`stage_durations()`
+  (tabela `job_status_events`) segue existindo só para instrumentação de
+  performance, não faz parte do contrato HTTP (a resposta de `GET
+  /status/{job_id}` continua expondo só o status atual). Ver
+  [`docs/PERFORMANCE.md`](./PERFORMANCE.md) para as medições dessa
+  instrumentação.
 
-  **Limitação residual conhecida:** o *registro* do job agora sobrevive a
-  um restart, mas a *execução* não — o pipeline ainda roda numa thread
-  in-process (`job_executor.py`), então um job pego em restart no meio do
-  processamento fica congelado no último estado não-terminal alcançado,
-  indefinidamente (a thread que o processava morreu com o processo
-  antigo). Corrigir isso de verdade depende do próximo item da preparação
-  para produção (fila real, ex. Celery/Redis, com execução resiliente).
-  Ver [`docs/PENDENCIAS.md`](./PENDENCIAS.md) para o detalhamento e a
-  validação empírica desse comportamento.
+  Tanto o registro quanto a *execução* de um job agora sobrevivem a
+  restart (do processo da API e do worker, respectivamente) — a limitação
+  residual que existia aqui logo após a migração para SQLite (job
+  congelado para sempre se o restart pegasse no meio do processamento) foi
+  resolvida pelo item seguinte da preparação para produção (worker
+  dedicado + fila real, seção 3.8). Ver
+  [`docs/PENDENCIAS.md`](./PENDENCIAS.md) para o histórico completo.
 - **`result_repository.py`** — persiste o resultado final de cada job como
   um arquivo JSON, permitindo que `GET /resultado/{job_id}` seja servido
   sem reprocessar nada.
@@ -390,6 +425,9 @@ vista arquitetural:
 ```env
 HF_TOKEN=                          # obrigatório — o modelo do pyannote é "gated" no Hugging Face
 STORAGE_ROOT=./storage
+DATABASE_URL=                      # vazio usa sqlite:///<STORAGE_ROOT>/jobs.db (ver §4)
+WORKER_POLL_INTERVAL_SECONDS=2.0    # ver §3.8 (app/worker.py)
+WORKER_MAX_ATTEMPTS_BEFORE_ERROR=3  # proteção contra "job veneno", ver §3.8
 WHISPERX_MODEL=turbo
 WHISPERX_LANGUAGE=pt
 DIARIZATION_MODEL=pyannote/speaker-diarization-community-1
@@ -420,6 +458,20 @@ O servidor sobe em `http://0.0.0.0:8000` por padrão, o que é necessário
 para ser alcançável por um emulador Android ou dispositivo físico na mesma
 rede (não apenas por `localhost`).
 
+**Processamento de jobs precisa do worker rodando** (§3.8) — sem ele,
+`/upload` cria o job normalmente, mas ele fica parado em `queued` para
+sempre, já que ninguém consome a fila. Num segundo terminal:
+
+```bash
+source .venv/bin/activate
+python -m app.worker
+```
+
+Nenhum serviço externo é necessário (nada de Redis) — API e worker são só
+dois processos Python apontando pro mesmo `STORAGE_ROOT`/`DATABASE_URL`. Em
+produção, cada um vira sua própria unidade systemd (ou equivalente), com
+restart automático independente um do outro.
+
 ## 10. Abordagem de testes
 
 Os testes automatizados privilegiam **testes de contrato com fixtures**
@@ -435,24 +487,37 @@ implementação, mas não fazem parte da suíte automatizada de CI.
 
 ## 11. Escopo da V1 e próximos passos conhecidos
 
-A V1 assume: um único processo backend (sem fila distribuída), execução em
-um servidor Python convencional com GPU, sem autenticação real de usuários
-ainda, e WebSocket de status como um recurso complementar ao polling
-(não uma dependência crítica). Esses pontos são decisões conscientes de
-escopo, não lacunas esquecidas — a interface de cada componente já foi
-desenhada considerando essas evoluções futuras, para que não exijam
-reescrever contratos já estabelecidos.
+A V1 assume: **um único worker dedicado** (sem paralelismo entre jobs —
+decisão deliberada, não lacuna, já que o pipeline é GPU-bound e uma única
+GPU por servidor não ganha nada processando dois jobs pesados ao mesmo
+tempo), sem autenticação real de usuários ainda, e WebSocket de status
+como um recurso complementar ao polling (não uma dependência crítica).
+Esses pontos são decisões conscientes de escopo, não lacunas esquecidas —
+a interface de cada componente já foi desenhada considerando essas
+evoluções futuras, para que não exijam reescrever contratos já
+estabelecidos.
 
 **Preparação para produção — progresso:**
 
 1. ✅ **Persistência real do estado do job** (`job_repository.py` em
-   SQLite, ver seção 4 acima) — reiniciar o servidor não apaga mais jobs
-   em andamento. Limitação residual conhecida e documentada: a execução
-   em si não é retomada após um restart (thread in-process morre com o
-   processo), só o registro sobrevive — ver
-   [`docs/PENDENCIAS.md`](./PENDENCIAS.md).
-2. ⏳ **Fila real com execução resiliente** (ex.: Celery + Redis) — próximo
-   item. Resolve a limitação residual do item 1 (retomar/reprocessar jobs
-   após um restart, em vez de só preservar o registro) e substitui
-   `InProcessJobExecutor` por workers que sobrevivem independentemente do
-   processo da API.
+   SQLite, ver seção 4) — reiniciar o servidor não apaga mais jobs em
+   andamento.
+2. ✅ **Fila real com execução resiliente** (`app/worker.py`, processo
+   dedicado, fila no próprio SQLite — sem Celery/Redis, ver seção 3.8) —
+   resolve por completo a limitação residual que o item 1 deixou em
+   aberto (job congelado para sempre se o restart pegasse no meio do
+   processamento): agora o worker sobrevive independentemente da API, e
+   reenfileira automaticamente jobs órfãos no boot, com proteção contra
+   "job veneno" (`attempts`/`WORKER_MAX_ATTEMPTS_BEFORE_ERROR`). Efeito
+   colateral corrigido de quebra: o `InProcessJobExecutor` antigo não
+   limitava concorrência nenhuma (cada upload virava uma thread nova,
+   sem fila) — hoje o processamento é serializado de verdade.
+
+   **Teto conhecido desta escolha:** a fila no banco escala para mais de
+   um worker na mesma máquina (a mesma GPU, então sem ganho real hoje),
+   mas **não** entre máquinas diferentes — SQLite não é seguro em
+   filesystem compartilhado entre servidores. Se um dia houver mais de um
+   servidor com GPU, essa camada precisaria migrar para Postgres (com
+   claim atômico) ou para um broker real (Celery/Redis). Não há evidência
+   hoje de que isso seja necessário — o projeto é documentado como "um
+   servidor Linux com GPU", singular.
