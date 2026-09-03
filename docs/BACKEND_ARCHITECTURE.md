@@ -42,6 +42,7 @@ negócio aqui — só validação e orquestração de chamadas.
 | `jobs.py` | `POST /upload`<br>`GET /status/{job_id}`<br>`GET /resultado/{job_id}`<br>`WS /ws/{job_id}` | Recebe o áudio e a lista de participantes; cria um job; expõe o estado atual; expõe o resultado final quando pronto. | O upload devolve `202 Accepted` imediatamente (não espera o processamento), porque uma transcrição real pode levar minutos — bloquear a requisição HTTP até terminar seria uma experiência ruim e arriscaria timeout. |
 | `participants.py` | `POST /participants/{id}/voice-samples`<br>`GET /participants/{id}/voice-profile`<br>`DELETE /participants/{id}/voice-profile` | Cadastro, consulta e remoção do perfil de voz de um participante. | Separado de `jobs.py` porque o cadastro de voz tem um ciclo de vida independente das reuniões — uma pessoa se cadastra uma vez, participa de muitas reuniões depois. |
 | `health.py` | `GET /health`<br>`GET /ready` | `/health` responde imediatamente, sem carregar nenhum modelo — serve para checagens de infraestrutura ("o processo está vivo?"). `/ready` verifica dependências reais: se o `HF_TOKEN` está configurado, se o Ollama está alcançável. | A distinção entre os dois evita um erro comum: um `/health` que "finge" prontidão quando na verdade uma dependência crítica está fora do ar. `/ready` existe justamente para não mentir sobre isso. |
+| `auth.py` | `POST /auth/register`<br>`POST /auth/login`<br>`POST /auth/refresh`<br>`POST /auth/logout`<br>`GET /auth/me` | Registro, login, renovação/rotação de refresh token, logout (revogação) e perfil do usuário autenticado. | Único conjunto de rotas explicitamente público (`/health`/`/ready` também) — todo o resto (`jobs.py`, `participants.py`) exige `Authorization: Bearer <access_token>`. Ver seção 3.9. |
 | `main.py` | — | Bootstrap da aplicação FastAPI: registra os routers, configura CORS para desenvolvimento. | Ponto único de montagem da aplicação. |
 
 ## 3. `app/services` — onde a inteligência do sistema mora
@@ -303,12 +304,80 @@ Agora:
   excedido isso, o job vai para `error` (`WORKER_MAX_TENTATIVAS_EXCEDIDO`)
   em vez de travar a fila para sempre num loop de crash.
 
+### 3.9. `auth_service.py` e `app/api/auth.py` — autenticação real
+
+Substitui a `AuthScreen` mock do app (sem chamada real ao backend) por
+autenticação de verdade: JWT (access + refresh), senha com hashing Argon2id
+(`argon2-cffi` — não `passlib`, que está sem release desde 2020 e tem um bug
+conhecido, não corrigido, com `bcrypt>=4.1`), e rate limiting simples contra
+força bruta. Consumo pelo app (tela real, armazenamento seguro de token,
+anexar token nas chamadas existentes) é trabalho do repositório do
+Flutter, tratado numa sessão separada — este item cobre só o contrato do
+lado do backend.
+
+**Decisão de escopo (a única aberta de propósito na proposta original, não
+decidida sozinha): reuniões e perfis de voz passam a ser isolados por
+conta.** Antes desta mudança, `participant_id` e o estado dos jobs eram
+globais — qualquer cliente da API via/cadastrava os mesmos dados, sem noção
+de dono. Escolhida a isolação completa (não só "JWT como porteiro, dados
+continuam globais") por dois motivos concretos: a tela do app já se chama
+"Suas Reuniões" (a alternativa deixaria a UI mentindo), e perfil de voz é
+dado biométrico — sem isolamento, qualquer conta autenticada poderia
+consultar/apagar o perfil de qualquer `participant_id` cadastrado por
+outra conta. Efeito no restante do sistema: seção 4 (`job_repository.py`,
+`VoiceRepository`).
+
+**Tokens:**
+- **Access token**: JWT (`PyJWT`, HS256), expira em
+  `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` (default 30 min) — stateless, validado
+  só pela assinatura, sem consulta ao banco a cada request.
+- **Refresh token**: JWT também, expira em `JWT_REFRESH_TOKEN_EXPIRE_DAYS`
+  (default 30 dias), mas **rastreado em banco** (tabela `refresh_tokens`,
+  ver seção 4) — diferente do access token, precisa ser revogável, senão
+  `POST /auth/logout` seria decorativo (o token continuaria válido até
+  expirar sozinho). Cada `POST /auth/refresh` bem-sucedido **rotaciona**: o
+  token usado é revogado e um par novo é emitido — mitigação padrão contra
+  reuso de um refresh token vazado.
+
+**Rate limiting** (tabela `auth_failed_attempts`, mesmo SQLite, sem
+infraestrutura nova — limpeza de linhas fora da janela é oportunista, a
+cada escrita, em vez de um job de limpeza separado):
+- `/auth/login`: chave por **e-mail** (protege uma conta específica contra
+  adivinhação de senha; IP teria falsos positivos atrás de CGNAT/redes
+  móveis compartilhadas) — `AUTH_LOGIN_MAX_ATTEMPTS` falhas em
+  `AUTH_LOGIN_WINDOW_MINUTES` bloqueia por `AUTH_LOGIN_LOCKOUT_MINUTES`
+  (`429` com header `Retry-After`, mensagem genérica). Login bem-sucedido
+  zera o contador.
+- `/auth/register`: chave por **IP** (não há conta "alvo" a proteger aqui —
+  o risco é criação em massa) — `AUTH_REGISTER_MAX_ATTEMPTS` em
+  `AUTH_REGISTER_WINDOW_MINUTES`. `request.client.host` sem proxy reverso
+  confiável configurado ainda (dev/V1); revisar para `X-Forwarded-For`
+  quando a topologia de deploy for definida.
+
+**Todo endpoint de `jobs.py` e `participants.py` exige
+`Authorization: Bearer <access_token>`** — `/health`/`/ready` continuam
+públicos (probes de infraestrutura). `WS /ws/{job_id}` recebe o token por
+query param (`?token=`), não header — handshake de WebSocket não permite
+header customizado em todo cliente.
+
+**Ownership**: `GET /status/{job_id}` e `GET /resultado/{job_id}` devolvem
+`404` (não `403`) tanto para job inexistente quanto para job de outro
+usuário — de propósito, para não revelar a outros usuários que um
+`job_id` alheio existe. Nova rota `GET /meetings` (não existia antes —
+sem ela "Suas Reuniões" não tinha como ser alimentada pelo backend) lista
+as reuniões do usuário autenticado.
+
 ## 4. `app/repositories` — onde os dados moram
 
 Cada repositório abstrai uma forma de persistência, para que o resto do
 sistema não precise saber os detalhes de como e onde os dados ficam
 guardados fisicamente:
 
+- **`user_repository.py`** — contas (`users`), refresh tokens rastreados
+  (`refresh_tokens`) e tentativas de autenticação falhas para rate limiting
+  (`auth_failed_attempts`). Mesmo SQLite de `job_repository.py` (mesma
+  `DATABASE_URL`), Base própria SQLAlchemy, self-contained, mesmo padrão de
+  schema criado automaticamente no primeiro uso. Ver seção 3.9.
 - **`job_repository.py`** — mantém o estado de todos os jobs em **SQLite**
   (via SQLAlchemy), não mais em memória: reiniciar o servidor já não apaga
   jobs em andamento. Três tabelas: `jobs` (estado atual de cada job,
@@ -317,7 +386,12 @@ guardados fisicamente:
   transição de status, insert-only, alimenta `stage_durations()`). A
   interface pública (`create`/`get`/`update_status`/`stage_durations`,
   mais `next_queued`/`requeue_orfaos` da fila) não exigiu mudanças em quem
-  já a consumia (`pipeline_facade.py`, `app/api/jobs.py`). Configurável via
+  já a consumia (`pipeline_facade.py`, `app/api/jobs.py`). Desde a
+  autenticação real (item 3), todo job tem um `user_id` (dono); `get()`
+  continua ownership-agnostic (usado pelo worker, que processa qualquer job
+  da fila sem se importar com dono) — `get_owned()`/`list_by_user()` são as
+  versões escopadas usadas pelas rotas HTTP (`GET /status`, `/resultado`,
+  `/meetings`). Configurável via
   `DATABASE_URL` (`.env`); vazio usa `sqlite:///<STORAGE_ROOT>/jobs.db` por
   padrão — zero infraestrutura extra, schema criado automaticamente no
   primeiro uso. SQLite (com modo WAL) foi escolhido em vez de Postgres
@@ -344,10 +418,13 @@ guardados fisicamente:
 - **`storage_repository.py`** — organiza os artefatos de cada job (o áudio
   recebido, e outros arquivos intermediários) em `storage/jobs/<job_id>/`.
 - **`voice_repository.py`** — organiza os perfis de voz em
-  `storage/voices/<participant_id>/`, guardando o embedding consolidado e
-  metadados (quantas amostras, quando foi atualizado pela última vez, qual
-  versão do modelo gerou o embedding — importante para saber quais perfis
-  precisam ser recalculados se o modelo de voz for trocado no futuro).
+  `storage/voices/<user_id>/<participant_id>/` (aninhado por conta desde a
+  autenticação real, item 3 — ver seção 3.9), guardando o embedding
+  consolidado e metadados (quantas amostras, quando foi atualizado pela
+  última vez, qual versão do modelo gerou o embedding — importante para
+  saber quais perfis precisam ser recalculados se o modelo de voz for
+  trocado no futuro). `participant_id` deixou de ser único globalmente —
+  só dentro do namespace de cada usuário.
 
 Nenhum desses repositórios depende de um provedor de nuvem — tudo é
 armazenamento local (arquivo SQLite ou arquivos JSON/tensor em disco), o
@@ -442,6 +519,11 @@ OLLAMA_MODEL=qwen3:14b
 ENABLE_IMPLICIT_QUESTIONS=false       # etapa de perguntas implícitas desligada por padrão; ver §3.7
 ENABLE_IMPLICIT_REFINEMENT=false
 DEMO_MODE=false
+JWT_SECRET_KEY=                       # obrigatório em produção — `openssl rand -hex 32`; ver §3.9
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30
+JWT_REFRESH_TOKEN_EXPIRE_DAYS=30
+AUTH_LOGIN_MAX_ATTEMPTS=5             # rate limiting de /auth/login e /auth/register; ver §3.9
+AUTH_REGISTER_MAX_ATTEMPTS=10
 ```
 
 Para desenvolvimento local:
@@ -490,8 +572,8 @@ implementação, mas não fazem parte da suíte automatizada de CI.
 A V1 assume: **um único worker dedicado** (sem paralelismo entre jobs —
 decisão deliberada, não lacuna, já que o pipeline é GPU-bound e uma única
 GPU por servidor não ganha nada processando dois jobs pesados ao mesmo
-tempo), sem autenticação real de usuários ainda, e WebSocket de status
-como um recurso complementar ao polling (não uma dependência crítica).
+tempo), e WebSocket de status como um recurso complementar ao polling (não
+uma dependência crítica).
 Esses pontos são decisões conscientes de escopo, não lacunas esquecidas —
 a interface de cada componente já foi desenhada considerando essas
 evoluções futuras, para que não exijam reescrever contratos já
@@ -521,3 +603,26 @@ estabelecidos.
    claim atômico) ou para um broker real (Celery/Redis). Não há evidência
    hoje de que isso seja necessário — o projeto é documentado como "um
    servidor Linux com GPU", singular.
+3. ✅ **Autenticação real** (`auth_service.py`/`app/api/auth.py`, JWT +
+   Argon2id + rate limiting, ver seção 3.9) — substitui a `AuthScreen` mock
+   do app (o consumo em si — tela real, storage seguro de token — é
+   trabalho do outro repositório, sessão separada). Decisão de escopo
+   tomada (não sozinho): reuniões e perfis de voz passam a ser isolados
+   por conta (`jobs.user_id`, `VoiceRepository` aninhado por `user_id`) —
+   ver seção 3.9 para o raciocínio completo. Efeito colateral: nova rota
+   `GET /meetings` (não existia antes), necessária para a tela "Suas
+   Reuniões" ter o que listar.
+
+   **Migração de dados pré-autenticação:** os 11 perfis de voz cadastrados
+   antes deste item (`storage/voices/<participant_id>/`, sem dono) foram
+   primeiro deduplicados — 3 perfis "Leandro" existiam (cadastros de teste
+   em datas diferentes, nenhum com mais amostras que os outros); mantido
+   só o mais recente (`1788038289268569`, 2026-08-29), os outros dois
+   removidos. Os 9 perfis restantes foram então atribuídos à conta
+   `leandro.freitas@ifg.edu.br` via `scripts/migrate_voices_to_user.py`
+   (script one-off, idempotente — identifica perfil legado pela presença
+   de `profile.json` direto sob `storage/voices/<algo>/`, nunca cria conta
+   nem mexe em senha). Nenhum job existia no banco local no momento desta
+   migração (`jobs`/`job_status_events` vazias) — as tabelas foram
+   recriadas do zero com o schema novo (`user_id` em `jobs`), sem
+   necessidade de migração de dado real.

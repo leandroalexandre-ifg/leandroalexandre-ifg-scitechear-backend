@@ -214,6 +214,13 @@ adotando `participant_id` desde o início, com um utilitário de migração
 não-destrutivo para trazer dados antigos (se existirem) para o novo
 formato.
 
+**Desde a autenticação real (item 3), `participant_id` deixou de ser único
+globalmente** — passou a ser único só dentro do namespace de cada conta
+(`storage/voices/<user_id>/<participant_id>/`). Duas contas diferentes
+podem usar o mesmo `participant_id` sem colisão nem vazamento de dado
+biométrico entre elas. Ver
+[`docs/BACKEND_ARCHITECTURE.md`](./BACKEND_ARCHITECTURE.md#4-apprepositories--onde-os-dados-moram).
+
 ## 9. Contrato de dados canônico
 
 ![Contrato de dados canônico](diagrams/06-data-contract.svg)
@@ -305,6 +312,14 @@ app (não em runtime, para evitar ficar "esquecido ligado").
 - **Identidade é sempre resolvida pelo backend**, nunca inferida pelo
   cliente por posição de lista ou qualquer outra heurística local.
 - **`participant_id` é a chave compartilhada**, não o nome (seção 8).
+- **Toda reunião e todo perfil de voz pertence a uma conta.** Desde a
+  autenticação real (item 3 da preparação para produção), o backend exige
+  um token (JWT) em toda rota de `jobs`/`participants`, e cada conta só vê
+  os próprios dados — nunca os de outra. Detalhe completo (contrato de
+  `/auth/*`, schema, decisão de escopo) em
+  [`docs/BACKEND_ARCHITECTURE.md`](./BACKEND_ARCHITECTURE.md#3-9-auth_servicepy-e-appapiauthpy--autenticação-real).
+  Consumo pelo app (AuthScreen real, armazenamento seguro de token) é
+  trabalho do outro repositório, tratado em sessão separada.
 - **Erro real nunca vira resultado fictício**, em nenhum dos dois lados
   (seção 10).
 - **Sem dependência de nuvem no caminho de execução do backend.**
