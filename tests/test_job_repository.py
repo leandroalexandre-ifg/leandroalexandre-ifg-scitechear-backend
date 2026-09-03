@@ -4,6 +4,7 @@ from app.models.job import JobError, JobStatusValue
 from app.models.participant import Participant
 from app.repositories.job_repository import (
     JobRepository,
+    JobRow,
     JobStatusEventRow,
     get_job_repository,
 )
@@ -32,6 +33,7 @@ def test_create_e_get(tmp_path):
     assert fetched.participants == record.participants
     assert fetched.expected_speaker_count == record.expected_speaker_count
     assert fetched.status == record.status
+    assert fetched.attempts == 0
 
 
 def test_get_inexistente_retorna_none(tmp_path):
@@ -171,3 +173,101 @@ def test_stage_durations_job_recem_criado_sem_transicoes_suficientes(tmp_path):
 def test_stage_durations_job_inexistente_retorna_vazio(tmp_path):
     repo = _novo_repo(tmp_path)
     assert repo.stage_durations("nao-existe") == {}
+
+
+# ---------------------------------------------------------------------------
+# next_queued / requeue_orfaos — fila real (item 2 da preparação para
+# produção, ver docs/PENDENCIAS.md e docs/BACKEND_ARCHITECTURE.md)
+# ---------------------------------------------------------------------------
+
+
+def test_next_queued_fila_vazia_retorna_none(tmp_path):
+    repo = _novo_repo(tmp_path)
+    assert repo.next_queued() is None
+
+
+def test_next_queued_ignora_jobs_que_ja_saíram_de_queued(tmp_path):
+    repo = _novo_repo(tmp_path)
+    repo.create(job_id="j1", title=None, participants=[], expected_speaker_count=None)
+    repo.create(job_id="j2", title=None, participants=[], expected_speaker_count=None)
+    repo.update_status("j1", JobStatusValue.DONE)
+
+    # só j2 continua queued — j1 (embora exista) não é candidato.
+    assert repo.next_queued() == "j2"
+
+
+def test_next_queued_retorna_o_mais_antigo_em_queued(tmp_path):
+    repo = _novo_repo(tmp_path)
+    repo.create(job_id="j1", title=None, participants=[], expected_speaker_count=None)
+    repo.create(job_id="j2", title=None, participants=[], expected_speaker_count=None)
+    repo.create(job_id="j3", title=None, participants=[], expected_speaker_count=None)
+    repo.update_status("j1", JobStatusValue.TRANSCRIBING)  # já saiu de queued
+
+    # Congela created_at pra não depender de timing real de execução do
+    # teste: entre os que continuam queued (j2, j3), j3 é o mais antigo.
+    t0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    with repo._session_factory() as session:
+        session.get(JobRow, "j3").created_at = t0
+        session.get(JobRow, "j2").created_at = t0 + timedelta(seconds=10)
+        session.commit()
+
+    assert repo.next_queued() == "j3"
+
+
+def test_requeue_orfaos_reenfileira_estagios_nao_terminais_e_ignora_o_resto(tmp_path):
+    repo = _novo_repo(tmp_path)
+    repo.create(job_id="j1", title=None, participants=[], expected_speaker_count=None)  # órfão
+    repo.create(job_id="j2", title=None, participants=[], expected_speaker_count=None)  # terminal
+    repo.create(job_id="j3", title=None, participants=[], expected_speaker_count=None)  # nunca pego
+
+    repo.update_status("j1", JobStatusValue.DIARIZING)
+    repo.update_status("j2", JobStatusValue.DONE)
+
+    afetados = repo.requeue_orfaos(max_attempts=3)
+
+    assert afetados == ["j1"]
+    job1 = repo.get("j1")
+    assert job1.status == JobStatusValue.QUEUED
+    assert job1.attempts == 1
+    # Intocados: j2 (terminal) e j3 (já era queued, não é órfão).
+    assert repo.get("j2").status == JobStatusValue.DONE
+    job3 = repo.get("j3")
+    assert job3.status == JobStatusValue.QUEUED
+    assert job3.attempts == 0
+
+
+def test_requeue_orfaos_sem_jobs_nao_terminais_retorna_vazio(tmp_path):
+    repo = _novo_repo(tmp_path)
+    repo.create(job_id="j1", title=None, participants=[], expected_speaker_count=None)  # queued
+
+    assert repo.requeue_orfaos(max_attempts=3) == []
+
+
+def test_requeue_orfaos_protege_contra_job_veneno_apos_exceder_max_attempts(tmp_path):
+    """Job que sistematicamente derruba o worker (ex.: segfault de lib nativa
+    processando um áudio específico) não pode reenfileirar para sempre."""
+    repo = _novo_repo(tmp_path)
+    repo.create(job_id="j1", title=None, participants=[], expected_speaker_count=None)
+
+    # Simula 3 ciclos de crash: o worker pega o job (volta a um estágio
+    # não-terminal) e "morre" antes de terminar — cada requeue_orfaos()
+    # seguinte encontra o job órfão de novo.
+    for tentativa_esperada in (1, 2, 3):
+        repo.update_status("j1", JobStatusValue.DIARIZING)
+        afetados = repo.requeue_orfaos(max_attempts=3)
+        assert afetados == ["j1"]
+        job = repo.get("j1")
+        assert job.status == JobStatusValue.QUEUED
+        assert job.attempts == tentativa_esperada
+
+    # 4º crash: excedeu max_attempts=3 — vai para error, não reenfileira mais.
+    repo.update_status("j1", JobStatusValue.DIARIZING)
+    afetados = repo.requeue_orfaos(max_attempts=3)
+
+    assert afetados == ["j1"]
+    job = repo.get("j1")
+    assert job.status == JobStatusValue.ERROR
+    assert job.attempts == 4
+    assert job.error.code == "WORKER_MAX_TENTATIVAS_EXCEDIDO"
+    assert "3" in job.error.message
+    assert "diarizing" in job.error.message
