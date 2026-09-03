@@ -1,4 +1,6 @@
 from functools import lru_cache
+from pathlib import Path
+from typing import Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -9,6 +11,18 @@ class Settings(BaseSettings):
 
     hf_token: str = Field(default="", alias="HF_TOKEN")
     storage_root: str = Field(default="./storage", alias="STORAGE_ROOT")
+
+    # Persistência de job_repository.py. Vazio (default) usa SQLite num
+    # arquivo dentro de STORAGE_ROOT — zero infraestrutura extra. Defina
+    # explicitamente para apontar a outro arquivo, ou (futuro) outro banco
+    # via URL do SQLAlchemy (ex.: postgresql://...), sem mudar código.
+    database_url: Optional[str] = Field(default=None, alias="DATABASE_URL")
+
+    @property
+    def database_url_efetivo(self) -> str:
+        if self.database_url:
+            return self.database_url
+        return f"sqlite:///{Path(self.storage_root) / 'jobs.db'}"
 
     whisperx_model: str = Field(default="turbo", alias="WHISPERX_MODEL")
     whisperx_language: str = Field(default="pt", alias="WHISPERX_LANGUAGE")

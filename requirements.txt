@@ -9,6 +9,12 @@ pydantic==2.13.4
 pydantic-settings==2.11.0
 python-multipart==0.0.20
 
+# --- Persistência (preparação para produção) ---
+# job_repository.py: SQLite por padrão (zero infraestrutura extra) via
+# SQLAlchemy — troca para Postgres depois é só mudar DATABASE_URL, mesmo
+# código. Ver docs/BACKEND_ARCHITECTURE.md.
+sqlalchemy==2.0.51
+
 # --- Testes ---
 pytest==8.4.2
 httpx==0.28.1
