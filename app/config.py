@@ -24,6 +24,16 @@ class Settings(BaseSettings):
             return self.database_url
         return f"sqlite:///{Path(self.storage_root) / 'jobs.db'}"
 
+    # app/worker.py: intervalo de polling da fila (segundos) quando não há
+    # job em queued. Curto o suficiente pra não atrasar percebivelmente um
+    # pipeline que leva minutos, sem ficar consultando o banco sem parar.
+    worker_poll_interval_seconds: float = Field(default=2.0, alias="WORKER_POLL_INTERVAL_SECONDS")
+    # Proteção contra "job veneno": quantas vezes um job pode ser encontrado
+    # órfão (deixado por uma instância do worker que morreu no meio do
+    # processamento) antes de parar de reenfileirar e ir direto para error.
+    # Ver JobRepository.requeue_orfaos().
+    worker_max_attempts_before_error: int = Field(default=3, alias="WORKER_MAX_ATTEMPTS_BEFORE_ERROR")
+
     whisperx_model: str = Field(default="turbo", alias="WHISPERX_MODEL")
     whisperx_language: str = Field(default="pt", alias="WHISPERX_LANGUAGE")
     whisperx_batch_size: int = Field(default=16, alias="WHISPERX_BATCH_SIZE")

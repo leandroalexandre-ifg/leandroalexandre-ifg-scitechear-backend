@@ -10,7 +10,11 @@ precisam mudar. Ver docs/BACKEND_ARCHITECTURE.md.
 Schema (criado automaticamente no primeiro uso, sem migração — não há dados
 de produção reais a migrar, job_repository é efêmero por natureza):
 
-    jobs               — um registro por job (estado atual).
+    jobs               — um registro por job (estado atual). `attempts`
+                         conta quantas vezes o job foi encontrado órfão no
+                         boot do worker (ver requeue_orfaos) — proteção
+                         contra "job veneno" que derruba o worker sempre
+                         que é processado; não conta tentativas normais.
     job_status_events  — uma linha por transição de status (INSERT-only);
                          só alimenta stage_durations() (instrumentação de
                          performance), não faz parte do contrato HTTP.
@@ -29,6 +33,17 @@ from app.config import get_settings
 from app.models.job import JobError, JobStatusValue
 from app.models.participant import Participant
 
+# Estágios não-terminais do pipeline (exceto QUEUED) — usado por
+# requeue_orfaos() para achar jobs deixados a meio por uma instância
+# anterior do worker que morreu.
+_ESTAGIOS_EM_ANDAMENTO = [
+    JobStatusValue.TRANSCRIBING,
+    JobStatusValue.DIARIZING,
+    JobStatusValue.IDENTIFYING,
+    JobStatusValue.SUMMARIZING,
+    JobStatusValue.EXTRACTING,
+]
+
 
 class Base(DeclarativeBase):
     pass
@@ -44,6 +59,7 @@ class JobRow(Base):
     status = Column(String, nullable=False)
     error_code = Column(String, nullable=True)
     error_message = Column(String, nullable=True)
+    attempts = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime(timezone=True), nullable=False)
     updated_at = Column(DateTime(timezone=True), nullable=False)
 
@@ -65,6 +81,7 @@ class JobRecord:
     expected_speaker_count: Optional[int]
     status: JobStatusValue = JobStatusValue.QUEUED
     error: Optional[JobError] = None
+    attempts: int = 0
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     # Histórico de transições (status, timestamp de quando ENTROU nesse
@@ -173,6 +190,62 @@ class JobRepository:
             for (status, ts), (_, proximo_ts) in zip(historico, historico[1:])
         }
 
+    def next_queued(self) -> Optional[str]:
+        """Job_id mais antigo (por created_at) ainda em `queued`, ou None se
+        a fila estiver vazia. Assume um único worker dedicado consumindo a
+        fila por vez (pressuposto do desenho: pipeline GPU-bound, ver
+        docs/BACKEND_ARCHITECTURE.md) — não faz claim atômico contra outros
+        consumidores concorrentes; quem tira o job de `queued` de fato é
+        `pipeline_facade.executar()`, ao chamar update_status(TRANSCRIBING)
+        como primeira ação."""
+        with self._session_factory() as session:
+            return session.scalars(
+                select(JobRow.job_id)
+                .where(JobRow.status == JobStatusValue.QUEUED.value)
+                .order_by(JobRow.created_at)
+                .limit(1)
+            ).first()
+
+    def requeue_orfaos(self, max_attempts: int) -> List[str]:
+        """Chamado no boot do worker: todo job num estágio não-terminal
+        (exceto `queued`) só pode ter sido deixado por uma instância
+        anterior do worker que morreu no meio do processamento (mesmo
+        pressuposto de next_queued() — um único worker por vez). Reprocessar
+        do zero é seguro (pipeline_facade não faz checkpoint parcial, só
+        persiste resultado ao chegar em DONE), então o padrão é reenfileirar
+        (volta a `queued`, `attempts` += 1).
+
+        Proteção contra "job veneno": se `attempts` já teria excedido
+        `max_attempts`, não reenfileira de novo — marca `error` direto, para
+        um job que sistematicamente derruba o worker não travar a fila para
+        sempre. Retorna os job_ids afetados (reenfileirados ou marcados
+        error)."""
+        agora = datetime.now(timezone.utc)
+        afetados: List[str] = []
+        with self._lock, self._session_factory() as session:
+            rows = session.scalars(
+                select(JobRow).where(
+                    JobRow.status.in_([s.value for s in _ESTAGIOS_EM_ANDAMENTO])
+                )
+            ).all()
+            for row in rows:
+                estagio_anterior = row.status
+                row.attempts += 1
+                if row.attempts > max_attempts:
+                    row.status = JobStatusValue.ERROR.value
+                    row.error_code = "WORKER_MAX_TENTATIVAS_EXCEDIDO"
+                    row.error_message = (
+                        f"Excedeu {max_attempts} tentativa(s) após crashes do worker "
+                        f"(último estágio alcançado antes do crash: {estagio_anterior})."
+                    )
+                else:
+                    row.status = JobStatusValue.QUEUED.value
+                row.updated_at = agora
+                session.add(JobStatusEventRow(job_id=row.job_id, status=row.status, occurred_at=agora))
+                afetados.append(row.job_id)
+            session.commit()
+        return afetados
+
     def _carregar_historico(self, session: Session, job_id: str) -> List[Tuple[JobStatusValue, datetime]]:
         rows = session.scalars(
             select(JobStatusEventRow)
@@ -190,6 +263,7 @@ class JobRepository:
             expected_speaker_count=row.expected_speaker_count,
             status=JobStatusValue(row.status),
             error=error,
+            attempts=row.attempts,
             created_at=_as_utc(row.created_at),
             updated_at=_as_utc(row.updated_at),
             status_history=historico,

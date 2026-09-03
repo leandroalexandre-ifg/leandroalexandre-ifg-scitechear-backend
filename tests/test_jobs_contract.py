@@ -1,9 +1,6 @@
 import json
 from pathlib import Path
 
-import pytest
-
-import app.api.jobs as jobs_module
 from app.config import get_settings
 from app.models.job import JobError, JobStatusValue
 from app.models.participant import Participant
@@ -13,13 +10,11 @@ from app.repositories.result_repository import ResultRepository
 from app.repositories.storage_repository import StorageRepository
 
 
-@pytest.fixture(autouse=True)
-def no_op_executor(monkeypatch):
-    """Os testes de contrato validam o wiring HTTP, não o pipeline pesado
-    (isso já é coberto por tests/test_pipeline_facade.py, com mocks das
-    etapas). Sem isso, todo /upload dispararia WhisperX/pyannote/SpeechBrain
-    de verdade numa thread de fundo."""
-    monkeypatch.setattr(jobs_module._executor, "submit", lambda job_id: None)
+# Os testes de contrato validam o wiring HTTP, não o pipeline pesado (isso já
+# é coberto por tests/test_pipeline_facade.py, com mocks das etapas). Não
+# precisam mais mockar nenhum executor: /upload só grava o job no banco —
+# quem processaria de verdade é o worker dedicado (app/worker.py), um
+# processo separado que os testes de API nunca sobem.
 
 
 def _upload(client, wav_bytes, participants=None, title="Reunião de teste", expected_speaker_count=None):
@@ -64,7 +59,8 @@ def test_resultado_job_inexistente_retorna_404(client):
 
 
 def test_status_apos_upload_fica_queued_sem_pipeline_disparado(client, wav_bytes):
-    # com o executor mockado (no_op_executor), nada processa o job — o status
+    # /upload não dispara processamento nenhum (isso é papel do worker
+    # dedicado, um processo separado que este teste nunca sobe) — o status
     # real só avança quando o PipelineFacade roda de verdade (fora deste teste).
     job_id = _upload(client, wav_bytes).json()["job_id"]
 

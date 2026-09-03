@@ -1,53 +1,20 @@
 import json
 import uuid
-from pathlib import Path
 from typing import List, Optional
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi import status as http_status
 from pydantic import TypeAdapter, ValidationError
 
-from app.config import get_settings
 from app.models.job import JobStatusResponse, JobStatusValue, UploadResponse
 from app.models.participant import Participant
 from app.models.result import MeetingResult
 from app.repositories.job_repository import get_job_repository
-from app.repositories.result_repository import ResultRepository
-from app.repositories.storage_repository import StorageRepository
-from app.repositories.voice_repository import VoiceRepository
-from app.services.job_executor import InProcessJobExecutor
-from app.services.pipeline_facade import MeetingPipelineFacade
+from app.services.job_runner import result_repository, storage_repository
 
 router = APIRouter(tags=["jobs"])
 
 _PARTICIPANTS_ADAPTER = TypeAdapter(List[Participant])
-
-
-def _storage_repository() -> StorageRepository:
-    return StorageRepository(Path(get_settings().storage_root))
-
-
-def _result_repository() -> ResultRepository:
-    return ResultRepository(_storage_repository())
-
-
-def _build_facade() -> MeetingPipelineFacade:
-    voices_root = Path(get_settings().storage_root) / "voices"
-    return MeetingPipelineFacade(
-        job_repository=get_job_repository(),
-        result_repository=_result_repository(),
-        storage_repository=_storage_repository(),
-        voice_repository=VoiceRepository(voices_root),
-    )
-
-
-def _executar_job(job_id: str) -> None:
-    _build_facade().executar(job_id)
-
-
-# V1: executor in-process (thread). Interface pronta para trocar por uma fila
-# real (Celery/Redis) sem mudar as rotas — ver app/services/job_executor.py.
-_executor = InProcessJobExecutor(_executar_job)
 
 
 def _validate_wav(file: UploadFile) -> None:
@@ -88,7 +55,7 @@ async def upload_meeting(
 
     job_id = str(uuid.uuid4())
     content = await file.read()
-    _storage_repository().save_audio(job_id, content, file.filename or "reuniao.wav")
+    storage_repository().save_audio(job_id, content, file.filename or "reuniao.wav")
 
     get_job_repository().create(
         job_id=job_id,
@@ -97,10 +64,10 @@ async def upload_meeting(
         expected_speaker_count=expected_speaker_count,
     )
 
-    # Responde rápido; o PipelineFacade percorre os estágios reais em
-    # background (transcribing -> ... -> done/error).
-    _executor.submit(job_id)
-
+    # Responde rápido; o processamento roda no worker dedicado (app/worker.py,
+    # processo separado), que consome a fila (job_repository) de forma
+    # assíncrona — /upload só grava o job, não dispara nada aqui. Ver
+    # docs/BACKEND_ARCHITECTURE.md.
     return UploadResponse(job_id=job_id, status=JobStatusValue.QUEUED)
 
 
@@ -130,7 +97,7 @@ async def get_job_result(job_id: str) -> MeetingResult:
             detail=f"Resultado ainda não disponível (status atual: {record.status.value}).",
         )
 
-    resultado = _result_repository().load(job_id)
+    resultado = result_repository().load(job_id)
     if resultado is None:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Resultado não encontrado.")
 
