@@ -64,6 +64,16 @@ def tmp_storage_root(tmp_path, monkeypatch):
     no ./storage real do repositório. Também fixa um JWT_SECRET_KEY de teste
     (auth_service recusa emitir/validar token sem ele — ver app/config.py)."""
     monkeypatch.setenv("STORAGE_ROOT", str(tmp_path))
+    # Sobrescrever STORAGE_ROOT não basta: database_url_efetivo (app/config.py)
+    # só deriva o caminho do banco a partir dele quando DATABASE_URL está
+    # vazio — preenchido, DATABASE_URL vence e o isolamento acima vira letra
+    # morta. Um .env de produção com DATABASE_URL definido (o .env.example
+    # convida a isso) fazia a suíte inteira ler e escrever no banco REAL:
+    # sem descarte entre testes, o rate limit de /auth/register acumulava até
+    # responder 429 e derrubava ~20 testes de contrato. Descoberto no primeiro
+    # deploy real (servidor NumbERS). Remover a variável do ambiente do teste
+    # força a derivação a partir do tmp_path, independentemente do .env.
+    monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.setenv("JWT_SECRET_KEY", "chave-de-teste-nao-usar-em-producao")
     get_settings.cache_clear()
     yield
