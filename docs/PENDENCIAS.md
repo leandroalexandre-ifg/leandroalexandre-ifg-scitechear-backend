@@ -429,3 +429,51 @@ quando `job.expected_speaker_count` não for `None`.
 
 **Status:** aberta, não bloqueia fases seguintes, correção trivial quando
 priorizada.
+
+## Aberta — Job fica congelado num estado intermediário para sempre se o servidor reiniciar durante o processamento (efeito colateral conhecido da persistência em banco)
+
+**Onde:** `app/repositories/job_repository.py` (persistência em SQLite,
+substituiu o dict em memória) + `app/services/job_executor.py` (execução
+segue in-process, numa thread por job).
+
+**O quê:** a migração de `job_repository` para SQLite (ver
+`docs/BACKEND_ARCHITECTURE.md`) resolve a perda total de estado no
+restart — antes, todo job em andamento simplesmente desaparecia. Mas só o
+**registro** passou a sobreviver; a **execução** continua não-resiliente.
+`InProcessJobExecutor` roda o pipeline numa thread do processo da API, sem
+nenhum mecanismo de "quem estava processando o quê" sobrevivendo ao
+processo. Se o servidor reiniciar enquanto um job está em qualquer estágio
+não-terminal (`transcribing`, `diarizing`, `identifying`, `summarizing`,
+`extracting`), a thread morre junto com o processo antigo — e nada no
+processo novo sabe que precisa retomar, reenfileirar ou marcar erro nesse
+job. O registro fica congelado no último estado alcançado antes do
+restart, **indefinidamente**: um cliente fazendo polling em `/status`
+nunca vai ver `done` nem `error` para esse job específico, só o mesmo
+estado intermediário repetido para sempre.
+
+**Validado empiricamente (teste manual da Fase 2 deste item):** upload
+real, `kill -9` do processo com o job em `transcribing`, novo processo
+apontando para o mesmo `STORAGE_ROOT`/banco — `GET /status/{job_id}`
+devolveu o job intacto, mas congelado no último estado alcançado
+(`extracting`, no caso testado), sem qualquer sinal de progresso ou erro
+daí em diante.
+
+**Por que não foi corrigido agora:** está fora do escopo deste item
+(substituir a persistência em memória por uma real — objetivo cumprido).
+Resolver de verdade — detectar jobs "órfãos" após um restart e marcá-los
+como erro, ou retomar/reprocessar via workers que sobrevivem
+independentemente do processo da API — é o objetivo do próximo item do
+roadmap (fila real com Celery/Redis, execução resiliente). Implementar
+aqui seria antecipar esse item sem a infraestrutura que o sustenta.
+
+**Risco:** qualquer job em andamento no exato momento de um restart/deploy
+em produção fica preso assim — o app cliente ficaria fazendo polling
+indefinidamente num job que nunca termina, sem sinalização de erro.
+Aceitável como comportamento transitório desta fase (o objetivo aqui era
+parar de perder o *registro* do job, não garantir resiliência de
+*execução*), mas não deve ser esquecido: todo restart em produção antes do
+item 2 do roadmap corre esse risco.
+
+**Status:** aberta, comportamento esperado e documentado — não bloqueia
+esta fase, mas fica pendente até a fila real/execução resiliente (item 2
+do roadmap) resolver de fato.
