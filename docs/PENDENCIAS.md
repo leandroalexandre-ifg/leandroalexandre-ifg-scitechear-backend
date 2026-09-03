@@ -513,3 +513,64 @@ para Postgres ou um broker real se isso um dia for necessário.
 
 **Status final:** resolvida. Job não fica mais congelado indefinidamente
 em nenhum cenário testado (restart da API, crash do worker, job veneno).
+
+## Resolvida — `STORAGE_ROOT` relativo dependia do cwd do processo, arriscando divergência silenciosa entre API e worker
+
+**Onde:** `app/config.py` (`Settings.storage_root`, `SettingsConfigDict.env_file`).
+
+**O quê:** `STORAGE_ROOT` (default `./storage`) era lido como string crua,
+sem nunca ser resolvido para caminho absoluto — quem consumia
+(`Path(get_settings().storage_root)`, em `app/api/participants.py`,
+`app/services/voice_service.py`, `app/services/job_runner.py`) construía
+um `Path` relativo, que `pathlib`/SQLAlchemy só resolvem contra
+`os.getcwd()` no momento real do I/O, não na criação do objeto. Na
+prática, cada processo fixava sua resolução no cwd que tinha *quando foi
+iniciado*.
+
+**Por que ficou mais urgente depois do item 2 (fila real com worker
+dedicado):** antes, só a API tocava o storage — um cwd "errado" era
+inofensivo, só existia um processo pra importar. Desde o worker dedicado
+(`app/worker.py`, processo separado), API e worker precisam concordar
+sobre onde o storage está fisicamente. Se um dos dois iniciasse de um cwd
+diferente (erro de configuração no systemd, alguém rodando um dos dois
+manualmente de outra pasta), os dois passariam a operar sobre diretórios
+físicos diferentes — silenciosamente, sem erro, só arquivos "sumindo" da
+perspectiva de um processo e não do outro. O `DATABASE_URL` default
+(`sqlite:///<STORAGE_ROOT>/jobs.db`) sofreria o mesmo problema, por
+derivar de `STORAGE_ROOT`.
+
+**Correção:** `field_validator` em `storage_root` (`app/config.py`) —
+valor relativo é ancorado em `_PROJECT_ROOT`
+(`Path(__file__).resolve().parent.parent`, fixo, nunca o cwd do
+processo); valor já absoluto passa direto, sem normalizar (não mexe em
+symlink de quem já configura caminho absoluto de propósito, ex.:
+produção). `database_url_efetivo` herdou a correção de graça, por
+derivar de `storage_root` já resolvido.
+
+**Achado durante a verificação manual deste item, incluído na mesma
+correção:** `env_file=".env"` do `SettingsConfigDict` tinha exatamente a
+mesma fragilidade — testado na prática, rodando a partir de `/tmp`,
+`HF_TOKEN` voltava vazio (`''`) em vez do valor real, silenciosamente, sem
+erro. Potencialmente pior que o problema original: se API e worker
+divergissem de cwd, um deles poderia subir com **todas** as configs em
+default, não só o storage — incluindo `JWT_SECRET_KEY` vazio, quebrando
+autenticação só na hora de assinar/validar um token. Corrigido com o
+mesmo padrão (`env_file=str(_PROJECT_ROOT / ".env")`).
+
+**Defesa em profundidade:** mesmo com a causa raiz corrigida, API
+(`app/main.py`, hook `lifespan`) e worker (`app/worker.py`, início de
+`main()`) logam `STORAGE_ROOT`/`DATABASE_URL` absolutos resolvidos na
+subida, mesmo formato de linha — um operador consegue notar visualmente
+se os dois processos alguma vez divergirem, mesmo por uma causa nova,
+ainda não prevista aqui.
+
+**Validado:** `tests/test_config.py` (6 casos) — relativo resolve pro
+mesmo absoluto trocando o cwd de fato via `monkeypatch.chdir`; absoluto
+passa direto sem normalizar (`..` no meio do caminho preservado
+literalmente); `env_file` é absoluto e não muda com o cwd. Verificação
+manual adicional: `Settings()` instanciado com cwd em `/tmp` resolveu
+`storage_root` para a raiz do repo (não `/tmp/storage`) e carregou
+`HF_TOKEN` do `.env` real corretamente.
+
+**Status:** resolvida. Ver `docs/BACKEND_ARCHITECTURE.md` §9 e §11 (item
+4) para o detalhe completo.

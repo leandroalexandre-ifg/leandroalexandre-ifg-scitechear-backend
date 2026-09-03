@@ -501,8 +501,8 @@ vista arquitetural:
 
 ```env
 HF_TOKEN=                          # obrigatório — o modelo do pyannote é "gated" no Hugging Face
-STORAGE_ROOT=./storage
-DATABASE_URL=                      # vazio usa sqlite:///<STORAGE_ROOT>/jobs.db (ver §4)
+STORAGE_ROOT=./storage             # relativo resolve contra a raiz do repo, não o cwd do processo — ver nota abaixo
+DATABASE_URL=                      # vazio usa sqlite:///<STORAGE_ROOT>/jobs.db (ver §4) — herda a mesma correção
 WORKER_POLL_INTERVAL_SECONDS=2.0    # ver §3.8 (app/worker.py)
 WORKER_MAX_ATTEMPTS_BEFORE_ERROR=3  # proteção contra "job veneno", ver §3.8
 WHISPERX_MODEL=turbo
@@ -553,6 +553,37 @@ Nenhum serviço externo é necessário (nada de Redis) — API e worker são só
 dois processos Python apontando pro mesmo `STORAGE_ROOT`/`DATABASE_URL`. Em
 produção, cada um vira sua própria unidade systemd (ou equivalente), com
 restart automático independente um do outro.
+
+**`STORAGE_ROOT` relativo não depende do cwd do processo (item 4 da
+preparação para produção).** Antes do item 2, só a API tocava o storage —
+um `STORAGE_ROOT` relativo resolvendo contra o cwd do processo era
+inofensivo, porque só existia um cwd para importar. Desde o worker
+dedicado, existem dois processos separados que precisam concordar sobre
+onde o storage está fisicamente; se um deles iniciar de um cwd diferente
+(erro de config no systemd, alguém rodando um dos dois manualmente de
+outra pasta), os dois passariam a operar sobre diretórios físicos
+diferentes — **silenciosamente**, sem erro, só arquivos "sumindo" da
+perspectiva de um processo e não do outro (e o `DATABASE_URL` default, que
+deriva de `STORAGE_ROOT`, sofreria o mesmo problema — cada processo
+enxergando um SQLite diferente).
+
+Corrigido em `app/config.py`: um `field_validator` em `storage_root`
+ancora valores relativos em `_PROJECT_ROOT` (`Path(__file__).resolve()
+.parent.parent` — fixo, nunca o cwd do processo); um valor já absoluto
+passa direto, sem normalizar (não mexe em symlink de quem já configura
+caminho absoluto de propósito). `env_file` do `SettingsConfigDict` recebeu
+a mesma correção — achado durante a verificação manual deste item: um
+`.env` relativo ao cwd falha em carregar silenciosamente se o processo
+iniciar de outro diretório, e **todas** as configs (não só o storage)
+voltam ao default — incluindo `JWT_SECRET_KEY` vazio, quebrando auth só na
+hora de assinar/validar um token.
+
+**Defesa em profundidade**: mesmo com a causa raiz corrigida, tanto a API
+(`app/main.py`, hook `lifespan`) quanto o worker (`app/worker.py`, início
+de `main()`) logam `STORAGE_ROOT`/`DATABASE_URL` absolutos resolvidos na
+subida, no mesmo formato de linha — um operador consegue notar visualmente
+se os dois processos alguma vez divergirem, mesmo que por uma causa nova,
+ainda não prevista aqui.
 
 ## 10. Abordagem de testes
 
@@ -626,3 +657,18 @@ estabelecidos.
    migração (`jobs`/`job_status_events` vazias) — as tabelas foram
    recriadas do zero com o schema novo (`user_id` em `jobs`), sem
    necessidade de migração de dado real.
+4. ✅ **`STORAGE_ROOT` independente do cwd do processo** (`app/config.py`,
+   ver seção 9) — ficou mais urgente depois do item 2: API e worker são
+   processos separados desde então, e um `STORAGE_ROOT` relativo resolvia
+   contra o cwd de cada processo individualmente, podendo divergir
+   silenciosamente entre os dois (erro de config no systemd, alguém
+   rodando um dos dois de outra pasta). Corrigido ancorando valores
+   relativos em `_PROJECT_ROOT` (`Path(__file__)`, nunca o cwd) — um valor
+   absoluto continua passando direto, sem normalizar. `DATABASE_URL`
+   default herdou a correção de graça, por derivar de `storage_root` já
+   resolvido. Achado durante a verificação manual, incluído no mesmo item:
+   `env_file` do `SettingsConfigDict` tinha a mesma fragilidade (`.env`
+   relativo ao cwd, falhando em carregar silenciosamente) — mesma correção
+   aplicada. Defesa em profundidade: API (`lifespan`) e worker logam
+   `STORAGE_ROOT`/`DATABASE_URL` resolvidos na subida, mesmo formato de
+   linha, para um operador notar visualmente qualquer divergência futura.
