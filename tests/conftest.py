@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from app.config import get_settings
 from app.main import app
-from app.repositories.job_repository import get_job_repository
+from app.repositories.job_repository import reset_job_repository
 from app.services import voice_service
 
 
@@ -56,10 +56,14 @@ def stub_voice_embedding(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def reset_job_repository():
+def reset_job_repository_singleton(tmp_storage_root):
     """get_job_repository() é um singleton compartilhado entre requisições
     (precisa sobreviver entre POST /upload e GET /status) — mas isso não pode
-    vazar estado de um teste para o outro."""
-    get_job_repository()._jobs.clear()
+    vazar estado de um teste para o outro. Descarta o singleton (não só os
+    dados): a implementação em banco fixa a conexão a um arquivo dentro do
+    STORAGE_ROOT no momento da criação, então precisa ser recriada a cada
+    teste para acompanhar o tmp_path isolado de `tmp_storage_root` (daí a
+    dependência explícita — precisa rodar depois dele)."""
+    reset_job_repository()
     yield
-    get_job_repository()._jobs.clear()
+    reset_job_repository()

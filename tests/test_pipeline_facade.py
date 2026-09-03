@@ -16,7 +16,7 @@ from app.services.transcription_service import TranscriptionMetadata, Transcript
 def _nova_facade(tmp_path):
     storage = StorageRepository(tmp_path)
     facade = MeetingPipelineFacade(
-        job_repository=JobRepository(),
+        job_repository=JobRepository(f"sqlite:///{tmp_path}/jobs.db"),
         result_repository=ResultRepository(storage),
         storage_repository=storage,
         voice_repository=VoiceRepository(tmp_path / "voices"),
