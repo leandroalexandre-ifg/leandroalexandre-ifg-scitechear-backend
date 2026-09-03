@@ -1,6 +1,6 @@
 """Artefatos de um job (áudio enviado, resultado canônico) em storage local
 do runtime — nada de Google Drive ou barramento externo no caminho de
-execução (regra invólavel do CLAUDE.md).
+execução (regra invólavel do AGENTS.md).
 
 Layout:
     storage/jobs/<job_id>/

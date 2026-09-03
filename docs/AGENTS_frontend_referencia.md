@@ -1,7 +1,7 @@
-# CLAUDE.md — SciTech Ear · Frontend (Flutter)
+# AGENTS.md — SciTech Ear · Frontend (Flutter)
 
-Este arquivo define como o Claude Code deve trabalhar **no repositório do app
-Flutter** do SciTech Ear. É carregado automaticamente em toda sessão. O backend
+Este arquivo define como trabalhar **no repositório do app
+Flutter** do SciTech Ear. O backend
 Python/IA vive em um repositório separado.
 
 ## Contexto
@@ -12,7 +12,7 @@ cliente**: ele grava, envia e exibe. Todo o processamento de IA acontece no
 backend, acessado exclusivamente pela API.
 
 A especificação completa da integração
-(`SciTech_Ear_Especificacao_Final_Implementacao_Claude.docx`) é mantida no
+(`SciTech_Ear_Especificacao_Final_Implementacao.docx`) é mantida no
 repositório do backend, que é a fonte de verdade do contrato. Em caso de dúvida
 sobre o formato de dados, siga o contrato canônico resumido abaixo.
 

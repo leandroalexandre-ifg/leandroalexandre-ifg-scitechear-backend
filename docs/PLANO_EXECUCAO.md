@@ -1,6 +1,6 @@
-# Plano de Execução no Claude Code — SciTech Ear (Integração V1)
+# Plano de Execução — SciTech Ear (Integração V1)
 
-> Como usar: cole o **Prompt-Mestre** uma vez no início da sessão do Claude Code.
+> Como usar: cole o **Prompt-Mestre** uma vez no início do trabalho.
 > Depois cole **um Prompt de Fase por vez**, na ordem. Só avance para a fase seguinte
 > quando os testes e o checklist da fase atual passarem. Isso respeita a regra da spec:
 > mudanças pequenas, verificáveis e com commit por fase.
@@ -381,11 +381,11 @@ Checklist de saída (Definição de Pronto da V1):
 
 ### Observações finais de uso
 
-- Se o Claude Code sugerir "adiantar" etapas (ex.: já implementar Celery, ou já
-  trocar o modelo de LLM), lembre-o das regras 8 e 10 do Prompt-Mestre: integração
+- Se surgir a sugestão de "adiantar" etapas (ex.: já implementar Celery, ou já
+  trocar o modelo de LLM), lembre-se das regras 8 e 10 do Prompt-Mestre: integração
   ponta a ponta primeiro, otimização depois.
-- Ao fim de cada fase, guarde o resumo (arquivos/decisões/pendências) que ele
-  produzir — vira o histórico da integração e ajuda a retomar entre sessões.
+- Ao fim de cada fase, guarde o resumo (arquivos/decisões/pendências) produzido
+  — vira o histórico da integração e ajuda a retomar entre sessões.
 - Pontos que a própria spec marca como calibráveis (thresholds de voz, min/max de
   falantes, peso do Qwen3 14B, escolha futura de fila) NÃO devem bloquear o E2E.
 ```

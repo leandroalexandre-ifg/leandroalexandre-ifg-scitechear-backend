@@ -12,7 +12,7 @@ biblioteca já usada em legacy/notebooks/transcricao.ipynb para validar WAV.
 Única mudança de comportamento em relação ao legado: `aplicar_biometria`
 devolve campos SEPARADOS (cluster, participant_id, speaker, identified,
 confidence) em vez de concatenar o score no nome (`"Leandro (0.82)"`) — e o
-banco é indexado por participant_id, nunca por nome (regra do CLAUDE.md).
+banco é indexado por participant_id, nunca por nome (regra do AGENTS.md).
 Falante não identificado permanece com o cluster original.
 """
 import logging

@@ -42,7 +42,7 @@ def tmp_storage_root(tmp_path, monkeypatch):
 def stub_voice_embedding(monkeypatch):
     """Evita baixar/rodar o modelo real do SpeechBrain nos testes: substitui a
     extração por um embedding determinístico derivado do conteúdo do arquivo
-    (mesma dimensão do ECAPA-TDNN, 192). Ver CLAUDE.md: "prefira testes de
+    (mesma dimensão do ECAPA-TDNN, 192). Ver AGENTS.md: "prefira testes de
     contrato com fixtures a rodar GPU no ciclo de desenvolvimento"."""
 
     def _fake_extrair_embedding(caminho_wav) -> torch.Tensor:

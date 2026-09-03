@@ -8,9 +8,9 @@ que vive em um repositório separado.
 
 ## Fonte de verdade
 
-`SciTech_Ear_Especificacao_Final_Implementacao_Claude.docx` (na raiz) é o contrato
-de implementação. `CLAUDE.md` resume as regras que valem em toda sessão do
-Claude Code. O plano de execução por fases está em `docs/PLANO_CLAUDE_CODE.md`.
+`SciTech_Ear_Especificacao_Final_Implementacao.docx` (na raiz) é o contrato
+de implementação. `AGENTS.md` resume as regras que valem em todo o desenvolvimento.
+O plano de execução por fases está em `docs/PLANO_EXECUCAO.md`.
 
 ## Estrutura
 
@@ -46,7 +46,7 @@ Claude Code. O plano de execução por fases está em `docs/PLANO_CLAUDE_CODE.md
    normalmente. Se `brew install ffmpeg@7` já tiver sido feito antes, pode
    remover (`brew uninstall ffmpeg@7`) — nada mais depende dele.
 5. Trabalhe em uma branch de integração (nunca na `main`).
-6. Siga a ordem de fases de `docs/PLANO_CLAUDE_CODE.md`. Os serviços em
+6. Siga a ordem de fases de `docs/PLANO_EXECUCAO.md`. Os serviços em
    `app/services/` são extraídos dos protótipos em `legacy/`.
 
 ## Regras que não mudam
@@ -54,7 +54,7 @@ Claude Code. O plano de execução por fases está em `docs/PLANO_CLAUDE_CODE.md
 Cliente fino no app; a API é a única fronteira; identidade de falante é do
 backend (biometria), nunca por posição; `participant_id` é a chave; erro real
 nunca vira resultado fictício; nada de Colab/Drive no caminho de execução;
-segredos só via ambiente. Detalhes no `CLAUDE.md` e na especificação.
+segredos só via ambiente. Detalhes no `AGENTS.md` e na especificação.
 
 ## Arquitetura
 

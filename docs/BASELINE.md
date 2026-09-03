@@ -1,8 +1,8 @@
 # BASELINE — SciTech Ear · Backend
 
 Registrado em 2026-08-09, branch `feat/estrutura-inicial`, antes do início da Fase 1.
-Baseado na leitura integral de `SciTech_Ear_Especificacao_Final_Implementacao_Claude.docx`,
-`CLAUDE.md`, `docs/PLANO_CLAUDE_CODE.md`, `legacy/` e `prompts/`.
+Baseado na leitura integral de `SciTech_Ear_Especificacao_Final_Implementacao.docx`,
+`AGENTS.md`, `docs/PLANO_EXECUCAO.md`, `legacy/` e `prompts/`.
 
 ## O que já existe
 
@@ -88,12 +88,12 @@ Não há `app/main.py` nem `app/config.py`.
   `VOICE_MODEL`, `VOICE_*_THRESHOLD`, `OLLAMA_*`,
   `ENABLE_IMPLICIT_REFINEMENT=false`, `DEMO_MODE=false`).
 - `.gitignore`, `storage/` (só `.gitkeep`), `tests/` (vazio), `README.md` e
-  `CLAUDE.md` já refletem a arquitetura alvo.
-- `docs/CLAUDE_frontend_referencia.md` — cópia do CLAUDE.md do repositório
+  `AGENTS.md` já refletem a arquitetura alvo.
+- `docs/AGENTS_frontend_referencia.md` — cópia do AGENTS.md do repositório
   Flutter (separado), útil como referência do contrato do lado cliente; não
   precisa ser editado aqui.
 
-## O que falta implementar (por fase, conforme `docs/PLANO_CLAUDE_CODE.md`)
+## O que falta implementar (por fase, conforme `docs/PLANO_EXECUCAO.md`)
 
 - **Fase 1** — schemas Pydantic do contrato canônico, `app/config.py`,
   `app/api/{jobs,participants,health}.py`, `app/main.py`; `/resultado`

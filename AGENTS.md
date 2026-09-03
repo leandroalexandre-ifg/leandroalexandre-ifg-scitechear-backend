@@ -1,12 +1,12 @@
-# CLAUDE.md — SciTech Ear · Backend
+# AGENTS.md — SciTech Ear · Backend
 
-Este arquivo define como o Claude Code deve trabalhar **no repositório do backend**
-do SciTech Ear. Ele é carregado automaticamente em toda sessão. Leia-o por completo
+Este arquivo define como trabalhar **no repositório do backend**
+do SciTech Ear. Leia-o por completo
 antes de editar qualquer arquivo. O frontend Flutter vive em um repositório separado.
 
 ## Fonte de verdade
 
-O documento **`SciTech_Ear_Especificacao_Final_Implementacao_Claude.docx`**
+O documento **`SciTech_Ear_Especificacao_Final_Implementacao.docx`**
 (na raiz deste repositório) é o contrato de implementação. Quando a documentação
 antiga divergir do código real, siga as decisões consolidadas desse documento.
 

@@ -1,5 +1,5 @@
 """Persistência do perfil biométrico de voz, indexada por participant_id
-(nunca por nome — regra invólavel do CLAUDE.md).
+(nunca por nome — regra invólavel do AGENTS.md).
 
 Layout em disco (spec seção 7.4):
 

@@ -38,7 +38,7 @@ pinado na spec) antes de decidir se isso precisa de ajuste de prompt. Se o
 `qwen3:14b` também vazar o prefixo, considerar reforçar a instrução do
 prompt (algo como "não inclua o rótulo `[Nome]:` no campo `pergunta`") —
 mudança de prompt, versionada, sem alterar os critérios semânticos
-existentes (regra do CLAUDE.md).
+existentes (regra do AGENTS.md).
 
 **Status:** aberta, não bloqueia fases seguintes.
 
@@ -295,7 +295,7 @@ NÃO IDENTIFICADO. Diagnóstico (sem reprocessar pipeline; score lido do
   um participante novo em vez de reutilizar um existente). Confirmado que
   **não é bug de backend**: este serviço não gera `participant_id`, ele é
   puramente definido por quem chama `POST /participants/{participant_id}
-  /voice-samples` (contrato do CLAUDE.md, regra 4) — os IDs eram lixo de
+  /voice-samples` (contrato do AGENTS.md, regra 4) — os IDs eram lixo de
   testes manuais do endpoint, anteriores à integração com um cliente
   estável. Um dos duplicados batia como 2º colocado (0.7077, margem 0.0227
   para o 1º) no caso acima, o que teria acionado rejeição por
