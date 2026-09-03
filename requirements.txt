@@ -19,6 +19,18 @@ sqlalchemy==2.0.51
 pytest==8.4.2
 httpx==0.28.1
 
+# --- Autenticação (item 3 da preparação para produção) ---
+# PyJWT: assinatura/validação de access e refresh tokens (HS256). Preferido a
+# python-jose (manutenção mais lenta) para código novo.
+PyJWT==2.10.1
+# argon2-cffi: hashing de senha (Argon2id, recomendação atual do OWASP
+# Password Storage Cheat Sheet). NÃO usa passlib — passlib está sem release
+# desde 2020 e tem um bug conhecido, não corrigido, com bcrypt>=4.1
+# (AttributeError: module 'bcrypt' has no attribute '__about__').
+argon2-cffi==23.1.0
+# pydantic[email]: valida formato de e-mail em UserRegisterRequest/LoginRequest.
+email-validator==2.2.0
+
 # --- Transcrição (Fase 3) ---
 # torch/torchaudio pinados pelo whisperx (torch~=2.8.0); baixou de 2.13.0/2.11.0
 # (Fase 2) para 2.8.0 — testes da Fase 2 (SpeechBrain) revalidados com esse par.

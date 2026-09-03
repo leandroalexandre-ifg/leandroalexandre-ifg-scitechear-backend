@@ -17,12 +17,18 @@ def migrate_legacy_voice_bank(
     legacy_root: Path,
     name_to_participant_id: Dict[str, str],
     enrollment_service: VoiceEnrollmentService,
+    user_id: str,
 ) -> List[VoiceProfileRecord]:
     """Para cada <legacy_root>/<nome>/audios/*.wav cujo nome esteja mapeado em
     name_to_participant_id, copia as amostras para o novo participant_id e
     recalcula o perfil consolidado. Nomes sem mapeamento ou sem pasta
     audios/ são ignorados silenciosamente (mapeamento é responsabilidade de
     quem chama esta função, ex.: um script one-off).
+
+    user_id: dono ao qual os perfis migrados são atribuídos (VoiceRepository
+    é escopado por usuário desde a autenticação real, item 3 — ver
+    docs/BACKEND_ARCHITECTURE.md). Esta função nunca decide sozinha qual
+    conta usar; quem chama (script one-off) resolve isso primeiro.
     """
     migrated: List[VoiceProfileRecord] = []
 
@@ -38,6 +44,7 @@ def migrate_legacy_voice_bank(
         profile = None
         for wav_path in wavs:
             profile = enrollment_service.add_sample(
+                user_id=user_id,
                 participant_id=participant_id,
                 content=wav_path.read_bytes(),
                 filename_hint=wav_path.name,

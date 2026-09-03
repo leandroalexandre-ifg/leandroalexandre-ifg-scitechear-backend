@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import health, jobs, participants
+from app.api import auth, health, jobs, participants
 
 app = FastAPI(title="SciTech Ear — Backend", version="0.1.0")
 
@@ -16,5 +16,6 @@ app.add_middleware(
 )
 
 app.include_router(health.router)
+app.include_router(auth.router)
 app.include_router(jobs.router)
 app.include_router(participants.router)

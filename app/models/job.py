@@ -32,3 +32,14 @@ class JobStatusResponse(BaseModel):
     progress: Optional[float] = None
     error: Optional[JobError] = None
     updated_at: datetime
+
+
+class MeetingSummary(BaseModel):
+    """Item de GET /meetings — resumo de uma reunião do usuário autenticado,
+    sem o payload completo do resultado (ver MeetingResult para isso)."""
+
+    job_id: str
+    title: Optional[str] = None
+    status: JobStatusValue
+    created_at: datetime
+    updated_at: datetime

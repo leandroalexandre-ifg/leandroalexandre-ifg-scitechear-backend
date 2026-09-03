@@ -2,11 +2,12 @@ import json
 import uuid
 from typing import List, Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi import status as http_status
 from pydantic import TypeAdapter, ValidationError
 
-from app.models.job import JobStatusResponse, JobStatusValue, UploadResponse
+from app.api.dependencies import get_current_user_id, user_id_from_ws_token
+from app.models.job import JobStatusResponse, JobStatusValue, MeetingSummary, UploadResponse
 from app.models.participant import Participant
 from app.models.result import MeetingResult
 from app.repositories.job_repository import get_job_repository
@@ -35,6 +36,7 @@ async def upload_meeting(
     title: Optional[str] = Form(None),
     participants: str = Form(...),
     expected_speaker_count: Optional[int] = Form(None),
+    user_id: str = Depends(get_current_user_id),
 ) -> UploadResponse:
     _validate_wav(file)
 
@@ -59,6 +61,7 @@ async def upload_meeting(
 
     get_job_repository().create(
         job_id=job_id,
+        user_id=user_id,
         title=title,
         participants=parsed_participants,
         expected_speaker_count=expected_speaker_count,
@@ -71,9 +74,24 @@ async def upload_meeting(
     return UploadResponse(job_id=job_id, status=JobStatusValue.QUEUED)
 
 
+@router.get("/meetings", response_model=List[MeetingSummary])
+async def list_meetings(
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    user_id: str = Depends(get_current_user_id),
+) -> List[MeetingSummary]:
+    records = get_job_repository().list_by_user(user_id, limit=limit, offset=offset)
+    return [
+        MeetingSummary(
+            job_id=r.job_id, title=r.title, status=r.status, created_at=r.created_at, updated_at=r.updated_at
+        )
+        for r in records
+    ]
+
+
 @router.get("/status/{job_id}", response_model=JobStatusResponse)
-async def get_job_status(job_id: str) -> JobStatusResponse:
-    record = get_job_repository().get(job_id)
+async def get_job_status(job_id: str, user_id: str = Depends(get_current_user_id)) -> JobStatusResponse:
+    record = get_job_repository().get_owned(job_id, user_id)
     if record is None:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Job não encontrado.")
 
@@ -86,8 +104,8 @@ async def get_job_status(job_id: str) -> JobStatusResponse:
 
 
 @router.get("/resultado/{job_id}", response_model=MeetingResult)
-async def get_job_result(job_id: str) -> MeetingResult:
-    record = get_job_repository().get(job_id)
+async def get_job_result(job_id: str, user_id: str = Depends(get_current_user_id)) -> MeetingResult:
+    record = get_job_repository().get_owned(job_id, user_id)
     if record is None:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Job não encontrado.")
 
@@ -105,11 +123,18 @@ async def get_job_result(job_id: str) -> MeetingResult:
 
 
 @router.websocket("/ws/{job_id}")
-async def job_progress_ws(websocket: WebSocket, job_id: str) -> None:
+async def job_progress_ws(websocket: WebSocket, job_id: str, token: Optional[str] = None) -> None:
     # Stub: aceita, informa o status atual uma vez e fecha. Push real de
     # progresso (e o fallback de polling continua obrigatório) chega na Fase 8.
+    # Autenticação via query param (?token=access_token) — handshake de
+    # WebSocket não permite header Authorization customizado em todo cliente.
+    user_id = user_id_from_ws_token(token)
+    if user_id is None:
+        await websocket.close(code=4401)
+        return
+
     await websocket.accept()
-    record = get_job_repository().get(job_id)
+    record = get_job_repository().get_owned(job_id, user_id)
     if record is None:
         await websocket.close(code=4404)
         return

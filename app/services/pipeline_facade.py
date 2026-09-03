@@ -70,7 +70,7 @@ class MeetingPipelineFacade:
 
         try:
             self._jobs.update_status(job_id, JobStatusValue.IDENTIFYING)
-            banco, nomes = self._carregar_banco_e_nomes(job.participants)
+            banco, nomes = self._carregar_banco_e_nomes(job.user_id, job.participants)
             segments = voice_service.aplicar_biometria(audio_path, diarizacao, banco, nomes=nomes)
         except Exception as exc:  # noqa: BLE001
             self._marcar_erro(job_id, "IDENTIFICATION_ERROR", str(exc))
@@ -104,16 +104,17 @@ class MeetingPipelineFacade:
         self._log_duracao_por_estagio(job_id)
 
     def _carregar_banco_e_nomes(
-        self, participants: List[Participant]
+        self, user_id: str, participants: List[Participant]
     ) -> Tuple[Dict[str, torch.Tensor], Dict[str, str]]:
         """banco só inclui participantes com perfil de voz cadastrado
-        (VoiceRepository); nomes vem do próprio job (contrato do /upload),
-        não do display_name do enrollment — é o nome que o Flutter mandou
-        para ESTA reunião."""
+        (VoiceRepository, escopado ao dono da reunião — ver item 3 da
+        preparação para produção); nomes vem do próprio job (contrato do
+        /upload), não do display_name do enrollment — é o nome que o Flutter
+        mandou para ESTA reunião."""
         banco: Dict[str, torch.Tensor] = {}
         nomes: Dict[str, str] = {}
         for participant in participants:
-            embedding = self._voices.load_embedding(participant.id)
+            embedding = self._voices.load_embedding(user_id, participant.id)
             if embedding is not None:
                 banco[participant.id] = embedding
             nomes[participant.id] = participant.name

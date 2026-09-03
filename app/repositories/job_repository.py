@@ -2,10 +2,12 @@
 
 Preparação para produção: SQLite (via SQLAlchemy) em vez do dict em memória
 que existia até aqui — reiniciar o servidor não pode mais apagar jobs em
-andamento. A interface pública (create/get/update_status/stage_durations,
-o dataclass JobRecord devolvido por create/get) é a mesma que a versão em
-memória expunha — os consumidores (PipelineFacade, app/api/jobs.py) não
-precisam mudar. Ver docs/BACKEND_ARCHITECTURE.md.
+andamento. Ver docs/BACKEND_ARCHITECTURE.md.
+
+Desde a autenticação real (item 3), todo job tem um `user_id` (dono). `get()`
+continua ownership-agnostic (usado pelo worker/PipelineFacade, que processa
+qualquer job da fila); `get_owned()`/`list_by_user()` são as versões
+escopadas usadas pelas rotas HTTP (app/api/jobs.py).
 
 Schema (criado automaticamente no primeiro uso, sem migração — não há dados
 de produção reais a migrar, job_repository é efêmero por natureza):
@@ -53,6 +55,13 @@ class JobRow(Base):
     __tablename__ = "jobs"
 
     job_id = Column(String, primary_key=True)
+    # Dono da reunião (item 3 da preparação para produção — autenticação
+    # real). Reuniões passam a ser escopadas por usuário: GET /status,
+    # /resultado e /meetings só devolvem jobs do usuário autenticado (ver
+    # get_owned/list_by_user abaixo e app/api/jobs.py). next_queued() e
+    # requeue_orfaos() (usados só pelo worker) continuam ignorando dono —
+    # ownership é regra da camada HTTP, não da fila.
+    user_id = Column(String, nullable=False, index=True)
     title = Column(String, nullable=True)
     participants = Column(JSON, nullable=False)
     expected_speaker_count = Column(Integer, nullable=True)
@@ -76,6 +85,7 @@ class JobStatusEventRow(Base):
 @dataclass
 class JobRecord:
     job_id: str
+    user_id: str
     title: Optional[str]
     participants: List[Participant]
     expected_speaker_count: Optional[int]
@@ -127,6 +137,7 @@ class JobRepository:
     def create(
         self,
         job_id: str,
+        user_id: str,
         title: Optional[str],
         participants: List[Participant],
         expected_speaker_count: Optional[int],
@@ -134,6 +145,7 @@ class JobRepository:
         agora = datetime.now(timezone.utc)
         row = JobRow(
             job_id=job_id,
+            user_id=user_id,
             title=title,
             participants=[p.model_dump() for p in participants],
             expected_speaker_count=expected_speaker_count,
@@ -151,12 +163,36 @@ class JobRepository:
         return self._to_record(row, [(JobStatusValue.QUEUED, agora)])
 
     def get(self, job_id: str) -> Optional[JobRecord]:
+        """Ownership-agnostic — usado pelo worker/pipeline_facade, que
+        processa qualquer job da fila independente de dono. Rotas HTTP devem
+        usar get_owned()."""
         with self._session_factory() as session:
             row = session.get(JobRow, job_id)
             if row is None:
                 return None
             historico = self._carregar_historico(session, job_id)
         return self._to_record(row, historico)
+
+    def get_owned(self, job_id: str, user_id: str) -> Optional[JobRecord]:
+        """Usado pelas rotas HTTP (GET /status, /resultado) — devolve None
+        tanto para job inexistente quanto para job de outro usuário, de
+        propósito: a API não deve revelar a outros usuários que um job_id
+        alheio existe (mesmo 404 nos dois casos, ver app/api/jobs.py)."""
+        record = self.get(job_id)
+        if record is None or record.user_id != user_id:
+            return None
+        return record
+
+    def list_by_user(self, user_id: str, limit: int = 50, offset: int = 0) -> List[JobRecord]:
+        with self._session_factory() as session:
+            rows = session.scalars(
+                select(JobRow)
+                .where(JobRow.user_id == user_id)
+                .order_by(JobRow.created_at.desc())
+                .limit(limit)
+                .offset(offset)
+            ).all()
+        return [self._to_record(row, []) for row in rows]
 
     def update_status(
         self, job_id: str, status: JobStatusValue, error: Optional[JobError] = None
@@ -258,6 +294,7 @@ class JobRepository:
         error = JobError(code=row.error_code, message=row.error_message) if row.error_code else None
         return JobRecord(
             job_id=row.job_id,
+            user_id=row.user_id,
             title=row.title,
             participants=[Participant(**p) for p in row.participants],
             expected_speaker_count=row.expected_speaker_count,

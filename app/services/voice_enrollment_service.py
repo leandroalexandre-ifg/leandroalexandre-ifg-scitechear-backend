@@ -1,4 +1,5 @@
-"""Cadastro/atualização de perfil de voz por participant_id.
+"""Cadastro/atualização de perfil de voz por participant_id, escopado por
+user_id desde a autenticação real (item 3 — ver VoiceRepository).
 
 Port de legacy/scripts/cadastro_vozes.py: preserva o comportamento de
 consolidação (recalcula o embedding médio a partir de TODAS as amostras já
@@ -21,18 +22,19 @@ class VoiceEnrollmentService:
 
     def add_sample(
         self,
+        user_id: str,
         participant_id: str,
         content: bytes,
         filename_hint: str,
         display_name: Optional[str] = None,
     ) -> VoiceProfileRecord:
-        self._repository.save_sample(participant_id, filename_hint, content)
-        return self._recompute_profile(participant_id, display_name=display_name)
+        self._repository.save_sample(user_id, participant_id, filename_hint, content)
+        return self._recompute_profile(user_id, participant_id, display_name=display_name)
 
     def _recompute_profile(
-        self, participant_id: str, display_name: Optional[str] = None
+        self, user_id: str, participant_id: str, display_name: Optional[str] = None
     ) -> VoiceProfileRecord:
-        sample_paths = self._repository.list_sample_paths(participant_id)
+        sample_paths = self._repository.list_sample_paths(user_id, participant_id)
         if not sample_paths:
             raise ValueError(f"Nenhuma amostra de voz encontrada para {participant_id}.")
 
@@ -40,10 +42,11 @@ class VoiceEnrollmentService:
         embedding_medio = torch.stack(embeddings).mean(dim=0)
         embedding_consolidado = voice_service.normalizar_embedding(embedding_medio)
 
-        existing = self._repository.load_profile(participant_id)
+        existing = self._repository.load_profile(user_id, participant_id)
         resolved_display_name = display_name or (existing.display_name if existing else None)
 
         return self._repository.save_profile(
+            user_id=user_id,
             participant_id=participant_id,
             embedding=embedding_consolidado,
             model_version=get_settings().voice_model,
@@ -51,8 +54,8 @@ class VoiceEnrollmentService:
             display_name=resolved_display_name,
         )
 
-    def get_profile(self, participant_id: str) -> Optional[VoiceProfileRecord]:
-        return self._repository.load_profile(participant_id)
+    def get_profile(self, user_id: str, participant_id: str) -> Optional[VoiceProfileRecord]:
+        return self._repository.load_profile(user_id, participant_id)
 
-    def delete_profile(self, participant_id: str) -> bool:
-        return self._repository.delete_profile(participant_id)
+    def delete_profile(self, user_id: str, participant_id: str) -> bool:
+        return self._repository.delete_profile(user_id, participant_id)

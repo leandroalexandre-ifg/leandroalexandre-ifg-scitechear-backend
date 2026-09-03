@@ -73,6 +73,23 @@ class Settings(BaseSettings):
     enable_implicit_refinement: bool = Field(default=False, alias="ENABLE_IMPLICIT_REFINEMENT")
     demo_mode: bool = Field(default=False, alias="DEMO_MODE")
 
+    # Autenticação (item 3 da preparação para produção). Vazio por padrão só
+    # para não quebrar `Settings()` sem .env em dev/teste — auth_service exige
+    # um valor não-vazio antes de assinar qualquer token (ver checagem em
+    # app/services/auth_service.py). Gerar em produção com `openssl rand -hex 32`.
+    jwt_secret_key: str = Field(default="", alias="JWT_SECRET_KEY")
+    jwt_algorithm: str = Field(default="HS256", alias="JWT_ALGORITHM")
+    jwt_access_token_expire_minutes: int = Field(default=30, alias="JWT_ACCESS_TOKEN_EXPIRE_MINUTES")
+    jwt_refresh_token_expire_days: int = Field(default=30, alias="JWT_REFRESH_TOKEN_EXPIRE_DAYS")
+
+    # Rate limiting de /auth/login (por e-mail) e /auth/register (por IP) —
+    # ver app/services/auth_service.py e docs/BACKEND_ARCHITECTURE.md.
+    auth_login_max_attempts: int = Field(default=5, alias="AUTH_LOGIN_MAX_ATTEMPTS")
+    auth_login_window_minutes: int = Field(default=15, alias="AUTH_LOGIN_WINDOW_MINUTES")
+    auth_login_lockout_minutes: int = Field(default=15, alias="AUTH_LOGIN_LOCKOUT_MINUTES")
+    auth_register_max_attempts: int = Field(default=10, alias="AUTH_REGISTER_MAX_ATTEMPTS")
+    auth_register_window_minutes: int = Field(default=60, alias="AUTH_REGISTER_WINDOW_MINUTES")
+
 
 @lru_cache
 def get_settings() -> Settings:

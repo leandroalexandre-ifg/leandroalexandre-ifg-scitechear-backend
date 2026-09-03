@@ -1,9 +1,10 @@
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, Response, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
 from fastapi import status as http_status
 
+from app.api.dependencies import get_current_user_id
 from app.api.jobs import _validate_wav
 from app.config import get_settings
 from app.models.participant import VoiceProfile, VoiceSampleUploadResponse
@@ -23,6 +24,7 @@ async def upload_voice_sample(
     participant_id: str,
     file: UploadFile = File(...),
     name: Optional[str] = Form(None),
+    user_id: str = Depends(get_current_user_id),
 ) -> VoiceSampleUploadResponse:
     _validate_wav(file)
     content = await file.read()
@@ -30,6 +32,7 @@ async def upload_voice_sample(
     service = _enrollment_service()
     try:
         profile = service.add_sample(
+            user_id=user_id,
             participant_id=participant_id,
             content=content,
             filename_hint=file.filename or "amostra.wav",
@@ -49,9 +52,11 @@ async def upload_voice_sample(
 
 
 @router.get("/participants/{participant_id}/voice-profile", response_model=VoiceProfile)
-async def get_voice_profile(participant_id: str) -> VoiceProfile:
+async def get_voice_profile(
+    participant_id: str, user_id: str = Depends(get_current_user_id)
+) -> VoiceProfile:
     service = _enrollment_service()
-    profile = service.get_profile(participant_id)
+    profile = service.get_profile(user_id, participant_id)
     if profile is None:
         return VoiceProfile(participant_id=participant_id, exists=False, sample_count=0)
 
@@ -65,7 +70,9 @@ async def get_voice_profile(participant_id: str) -> VoiceProfile:
 
 
 @router.delete("/participants/{participant_id}/voice-profile", status_code=http_status.HTTP_204_NO_CONTENT)
-async def delete_voice_profile(participant_id: str) -> Response:
+async def delete_voice_profile(
+    participant_id: str, user_id: str = Depends(get_current_user_id)
+) -> Response:
     service = _enrollment_service()
-    service.delete_profile(participant_id)
+    service.delete_profile(user_id, participant_id)
     return Response(status_code=http_status.HTTP_204_NO_CONTENT)
