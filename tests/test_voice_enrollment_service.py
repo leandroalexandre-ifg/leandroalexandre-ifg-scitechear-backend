@@ -12,7 +12,7 @@ def service(tmp_path) -> VoiceEnrollmentService:
 
 def test_add_sample_cria_perfil_associado_ao_participant_id(service):
     profile = service.add_sample(
-        participant_id="p1", content=b"audio-1", filename_hint="amostra1.wav", display_name="Leandro"
+        user_id="u1", participant_id="p1", content=b"audio-1", filename_hint="amostra1.wav", display_name="Leandro"
     )
 
     assert profile.participant_id == "p1"
@@ -22,11 +22,11 @@ def test_add_sample_cria_perfil_associado_ao_participant_id(service):
 
 
 def test_nova_amostra_recalcula_embedding_consolidado(service):
-    profile_1 = service.add_sample(participant_id="p1", content=b"audio-1", filename_hint="a1.wav")
-    embedding_1 = service._repository.load_embedding("p1")
+    profile_1 = service.add_sample(user_id="u1", participant_id="p1", content=b"audio-1", filename_hint="a1.wav")
+    embedding_1 = service._repository.load_embedding("u1", "p1")
 
-    profile_2 = service.add_sample(participant_id="p1", content=b"audio-2", filename_hint="a2.wav")
-    embedding_2 = service._repository.load_embedding("p1")
+    profile_2 = service.add_sample(user_id="u1", participant_id="p1", content=b"audio-2", filename_hint="a2.wav")
+    embedding_2 = service._repository.load_embedding("u1", "p1")
 
     assert profile_1.sample_count == 1
     assert profile_2.sample_count == 2
@@ -37,24 +37,24 @@ def test_nova_amostra_recalcula_embedding_consolidado(service):
 
 
 def test_display_name_e_preservado_quando_nao_informado_de_novo(service):
-    service.add_sample(participant_id="p1", content=b"audio-1", filename_hint="a1.wav", display_name="Leandro")
-    profile = service.add_sample(participant_id="p1", content=b"audio-2", filename_hint="a2.wav")
+    service.add_sample(user_id="u1", participant_id="p1", content=b"audio-1", filename_hint="a1.wav", display_name="Leandro")
+    profile = service.add_sample(user_id="u1", participant_id="p1", content=b"audio-2", filename_hint="a2.wav")
 
     assert profile.display_name == "Leandro"
 
 
 def test_get_profile_inexistente_retorna_none(service):
-    assert service.get_profile("ninguem") is None
+    assert service.get_profile("u1", "ninguem") is None
 
 
 def test_delete_profile_remove_perfil_e_amostras(service):
-    service.add_sample(participant_id="p1", content=b"audio-1", filename_hint="a1.wav")
+    service.add_sample(user_id="u1", participant_id="p1", content=b"audio-1", filename_hint="a1.wav")
 
-    assert service.delete_profile("p1") is True
-    assert service.get_profile("p1") is None
-    assert service._repository.list_sample_paths("p1") == []
+    assert service.delete_profile("u1", "p1") is True
+    assert service.get_profile("u1", "p1") is None
+    assert service._repository.list_sample_paths("u1", "p1") == []
 
 
 def test_recompute_sem_amostras_leva_a_erro(service):
     with pytest.raises(ValueError):
-        service._recompute_profile("ninguem")
+        service._recompute_profile("u1", "ninguem")

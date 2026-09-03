@@ -18,17 +18,20 @@ def test_create_e_get(tmp_path):
     repo = _novo_repo(tmp_path)
     record = repo.create(
         job_id="j1",
+        user_id="u1",
         title="Reunião",
         participants=[Participant(id="p1", name="Leandro")],
         expected_speaker_count=2,
     )
 
     assert record.job_id == "j1"
+    assert record.user_id == "u1"
     assert record.status == JobStatusValue.QUEUED
     assert record.error is None
 
     fetched = repo.get("j1")
     assert fetched.job_id == record.job_id
+    assert fetched.user_id == record.user_id
     assert fetched.title == record.title
     assert fetched.participants == record.participants
     assert fetched.expected_speaker_count == record.expected_speaker_count
@@ -43,7 +46,7 @@ def test_get_inexistente_retorna_none(tmp_path):
 
 def test_update_status_atualiza_status_e_updated_at(tmp_path):
     repo = _novo_repo(tmp_path)
-    record = repo.create(job_id="j1", title=None, participants=[], expected_speaker_count=None)
+    record = repo.create(job_id="j1", user_id="u1", title=None, participants=[], expected_speaker_count=None)
     antes = record.updated_at
 
     repo.update_status("j1", JobStatusValue.TRANSCRIBING)
@@ -55,7 +58,7 @@ def test_update_status_atualiza_status_e_updated_at(tmp_path):
 
 def test_update_status_com_erro(tmp_path):
     repo = _novo_repo(tmp_path)
-    repo.create(job_id="j1", title=None, participants=[], expected_speaker_count=None)
+    repo.create(job_id="j1", user_id="u1", title=None, participants=[], expected_speaker_count=None)
 
     repo.update_status("j1", JobStatusValue.ERROR, error=JobError(code="X", message="falhou"))
 
@@ -86,6 +89,7 @@ def test_persistencia_sobrevive_a_reinicializacao_do_repositorio(tmp_path):
     repo1 = JobRepository(database_url)
     repo1.create(
         job_id="j1",
+        user_id="u1",
         title="Reunião",
         participants=[Participant(id="p1", name="Leandro")],
         expected_speaker_count=2,
@@ -118,7 +122,7 @@ def test_persistencia_preserva_erro_entre_reinicializacoes(tmp_path):
     database_url = f"sqlite:///{tmp_path / 'jobs.db'}"
 
     repo1 = JobRepository(database_url)
-    repo1.create(job_id="j1", title=None, participants=[], expected_speaker_count=None)
+    repo1.create(job_id="j1", user_id="u1", title=None, participants=[], expected_speaker_count=None)
     repo1.update_status("j1", JobStatusValue.ERROR, error=JobError(code="X", message="falhou"))
     repo1._engine.dispose()
 
@@ -136,7 +140,7 @@ def test_persistencia_preserva_erro_entre_reinicializacoes(tmp_path):
 
 def test_stage_durations_calcula_a_partir_do_historico_de_transicoes(tmp_path):
     repo = _novo_repo(tmp_path)
-    repo.create(job_id="j1", title=None, participants=[], expected_speaker_count=None)
+    repo.create(job_id="j1", user_id="u1", title=None, participants=[], expected_speaker_count=None)
 
     # Congela timestamps artificiais escrevendo direto na tabela de eventos
     # (substitui o QUEUED real criado por create(), para não depender de
@@ -165,7 +169,7 @@ def test_stage_durations_calcula_a_partir_do_historico_de_transicoes(tmp_path):
 
 def test_stage_durations_job_recem_criado_sem_transicoes_suficientes(tmp_path):
     repo = _novo_repo(tmp_path)
-    repo.create(job_id="j1", title=None, participants=[], expected_speaker_count=None)
+    repo.create(job_id="j1", user_id="u1", title=None, participants=[], expected_speaker_count=None)
 
     assert repo.stage_durations("j1") == {}
 
@@ -188,8 +192,8 @@ def test_next_queued_fila_vazia_retorna_none(tmp_path):
 
 def test_next_queued_ignora_jobs_que_ja_saíram_de_queued(tmp_path):
     repo = _novo_repo(tmp_path)
-    repo.create(job_id="j1", title=None, participants=[], expected_speaker_count=None)
-    repo.create(job_id="j2", title=None, participants=[], expected_speaker_count=None)
+    repo.create(job_id="j1", user_id="u1", title=None, participants=[], expected_speaker_count=None)
+    repo.create(job_id="j2", user_id="u1", title=None, participants=[], expected_speaker_count=None)
     repo.update_status("j1", JobStatusValue.DONE)
 
     # só j2 continua queued — j1 (embora exista) não é candidato.
@@ -198,9 +202,9 @@ def test_next_queued_ignora_jobs_que_ja_saíram_de_queued(tmp_path):
 
 def test_next_queued_retorna_o_mais_antigo_em_queued(tmp_path):
     repo = _novo_repo(tmp_path)
-    repo.create(job_id="j1", title=None, participants=[], expected_speaker_count=None)
-    repo.create(job_id="j2", title=None, participants=[], expected_speaker_count=None)
-    repo.create(job_id="j3", title=None, participants=[], expected_speaker_count=None)
+    repo.create(job_id="j1", user_id="u1", title=None, participants=[], expected_speaker_count=None)
+    repo.create(job_id="j2", user_id="u1", title=None, participants=[], expected_speaker_count=None)
+    repo.create(job_id="j3", user_id="u1", title=None, participants=[], expected_speaker_count=None)
     repo.update_status("j1", JobStatusValue.TRANSCRIBING)  # já saiu de queued
 
     # Congela created_at pra não depender de timing real de execução do
@@ -216,9 +220,9 @@ def test_next_queued_retorna_o_mais_antigo_em_queued(tmp_path):
 
 def test_requeue_orfaos_reenfileira_estagios_nao_terminais_e_ignora_o_resto(tmp_path):
     repo = _novo_repo(tmp_path)
-    repo.create(job_id="j1", title=None, participants=[], expected_speaker_count=None)  # órfão
-    repo.create(job_id="j2", title=None, participants=[], expected_speaker_count=None)  # terminal
-    repo.create(job_id="j3", title=None, participants=[], expected_speaker_count=None)  # nunca pego
+    repo.create(job_id="j1", user_id="u1", title=None, participants=[], expected_speaker_count=None)  # órfão
+    repo.create(job_id="j2", user_id="u1", title=None, participants=[], expected_speaker_count=None)  # terminal
+    repo.create(job_id="j3", user_id="u1", title=None, participants=[], expected_speaker_count=None)  # nunca pego
 
     repo.update_status("j1", JobStatusValue.DIARIZING)
     repo.update_status("j2", JobStatusValue.DONE)
@@ -238,7 +242,7 @@ def test_requeue_orfaos_reenfileira_estagios_nao_terminais_e_ignora_o_resto(tmp_
 
 def test_requeue_orfaos_sem_jobs_nao_terminais_retorna_vazio(tmp_path):
     repo = _novo_repo(tmp_path)
-    repo.create(job_id="j1", title=None, participants=[], expected_speaker_count=None)  # queued
+    repo.create(job_id="j1", user_id="u1", title=None, participants=[], expected_speaker_count=None)  # queued
 
     assert repo.requeue_orfaos(max_attempts=3) == []
 
@@ -247,7 +251,7 @@ def test_requeue_orfaos_protege_contra_job_veneno_apos_exceder_max_attempts(tmp_
     """Job que sistematicamente derruba o worker (ex.: segfault de lib nativa
     processando um áudio específico) não pode reenfileirar para sempre."""
     repo = _novo_repo(tmp_path)
-    repo.create(job_id="j1", title=None, participants=[], expected_speaker_count=None)
+    repo.create(job_id="j1", user_id="u1", title=None, participants=[], expected_speaker_count=None)
 
     # Simula 3 ciclos de crash: o worker pega o job (volta a um estágio
     # não-terminal) e "morre" antes de terminar — cada requeue_orfaos()
@@ -271,3 +275,53 @@ def test_requeue_orfaos_protege_contra_job_veneno_apos_exceder_max_attempts(tmp_
     assert job.error.code == "WORKER_MAX_TENTATIVAS_EXCEDIDO"
     assert "3" in job.error.message
     assert "diarizing" in job.error.message
+
+
+# ---------------------------------------------------------------------------
+# get_owned / list_by_user — isolamento por usuário (item 3 da preparação
+# para produção, ver docs/BACKEND_ARCHITECTURE.md)
+# ---------------------------------------------------------------------------
+
+
+def test_get_owned_devolve_job_do_dono(tmp_path):
+    repo = _novo_repo(tmp_path)
+    repo.create(job_id="j1", user_id="u1", title=None, participants=[], expected_speaker_count=None)
+
+    assert repo.get_owned("j1", "u1") is not None
+
+
+def test_get_owned_devolve_none_para_job_de_outro_usuario(tmp_path):
+    repo = _novo_repo(tmp_path)
+    repo.create(job_id="j1", user_id="u1", title=None, participants=[], expected_speaker_count=None)
+
+    assert repo.get_owned("j1", "u2") is None
+
+
+def test_get_owned_devolve_none_para_job_inexistente(tmp_path):
+    repo = _novo_repo(tmp_path)
+    assert repo.get_owned("nao-existe", "u1") is None
+
+
+def test_list_by_user_so_devolve_jobs_do_usuario_ordenados_do_mais_recente(tmp_path):
+    repo = _novo_repo(tmp_path)
+    repo.create(job_id="j1", user_id="u1", title="Primeira", participants=[], expected_speaker_count=None)
+    repo.create(job_id="j2", user_id="u2", title="De outro usuário", participants=[], expected_speaker_count=None)
+    repo.create(job_id="j3", user_id="u1", title="Segunda", participants=[], expected_speaker_count=None)
+
+    t0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    with repo._session_factory() as session:
+        session.get(JobRow, "j1").created_at = t0
+        session.get(JobRow, "j3").created_at = t0 + timedelta(seconds=10)
+        session.commit()
+
+    resultado = repo.list_by_user("u1")
+    assert [r.job_id for r in resultado] == ["j3", "j1"]
+
+
+def test_list_by_user_respeita_limit_e_offset(tmp_path):
+    repo = _novo_repo(tmp_path)
+    for i in range(5):
+        repo.create(job_id=f"j{i}", user_id="u1", title=None, participants=[], expected_speaker_count=None)
+
+    pagina = repo.list_by_user("u1", limit=2, offset=2)
+    assert len(pagina) == 2

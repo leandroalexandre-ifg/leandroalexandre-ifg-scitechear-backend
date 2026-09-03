@@ -21,6 +21,7 @@ def test_migracao_cria_perfil_por_participant_id_sem_tocar_no_original(tmp_path)
         legacy_root=legacy_root,
         name_to_participant_id={"Leandro": "p_leandro_123"},
         enrollment_service=service,
+        user_id="u1",
     )
 
     assert len(migrados) == 1
@@ -29,7 +30,7 @@ def test_migracao_cria_perfil_por_participant_id_sem_tocar_no_original(tmp_path)
     assert migrados[0].display_name == "Leandro"
 
     # perfil migrado existe na nova estrutura, indexado por participant_id
-    perfil = service.get_profile("p_leandro_123")
+    perfil = service.get_profile("u1", "p_leandro_123")
     assert perfil is not None
     assert perfil.sample_count == 2
 
@@ -47,10 +48,11 @@ def test_migracao_ignora_nome_sem_mapeamento(tmp_path):
         legacy_root=legacy_root,
         name_to_participant_id={"OutraPessoa": "p_outro"},
         enrollment_service=service,
+        user_id="u1",
     )
 
     assert migrados == []
-    assert service.get_profile("p_outro") is None
+    assert service.get_profile("u1", "p_outro") is None
 
 
 def test_migracao_ignora_pasta_sem_audios(tmp_path):
@@ -62,6 +64,7 @@ def test_migracao_ignora_pasta_sem_audios(tmp_path):
         legacy_root=legacy_root,
         name_to_participant_id={"SemAudios": "p_x"},
         enrollment_service=service,
+        user_id="u1",
     )
 
     assert migrados == []

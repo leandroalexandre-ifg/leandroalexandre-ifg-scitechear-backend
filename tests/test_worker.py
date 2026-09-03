@@ -16,6 +16,7 @@ def test_worker_reenfileira_orfaos_no_boot_e_processa_a_fila(monkeypatch):
     jobs = get_job_repository()
     jobs.create(
         job_id="j1",
+        user_id="u1",
         title=None,
         participants=[Participant(id="p1", name="Leandro")],
         expected_speaker_count=None,
@@ -48,7 +49,7 @@ def test_worker_reenfileira_orfaos_no_boot_e_processa_a_fila(monkeypatch):
 
 def test_worker_ignora_jobs_ja_terminais_no_boot(monkeypatch):
     jobs = get_job_repository()
-    jobs.create(job_id="j1", title=None, participants=[], expected_speaker_count=None)
+    jobs.create(job_id="j1", user_id="u1", title=None, participants=[], expected_speaker_count=None)
     jobs.update_status("j1", JobStatusValue.DONE)  # terminal, não é órfão
 
     processados = []

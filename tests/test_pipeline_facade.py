@@ -28,6 +28,7 @@ def _preparar_job(facade, storage, job_id="job-1", participants=None):
     storage.save_audio(job_id, b"fake-wav-bytes", "reuniao.wav")
     facade._jobs.create(
         job_id=job_id,
+        user_id="u1",
         title="Reunião de teste",
         participants=participants if participants is not None else [Participant(id="p1", name="Leandro")],
         expected_speaker_count=None,
@@ -383,7 +384,7 @@ def test_erro_na_extracao_marca_job_como_error(tmp_path, monkeypatch):
 
 def test_job_sem_audio_marca_erro(tmp_path):
     facade, storage = _nova_facade(tmp_path)
-    facade._jobs.create(job_id="job-sem-audio", title=None, participants=[], expected_speaker_count=None)
+    facade._jobs.create(job_id="job-sem-audio", user_id="u1", title=None, participants=[], expected_speaker_count=None)
 
     facade.executar("job-sem-audio")
 
@@ -405,11 +406,26 @@ def test_executar_job_inexistente_nao_lanca_excecao(tmp_path):
 def test_carregar_banco_so_inclui_quem_tem_perfil_de_voz(tmp_path):
     facade, _storage = _nova_facade(tmp_path)
     facade._voices.save_profile(
-        participant_id="p1", embedding=torch.tensor([1.0, 0.0]), model_version="v1", sample_count=1
+        user_id="u1", participant_id="p1", embedding=torch.tensor([1.0, 0.0]), model_version="v1", sample_count=1
     )
 
     participantes = [Participant(id="p1", name="Leandro"), Participant(id="p2", name="Maria")]
-    banco, nomes = facade._carregar_banco_e_nomes(participantes)
+    banco, nomes = facade._carregar_banco_e_nomes("u1", participantes)
 
     assert set(banco.keys()) == {"p1"}
     assert nomes == {"p1": "Leandro", "p2": "Maria"}
+
+
+def test_carregar_banco_nao_ve_perfil_de_outro_usuario(tmp_path):
+    """Isolamento por usuário (item 3): o embedding cadastrado por u1 não
+    entra no banco de identificação de uma reunião de u2, mesmo com o mesmo
+    participant_id."""
+    facade, _storage = _nova_facade(tmp_path)
+    facade._voices.save_profile(
+        user_id="u1", participant_id="p1", embedding=torch.tensor([1.0, 0.0]), model_version="v1", sample_count=1
+    )
+
+    participantes = [Participant(id="p1", name="Leandro")]
+    banco, _nomes = facade._carregar_banco_e_nomes("u2", participantes)
+
+    assert banco == {}

@@ -82,6 +82,7 @@ def test_resultado_apos_pipeline_concluido_valida_contra_schema(client):
     job_repo = get_job_repository()
     job_repo.create(
         job_id="job-done-1",
+        user_id=client.user_id,
         title="Reunião concluída",
         participants=[Participant(id="p1", name="Leandro")],
         expected_speaker_count=None,
@@ -130,7 +131,7 @@ def test_resultado_apos_pipeline_concluido_valida_contra_schema(client):
 
 def test_resultado_apos_erro_continua_409_com_status_error(client):
     job_repo = get_job_repository()
-    job_repo.create(job_id="job-com-erro", title=None, participants=[], expected_speaker_count=None)
+    job_repo.create(job_id="job-com-erro", user_id=client.user_id, title=None, participants=[], expected_speaker_count=None)
     job_repo.update_status(
         "job-com-erro",
         JobStatusValue.ERROR,
@@ -145,3 +146,69 @@ def test_resultado_apos_erro_continua_409_com_status_error(client):
 
     result_response = client.get("/resultado/job-com-erro")
     assert result_response.status_code == 409
+
+
+# ---------------------------------------------------------------------------
+# Autenticação e isolamento por usuário (item 3 da preparação para produção)
+# ---------------------------------------------------------------------------
+
+
+def test_upload_sem_token_retorna_401(unauthenticated_client, wav_bytes):
+    response = _upload(unauthenticated_client, wav_bytes)
+    assert response.status_code == 401
+
+
+def test_status_sem_token_retorna_401(unauthenticated_client):
+    response = unauthenticated_client.get("/status/qualquer-job")
+    assert response.status_code == 401
+
+
+def _outro_usuario_logado(unauthenticated_client_da_fixture, base_client):
+    """Registra e loga uma SEGUNDA conta no mesmo app (mesma instância
+    ASGI, mesmo STORAGE_ROOT do teste) — usa um TestClient novo para não
+    sobrescrever o header Authorization de `client`."""
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    outro = TestClient(app)
+    register = outro.post(
+        "/auth/register", json={"email": "outra-conta@scitechear.example.com", "password": "outra-senha-123"}
+    )
+    assert register.status_code == 201
+    login = outro.post(
+        "/auth/login", json={"email": "outra-conta@scitechear.example.com", "password": "outra-senha-123"}
+    )
+    outro.headers.update({"Authorization": f"Bearer {login.json()['access_token']}"})
+    return outro
+
+
+def test_status_de_job_de_outro_usuario_retorna_404(client, wav_bytes):
+    job_id = _upload(client, wav_bytes).json()["job_id"]
+
+    outro = _outro_usuario_logado(None, client)
+    response = outro.get(f"/status/{job_id}")
+    assert response.status_code == 404
+
+
+def test_resultado_de_job_de_outro_usuario_retorna_404(client, wav_bytes):
+    job_id = _upload(client, wav_bytes).json()["job_id"]
+
+    outro = _outro_usuario_logado(None, client)
+    response = outro.get(f"/resultado/{job_id}")
+    assert response.status_code == 404
+
+
+def test_meetings_lista_so_reunioes_do_usuario_autenticado(client, wav_bytes):
+    job_id = _upload(client, wav_bytes).json()["job_id"]
+    outro = _outro_usuario_logado(None, client)
+    _upload(outro, wav_bytes)
+
+    response = client.get("/meetings")
+    assert response.status_code == 200
+    job_ids = [item["job_id"] for item in response.json()]
+    assert job_ids == [job_id]
+
+    response_outro = outro.get("/meetings")
+    assert len(response_outro.json()) == 1
+    assert response_outro.json()[0]["job_id"] != job_id

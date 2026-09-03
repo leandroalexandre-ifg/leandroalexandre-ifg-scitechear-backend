@@ -9,12 +9,42 @@ from fastapi.testclient import TestClient
 from app.config import get_settings
 from app.main import app
 from app.repositories.job_repository import reset_job_repository
+from app.repositories.user_repository import reset_user_repository
 from app.services import voice_service
+
+TEST_USER_EMAIL = "teste@scitechear.example.com"
+TEST_USER_PASSWORD = "senha-de-teste-123"
 
 
 @pytest.fixture
-def client() -> TestClient:
+def unauthenticated_client() -> TestClient:
+    """TestClient sem token — usado só pelos testes de app/api/auth.py e por
+    quem precisa verificar o comportamento de rotas protegidas sem
+    Authorization (401)."""
     return TestClient(app)
+
+
+@pytest.fixture
+def client(unauthenticated_client: TestClient) -> TestClient:
+    """TestClient com um usuário de teste já registrado e logado (header
+    Authorization padrão) — a maioria dos testes de contrato HTTP não é
+    sobre autenticação em si, então evita repetir register+login em cada um.
+    client.user_id fica disponível para testes que criam jobs/perfis direto
+    pelo repository (sem passar pela rota /upload), para o user_id bater com
+    o do token."""
+    register = unauthenticated_client.post(
+        "/auth/register",
+        json={"email": TEST_USER_EMAIL, "password": TEST_USER_PASSWORD, "name": "Usuário de Teste"},
+    )
+    assert register.status_code == 201, register.text
+    login = unauthenticated_client.post(
+        "/auth/login", json={"email": TEST_USER_EMAIL, "password": TEST_USER_PASSWORD}
+    )
+    assert login.status_code == 200, login.text
+
+    unauthenticated_client.headers.update({"Authorization": f"Bearer {login.json()['access_token']}"})
+    unauthenticated_client.user_id = register.json()["user_id"]
+    return unauthenticated_client
 
 
 @pytest.fixture
@@ -31,8 +61,10 @@ def wav_bytes() -> bytes:
 @pytest.fixture(autouse=True)
 def tmp_storage_root(tmp_path, monkeypatch):
     """Isola cada teste em um STORAGE_ROOT descartável — nenhum teste escreve
-    no ./storage real do repositório."""
+    no ./storage real do repositório. Também fixa um JWT_SECRET_KEY de teste
+    (auth_service recusa emitir/validar token sem ele — ver app/config.py)."""
     monkeypatch.setenv("STORAGE_ROOT", str(tmp_path))
+    monkeypatch.setenv("JWT_SECRET_KEY", "chave-de-teste-nao-usar-em-producao")
     get_settings.cache_clear()
     yield
     get_settings.cache_clear()
@@ -67,3 +99,14 @@ def reset_job_repository_singleton(tmp_storage_root):
     reset_job_repository()
     yield
     reset_job_repository()
+
+
+@pytest.fixture(autouse=True)
+def reset_user_repository_singleton(tmp_storage_root):
+    """Mesmo raciocínio de reset_job_repository_singleton acima, para o
+    singleton de UserRepository (mesmo arquivo SQLite, mesma necessidade de
+    não vazar estado — nem conexão presa ao tmp_path de um teste anterior —
+    entre testes)."""
+    reset_user_repository()
+    yield
+    reset_user_repository()
