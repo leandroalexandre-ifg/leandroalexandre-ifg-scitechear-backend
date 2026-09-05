@@ -76,6 +76,17 @@ class Settings(BaseSettings):
     # Ver JobRepository.requeue_orfaos().
     worker_max_attempts_before_error: int = Field(default=3, alias="WORKER_MAX_ATTEMPTS_BEFORE_ERROR")
 
+    # WS /ws/{job_id}: de quanto em quanto tempo a API relê o job no banco
+    # para empurrar mudanças ao app. O worker roda em outro processo, então
+    # o banco é o único ponto de encontro — ver o docstring de
+    # job_progress_ws em app/api/jobs.py. Mais curto que o polling do worker
+    # porque aqui a latência é percebida pelo usuário na tela.
+    ws_poll_interval_seconds: float = Field(default=1.0, alias="WS_POLL_INTERVAL_SECONDS")
+    # Teto de vida de uma conexão WebSocket: um job travado num estado
+    # intermediário não deve segurar a conexão para sempre. Ao estourar, a
+    # API fecha e o app volta ao polling (que continua sendo o fallback).
+    ws_max_duration_seconds: float = Field(default=3600.0, alias="WS_MAX_DURATION_SECONDS")
+
     whisperx_model: str = Field(default="turbo", alias="WHISPERX_MODEL")
     whisperx_language: str = Field(default="pt", alias="WHISPERX_LANGUAGE")
     whisperx_batch_size: int = Field(default=16, alias="WHISPERX_BATCH_SIZE")

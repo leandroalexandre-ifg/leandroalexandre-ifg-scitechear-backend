@@ -360,6 +360,47 @@ públicos (probes de infraestrutura). `WS /ws/{job_id}` recebe o token por
 query param (`?token=`), não header — handshake de WebSocket não permite
 header customizado em todo cliente.
 
+### `WS /ws/{job_id}` — push de progresso
+
+Deixou de ser stub na Fase 8, depois do E2E verde (`docs/E2E_FASE8.md`), como
+o plano de execução exigia. Empurra o estado do job até `done`/`error` e então
+fecha sozinho.
+
+**Por que a API observa o banco em vez de receber um evento:** o worker roda
+num **processo separado** (`app/worker.py`), então não há evento in-process
+para escutar — quem sabe que o job avançou é o banco. A API relê o job a cada
+`WS_POLL_INTERVAL_SECONDS` (default 1,0s, numa thread separada para não
+bloquear o event loop) e empurra o que mudou. Do ponto de vista do app o push
+é real: ele não pergunta nada. A espera fica do lado do servidor, que é onde é
+barata — SQLite local, uma leitura por segundo por conexão aberta.
+
+Um barramento de eventos (Redis, `NOTIFY` do Postgres) entre worker e API foi
+descartado por ora: exigiria infraestrutura nova num servidor compartilhado
+para ganhar ~1s de latência num pipeline que leva dezenas de segundos.
+
+**O corpo de cada mensagem é idêntico ao de `GET /status/{job_id}`** — o app
+usa um parser só para os dois caminhos, e nunca precisa reconciliar dois
+formatos que descrevem a mesma coisa. `tests/test_jobs_websocket.py` trava
+essa igualdade explicitamente.
+
+**Propriedades assumidas**, todas cobertas por teste:
+
+- só emite quando algo muda (um job parado 40s em `transcribing` não vira 40
+  mensagens iguais);
+- o que trafega é o **estado atual** a cada intervalo, não a sequência completa
+  de transições: um estágio mais curto que o intervalo pode não ser observado
+  (na validação real, `identifying` com 0,07s não apareceu). É o mesmo que o
+  polling do app veria — os dois caminhos ficam consistentes — e o histórico
+  completo continua em `job_status_events`;
+- mesmo isolamento por `user_id` das rotas HTTP: job de outro usuário fecha com
+  `4404`, indistinguível de inexistente (token ausente ou inválido fecha com
+  `4401`);
+- teto de vida por conexão (`WS_MAX_DURATION_SECONDS`, default 1h): job travado
+  não segura a conexão para sempre — a API fecha e o app volta ao polling;
+- erro real do job chega ao app como `status: "error"` com `error.code`/
+  `error.message` (regra 5: erro nunca vira resultado fictício, e também não
+  some no silêncio de uma conexão pendurada).
+
 **Ownership**: `GET /status/{job_id}` e `GET /resultado/{job_id}` devolvem
 `404` (não `403`) tanto para job inexistente quanto para job de outro
 usuário — de propósito, para não revelar a outros usuários que um

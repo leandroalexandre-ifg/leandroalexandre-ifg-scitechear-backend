@@ -193,11 +193,27 @@ para pt-BR antes de trocar qualquer outra coisa.
 - **Sobreposição de verdade**: o trecho sobreposto de R4 é uma soma de duas
   faixas, não duas pessoas falando juntas numa sala.
 - **O app Flutter**: nada foi exercido pelo cliente real (Fase 7 pendente).
-- **WebSocket**: `/ws/{job_id}` continua stub; o acompanhamento foi por
-  polling, como o app faz hoje. O polling de 3s não chegou a observar
-  `diarizing`/`identifying` nos jobs sem implícitas — os estágios duram menos
-  que o intervalo. Não é falha: o histórico de status do job registra todas as
-  transições, e o log do worker as confirma.
+- **O app Flutter como cliente**: os cinco cenários foram exercidos por um
+  cliente Python. O contrato é o mesmo, mas o app real não foi rodado.
+
+## Adendo — WebSocket real, validado depois deste E2E
+
+Com o E2E verde, o item 2 da Fase 8 foi liberado e o `WS /ws/{job_id}` deixou
+de ser stub (ver `BACKEND_ARCHITECTURE.md`). A validação usou o mesmo áudio de
+R1, acompanhando o job **só pelo WebSocket, com zero polling**:
+
+    +  0.01s  push: queued
+    +  1.01s  push: transcribing
+    +  7.02s  push: diarizing
+    +  8.03s  push: extracting
+    + 16.04s  push: done
+    conexão encerrada pelo servidor, 5 mensagens, 0 duplicadas
+
+O resultado ficou disponível em seguida (18 segmentos, 2 perguntas). Dois
+estágios do contrato não foram observados — `identifying` (0,07s) e
+`summarizing` (0,00s, desligado por flag) — porque duram menos que o intervalo
+de leitura de 1s. É a mesma coisa que o polling do app veria, e o histórico
+completo continua em `job_status_events`.
 
 ## Reprodução
 

@@ -1,12 +1,17 @@
+import asyncio
+import contextlib
 import json
+import time
 import uuid
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi import status as http_status
 from pydantic import TypeAdapter, ValidationError
+from starlette.concurrency import run_in_threadpool
 
 from app.api.dependencies import get_current_user_id, user_id_from_ws_token
+from app.config import get_settings
 from app.models.job import JobStatusResponse, JobStatusValue, MeetingSummary, UploadResponse
 from app.models.participant import Participant
 from app.models.result import MeetingResult
@@ -122,26 +127,95 @@ async def get_job_result(job_id: str, user_id: str = Depends(get_current_user_id
     return resultado
 
 
+_ESTADOS_FINAIS = {JobStatusValue.DONE, JobStatusValue.ERROR}
+
+
+def _status_payload(record) -> dict:
+    """Mesmo corpo de GET /status/{job_id}, serializado para JSON.
+
+    Deliberadamente idêntico: o app reaproveita um único parser para o
+    polling e para o WebSocket, e nunca precisa reconciliar dois formatos
+    que descrevem a mesma coisa."""
+    return JobStatusResponse(
+        job_id=record.job_id,
+        status=record.status,
+        error=record.error,
+        updated_at=record.updated_at,
+    ).model_dump(mode="json")
+
+
 @router.websocket("/ws/{job_id}")
 async def job_progress_ws(websocket: WebSocket, job_id: str, token: Optional[str] = None) -> None:
-    # Stub: aceita, informa o status atual uma vez e fecha. Push real de
-    # progresso (e o fallback de polling continua obrigatório) chega na Fase 8.
-    # Autenticação via query param (?token=access_token) — handshake de
-    # WebSocket não permite header Authorization customizado em todo cliente.
+    """Push de progresso do job, do estado atual até done/error.
+
+    Autenticação via query param (?token=access_token) — o handshake de
+    WebSocket não permite header Authorization customizado em todo cliente.
+
+    Como o worker é um PROCESSO SEPARADO da API (app/worker.py), não existe
+    evento in-process para observar: quem sabe que o job avançou é o banco.
+    Então a API observa o banco e empurra para o cliente a cada mudança. O
+    push é real do ponto de vista do app (ele não pergunta nada); a espera
+    fica do lado do servidor, que é onde ela é barata — SQLite local, uma
+    leitura por segundo por conexão aberta.
+
+    A alternativa seria um barramento de eventos (Redis, NOTIFY do Postgres)
+    entre worker e API. Foi descartada por ora: exigiria infraestrutura nova
+    num servidor compartilhado para ganhar ~1s de latência num pipeline que
+    leva dezenas de segundos.
+
+    O polling do app continua sendo o fallback obrigatório, e este handler é
+    escrito para não atrapalhá-lo: em qualquer situação de dúvida ele fecha
+    a conexão em vez de segurá-la (o app volta ao polling), e o corpo das
+    mensagens é igual ao de GET /status.
+
+    Consequência assumida: o que é empurrado é o ESTADO ATUAL a cada
+    intervalo, não a sequência completa de transições. Um estágio mais curto
+    que `ws_poll_interval_seconds` pode não ser observado — na validação com
+    job real, `identifying` (0,07s) e `summarizing` (0,00s, desligado por
+    flag) não apareceram. É exatamente o que o polling do app veria, o que
+    mantém os dois caminhos consistentes; o histórico completo de transições
+    continua no banco (`job_status_events`) para quem precisar medir.
+    """
     user_id = user_id_from_ws_token(token)
     if user_id is None:
         await websocket.close(code=4401)
         return
 
     await websocket.accept()
-    record = get_job_repository().get_owned(job_id, user_id)
+    repositorio = get_job_repository()
+    # get_owned toca o SQLite: fora do event loop, para uma conexão lenta não
+    # atrasar as outras requisições da API.
+    record = await run_in_threadpool(repositorio.get_owned, job_id, user_id)
     if record is None:
         await websocket.close(code=4404)
         return
 
+    settings = get_settings()
+    limite = time.monotonic() + settings.ws_max_duration_seconds
+    ultimo_payload: Optional[dict] = None
     try:
-        await websocket.send_json({"job_id": record.job_id, "status": record.status.value})
+        while True:
+            payload = _status_payload(record)
+            # Só emite quando algo mudou de fato — um job parado em
+            # `transcribing` por 40s não vira 40 mensagens iguais.
+            if payload != ultimo_payload:
+                await websocket.send_json(payload)
+                ultimo_payload = payload
+
+            if record.status in _ESTADOS_FINAIS:
+                break
+            if time.monotonic() >= limite:
+                # Teto de vida da conexão: um job travado não deixa um
+                # WebSocket aberto para sempre. O app cai no polling.
+                break
+
+            await asyncio.sleep(settings.ws_poll_interval_seconds)
+            record = await run_in_threadpool(repositorio.get_owned, job_id, user_id)
+            if record is None:
+                break
     except WebSocketDisconnect:
+        # Cliente sumiu no meio do caminho — nada a fazer, e não é erro.
         pass
     finally:
-        await websocket.close()
+        with contextlib.suppress(RuntimeError):
+            await websocket.close()
