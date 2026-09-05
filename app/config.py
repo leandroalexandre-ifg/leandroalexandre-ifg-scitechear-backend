@@ -1,6 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -125,6 +125,18 @@ class Settings(BaseSettings):
     enable_implicit_questions: bool = Field(default=False, alias="ENABLE_IMPLICIT_QUESTIONS")
     enable_implicit_refinement: bool = Field(default=False, alias="ENABLE_IMPLICIT_REFINEMENT")
     demo_mode: bool = Field(default=False, alias="DEMO_MODE")
+
+    # Origens aceitas pelo CORS, separadas por vírgula. O default "*" mantém o
+    # comportamento de desenvolvimento (Android Emulator / túnel durante a
+    # integração). Em produção, restrinja: ver docs/DEPLOY.md — o app Android
+    # é cliente nativo e não manda Origin, então CORS não é o que o faz
+    # funcionar; liberar tudo só amplia a superfície para clientes de
+    # navegador.
+    cors_allow_origins: str = Field(default="*", alias="CORS_ALLOW_ORIGINS")
+
+    @property
+    def cors_allow_origins_list(self) -> List[str]:
+        return [origem.strip() for origem in self.cors_allow_origins.split(",") if origem.strip()]
 
     # Autenticação (item 3 da preparação para produção). Vazio por padrão só
     # para não quebrar `Settings()` sem .env em dev/teste — auth_service exige
