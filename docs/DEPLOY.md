@@ -43,7 +43,7 @@ quem administra o servidor a cada mudança de configuração.
 
 | Unidade | O que é | Porta |
 |---|---|---|
-| `scitechear-api` | FastAPI/uvicorn | `0.0.0.0:18080` (ver abaixo) |
+| `scitechear-api` | FastAPI/uvicorn | `127.0.0.1:18080` (ver abaixo) |
 | `scitechear-worker` | consumidor da fila de jobs (usa a GPU) | — |
 | `ollama` | servidor do LLM (`qwen3:14b`) | `127.0.0.1:11434` |
 
@@ -55,20 +55,36 @@ quem administra o servidor a cada mudança de configuração.
 usuário morrem quando a sessão SSH termina. Já está habilitado — mas é a
 primeira coisa a checar se os serviços "somem" depois de um logout.
 
-**A API responde na rede desde o piloto** (2026-09-05); o Ollama continua em
-loopback. A porta `18080` (e não `8000`) é para não colidir com o default que
-qualquer outro projeto Python da máquina escolheria.
+**A API está em loopback, e os três serviços também.** A porta `18080` (e não
+`8000`) é para não colidir com o default que qualquer outro projeto Python da
+máquina escolheria.
 
-O bind é `0.0.0.0` e **não** o IP específico, de propósito: o endereço da
-`eno1` vem por DHCP (`10.4.254.201` via `10.4.0.1`), e fixar um IP que pode
-mudar faria o uvicorn falhar com *cannot assign requested address* e entrar em
-loop de restart — a API simplesmente não subiria, no pior momento possível. As
-demais interfaces (`docker0`, bridges, `wlp101s0`, `enp103s0`) estão DOWN, então
-na prática isso é `eno1` + loopback. **Quem pode chegar à porta é
+Houve um bind em `0.0.0.0` em 2026-09-05, **revertido no mesmo dia** por
+decisão de Leandro. O motivo da reversão é o item 4 abaixo: enquanto o estado
+do firewall for desconhecido, escutar na `eno1` significa senha e áudio de
+reunião em **HTTP puro** ao alcance de qualquer máquina da `10.4.0.0/16` — a
+instituição inteira. O teto de upload e a allowlist de domínio reduzem a
+superfície, mas nenhum dos dois cifra nada.
+
+**Não reabra o bind sem as duas condições**, ambas confirmadas por Leandro:
+
+1. o administrador do NumbERS confirmou a regra de firewall da `18080`;
+2. existe plano concreto de TLS — mesmo provisório (certificado autoassinado,
+   já que o acesso é por VPN interna).
+
+Até lá o caminho é o túnel SSH abaixo, que não depende de ninguém.
+
+Quando reabrir, use `0.0.0.0` e **não** o IP específico: o endereço da `eno1`
+vem por DHCP (`10.4.254.201` via `10.4.0.1`), e fixar um IP que pode mudar
+faria o uvicorn falhar com *cannot assign requested address* e entrar em loop
+de restart — a API simplesmente não subiria, no pior momento possível. As
+demais interfaces (`docker0`, bridges, `wlp101s0`, `enp103s0`) estão DOWN,
+então na prática isso seria `eno1` + loopback. **Quem pode chegar à porta é
 responsabilidade do firewall**, que é a camada certa para isso; restringir pelo
-bind seria frágil e daria uma falsa sensação de controle.
+bind seria frágil e daria uma falsa sensação de controle — mas essa camada
+certa só vale depois que se souber que ela existe.
 
-Para reverter ao loopback, há cópias datadas da unidade em
+Há cópias datadas da unidade em
 `/data/projects/leandro/scitechear/scitechear-api.service.bak-*`.
 
 O Ollama foi instalado **sem privilégio de root**, em `~/.local/bin`, mesmo com
@@ -78,9 +94,9 @@ LLM.
 
 ## Como o app alcança o backend
 
-A API responde em `0.0.0.0:18080` desde 2026-09-05, então um tablet ou celular
-na rede do IFG a alcança **se o firewall deixar** — o que ainda não se sabe. O
-túnel SSH abaixo continua valendo como caminho que não depende de ninguém.
+A API responde só em `127.0.0.1:18080`, então **nenhum aparelho na rede a
+alcança diretamente** — nem pela VPN. O túnel SSH abaixo é o caminho, e não
+depende de ninguém.
 
 ### Recomendado: túnel SSH sobre a VPN
 
@@ -105,33 +121,34 @@ alunos usando os próprios aparelhos direto do laboratório, sem VPN.
 
 A máquina tem IP **`10.4.254.201/16`** na interface `eno1` — a rede do IFG,
 por DHCP (a lease renova; **para o piloto, peça reserva de DHCP ao admin**, ou
-o app aponta para um alvo que pode mudar). A API já escuta fora do loopback;
-falta saber se o firewall deixa o pacote chegar. Vale para os dois cenários
-— o do professor e o dos alunos é a mesma mudança, o que é bom: dá para
-testar na topologia real antes.
+o app aponta para um alvo que pode mudar). Vale para os dois cenários — o do
+professor e o dos alunos é a mesma mudança, o que é bom: dá para testar na
+topologia real antes.
 
-O que precisa acontecer:
+Os quatro itens abaixo são **pré-requisitos do bind na rede**, não
+consequências dele. A ordem importa: 1 e 2 são o que autoriza o 4.
 
-1. ~~**Bind na interface da rede.**~~ **Feito** (2026-09-05): `0.0.0.0:18080`,
-   pelo motivo explicado acima. Verificado respondendo tanto em `127.0.0.1`
-   quanto em `10.4.254.201`.
-2. **Liberar a porta no firewall** — *este item exige quem administra o
-   servidor*, e é o único ainda pendente. Idealmente restrito à faixa do
-   laboratório, não à `10.4.0.0/16` inteira. **Enquanto não se sabe o estado do
-   firewall, considere a API alcançável por qualquer máquina da instituição** —
-   é o que torna os dois tetos abaixo obrigatórios, e não recomendações.
-3. ~~**Fechar as portas de entrada abertas.**~~ **Feito** (ver abaixo): teto de
-   upload e allowlist de e-mail no registro, esta última já ativa em produção
-   com `ifg.edu.br` e confirmada recusando domínio de fora com `403`.
-4. **Decidir sobre TLS.** O tráfego é HTTP puro; na rede institucional isso
+1. **Liberar a porta no firewall** — *exige quem administra o servidor*.
+   Idealmente restrito à faixa do laboratório, não à `10.4.0.0/16` inteira.
+   Enquanto o estado do firewall for desconhecido, o bind na rede tem que ser
+   tratado como "alcançável por qualquer máquina da instituição".
+2. **Decidir sobre TLS.** O tráfego é HTTP puro; na rede institucional isso
    significa senha e áudio de reunião em claro para quem estiver na mesma
    rede. Um certificado próprio exige configuração no app Android
-   (`network_security_config` ou CA instalada), então é trabalho da Fase 7 —
-   não dá para resolver só do lado do servidor.
+   (`network_security_config` ou CA instalada), então tem uma perna na Fase 7 —
+   não dá para resolver só do lado do servidor. Para o piloto, um certificado
+   autoassinado basta (o acesso já é por VPN interna).
+3. ~~**Fechar as portas de entrada abertas.**~~ **Feito** (ver abaixo): teto de
+   upload e allowlist de e-mail no registro, esta última já ativa em produção
+   com `ifg.edu.br` e confirmada recusando domínio de fora com `403`. Reduzem a
+   superfície, mas **não cifram nada** — não substituem o item 2.
+4. **Bind na interface da rede.** Feito e revertido em 2026-09-05 (ver "Os três
+   serviços"). Só reabrir depois de 1 e 2, com confirmação de Leandro.
 
 **`10.4.0.0/16` é a instituição inteira, não só o laboratório.** É a razão de
-os dois itens abaixo existirem: enquanto a API respondia só em loopback, quem
-chegava à porta já estava dentro da máquina, e nenhum dos dois fazia falta.
+os dois tetos abaixo existirem: com a API em loopback, quem chega à porta já
+está dentro da máquina, e nenhum dos dois faz falta — eles existem para o dia
+em que o bind reabrir.
 
 #### Teto de upload
 

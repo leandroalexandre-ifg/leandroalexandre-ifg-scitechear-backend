@@ -14,27 +14,36 @@ O plano de execução por fases está em `docs/PLANO_EXECUCAO.md`.
 
 ## Estrutura
 
-    app/            # aplicação (a implementar): api, models, services, repositories
+    app/
+      main.py       # a API FastAPI
+      worker.py     # processo separado que consome a fila e roda o pipeline na GPU
+      config.py     # Pydantic Settings (lê o .env)
+      api/          # rotas: auth, jobs (upload/status/resultado/ws), participants, health
+      models/       # contrato canônico: job, participant, result, user
+      services/     # transcrição, diarização, biometria, perguntas, pipeline_facade, auth
+      repositories/ # job (SQLite), result, storage, user, voice
     prompts/        # prompts de LLM versionados
     legacy/         # protótipos originais (notebooks + scripts) — NÃO executar em produção
       notebooks/    # transcricao / diarizacao / llm (usam Colab/Drive; só referência)
       scripts/      # etapa2b_diarizacao, etapa3_biometria, cadastro_vozes, pipeline
-      banco_vozes/  # banco legado (não versionado; será recriado por participant_id)
+      banco_vozes/  # banco legado (não versionado; recriado por participant_id)
     storage/        # artefatos por job (dev/teste; não versionado)
     tests/          # testes
-    docs/           # baseline, plano de execução
+    docs/           # arquitetura, deploy, pendências, E2E, performance
 
 ## Primeiros passos
 
 1. `cp .env.example .env` e preencha o `HF_TOKEN`.
-2. Python **3.13** (via `brew install python@3.13`): `python3.13 -m venv .venv &&
-   source .venv/bin/activate && pip install -r requirements.txt`. WhisperX,
-   pyannote.audio e SpeechBrain exigem Python 3.10+; 3.13 já vinha instalado
-   via Homebrew neste Mac e tem wheels prontos para todo o stack (torch,
-   torchaudio, ctranslate2, numba) — ver decisão registrada no relatório da
-   Fase 2.
+2. Python **3.12** (o que está fixado em `.python-version`, e o que o servidor
+   de deploy tem): `python3.12 -m venv .venv && source .venv/bin/activate &&
+   pip install -r requirements.txt`. WhisperX, pyannote.audio e SpeechBrain
+   exigem Python 3.10+. O desenvolvimento começou em 3.13 num Mac (ver o
+   relatório da Fase 2), mas o alvo passou a ser o 3.12 do Ubuntu 24.04 do
+   NumbERS — todo o stack (torch, torchaudio, ctranslate2, numba) tem wheels
+   prontos nas duas versões.
 3. FFmpeg (necessário para `whisperx.load_audio`, que chama o binário `ffmpeg`
-   via subprocess): `brew install ffmpeg`.
+   via subprocess): `apt install ffmpeg` no Linux, `brew install ffmpeg` no
+   Mac.
 4. ~~`ffmpeg@7` + `DYLD_FALLBACK_LIBRARY_PATH` para o `torchcodec` do
    pyannote~~ — **obsoleto**, não é mais necessário. `diarization_service.py`
    carrega o áudio via `soundfile` e passa `{"waveform": tensor,
@@ -45,9 +54,15 @@ O plano de execução por fases está em `docs/PLANO_EXECUCAO.md`.
    `DYLD_FALLBACK_LIBRARY_PATH` setado confirmou que a diarização completa
    normalmente. Se `brew install ffmpeg@7` já tiver sido feito antes, pode
    remover (`brew uninstall ffmpeg@7`) — nada mais depende dele.
-5. Trabalhe em uma branch de integração (nunca na `main`).
-6. Siga a ordem de fases de `docs/PLANO_EXECUCAO.md`. Os serviços em
-   `app/services/` são extraídos dos protótipos em `legacy/`.
+5. Trabalhe em uma branch de integração (nunca na `main`). **No servidor de
+   deploy isso tem uma consequência**: as unidades systemd rodam direto do
+   checkout, então a branch que estiver ativa é o que sobe no próximo restart
+   — ver [`docs/DEPLOY.md`](docs/DEPLOY.md).
+6. Siga a ordem de fases de `docs/PLANO_EXECUCAO.md`. As fases 0–6 e 8 estão
+   feitas: os serviços em `app/services/` já foram extraídos dos protótipos em
+   `legacy/`, e o backend roda de ponta a ponta no servidor (ver
+   [`docs/E2E_FASE8.md`](docs/E2E_FASE8.md)). A Fase 7 — o app Flutter como
+   cliente real — é o que falta.
 
 ## Regras que não mudam
 
@@ -98,3 +113,7 @@ com isolamento de rede Wi-Fi entre os aparelhos.
 > Para alcançar o backend **implantado no servidor** (que fica em loopback, na
 > porta 18080), o caminho é outro — túnel SSH sobre a VPN. Ver
 > [`docs/DEPLOY.md`](docs/DEPLOY.md).
+>
+> O loopback lá é deliberado: o bind na rede só reabre depois de confirmada a
+> regra de firewall da porta e definido um plano de TLS — hoje o tráfego é HTTP
+> puro, e a rede do IFG é a `10.4.0.0/16` inteira.
