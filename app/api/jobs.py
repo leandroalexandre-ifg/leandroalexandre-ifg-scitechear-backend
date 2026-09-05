@@ -16,6 +16,7 @@ from app.models.job import JobStatusResponse, JobStatusValue, MeetingSummary, Up
 from app.models.participant import Participant
 from app.models.result import MeetingResult
 from app.repositories.job_repository import get_job_repository
+from app.repositories.storage_repository import ArquivoGrandeDemaisError
 from app.services.job_runner import result_repository, storage_repository
 
 router = APIRouter(tags=["jobs"])
@@ -61,8 +62,22 @@ async def upload_meeting(
         )
 
     job_id = str(uuid.uuid4())
-    content = await file.read()
-    storage_repository().save_audio(job_id, content, file.filename or "reuniao.wav")
+    # Grava direto no disco, em pedaços, com o teto aplicado durante a
+    # escrita. O job só é criado depois: upload recusado não deixa job órfão
+    # na fila para o worker pegar.
+    try:
+        await run_in_threadpool(
+            storage_repository().save_audio_stream,
+            job_id,
+            file.file,
+            file.filename or "reuniao.wav",
+            get_settings().max_upload_bytes,
+        )
+    except ArquivoGrandeDemaisError as exc:
+        raise HTTPException(
+            status_code=http_status.HTTP_413_CONTENT_TOO_LARGE,
+            detail=f"Áudio excede o limite de {get_settings().max_upload_mb} MB.",
+        ) from exc
 
     get_job_repository().create(
         job_id=job_id,

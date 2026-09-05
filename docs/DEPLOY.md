@@ -86,18 +86,58 @@ mesmo `adb reverse` que o README já descreve:
 E o app aponta para `http://127.0.0.1:18080` via `--dart-define`
 (`SCITECH_API_BASE_URL`, `SCITECH_WS_BASE_URL` — ver Fase 7 do plano).
 
-### Alternativa: expor na rede — **exige o admin**
+### Aparelhos na rede do IFG (VPN ou laboratório) — **exige o admin**
 
-Trocar o bind para `0.0.0.0` e liberar a porta no firewall da máquina. Só faz
-sentido se vários aparelhos precisarem acessar sem passar por uma estação de
-desenvolvimento. Implica:
+Cenário do piloto: o professor testando pela VPN com um tablet, e depois os
+alunos usando os próprios aparelhos direto do laboratório, sem VPN.
 
-- coordenar com quem administra o servidor (regra de firewall);
-- rever o CORS (ver abaixo) e provavelmente colocar um proxy reverso com TLS
-  na frente — hoje o tráfego é HTTP puro, aceitável só porque não sai do
-  loopback/túnel;
-- reavaliar o rate limiting, que hoje protege `/auth` contra força bruta
-  assumindo um universo pequeno de clientes.
+A máquina tem IP **`10.4.254.201/16`** na interface `eno1` — a rede do IFG.
+Hoje só o SSH escuta fora do loopback, então **nem pela VPN a API é
+alcançável**: o tablet chega à rede 10.4.x.x, mas a API só atende em
+`127.0.0.1`. Vale para os dois cenários — o do professor e o dos alunos é a
+mesma mudança, o que é bom: dá para testar na topologia real antes.
+
+O que precisa acontecer:
+
+1. **Bind na interface da rede.** Prefira o IP específico (`10.4.254.201`) a
+   `0.0.0.0`: a máquina tem interfaces de docker e bridges que não têm por que
+   receber a API. É uma linha no `ExecStart` da unidade `scitechear-api`.
+2. **Liberar a porta no firewall** — *este item exige quem administra o
+   servidor*. Idealmente restrito à faixa do laboratório, não à `10.4.0.0/16`
+   inteira.
+3. **Fechar as portas de entrada abertas** (feito, ver abaixo): teto de upload
+   e allowlist de e-mail no registro.
+4. **Decidir sobre TLS.** O tráfego é HTTP puro; na rede institucional isso
+   significa senha e áudio de reunião em claro para quem estiver na mesma
+   rede. Um certificado próprio exige configuração no app Android
+   (`network_security_config` ou CA instalada), então é trabalho da Fase 7 —
+   não dá para resolver só do lado do servidor.
+
+**`10.4.0.0/16` é a instituição inteira, não só o laboratório.** É a razão de
+os dois itens abaixo existirem: enquanto a API respondia só em loopback, quem
+chegava à porta já estava dentro da máquina, e nenhum dos dois fazia falta.
+
+#### Teto de upload
+
+`MAX_UPLOAD_MB` (default 300, cobre ~2h de WAV 16 kHz mono) e
+`MAX_VOICE_SAMPLE_MB` (default 25). O teto do áudio é aplicado **durante** a
+gravação, em pedaços de 1 MB: sem isso, quem envia é que decide quanta RAM e
+quanto disco o servidor gasta. Upload recusado não deixa arquivo parcial nem
+job órfão na fila — o job só é criado depois da gravação terminar.
+
+#### Allowlist de e-mail no registro
+
+`AUTH_ALLOWED_EMAIL_DOMAINS` (vazio = registro aberto, o default de
+desenvolvimento). Preenchida com os domínios institucionais
+(`ifg.edu.br,academico.ifg.edu.br`), só quem tem vínculo cria conta — sem
+precisar inventar um fluxo de convite. E-mail recusado conta como tentativa
+falha no rate limit, para não virar um varredor de domínios.
+
+### Expor à internet
+
+Fora do escopo do piloto, e bem mais caro que a rede interna: IP público ou
+DNS, TLS obrigatório, e revisão do rate limiting (que hoje protege `/auth`
+assumindo um universo pequeno de clientes). Não faça sem TLS.
 
 ## CORS
 

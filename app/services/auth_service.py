@@ -38,6 +38,10 @@ class TokenInvalidoError(AuthError):
     pass
 
 
+class DominioNaoPermitidoError(AuthError):
+    """E-mail fora da allowlist institucional de AUTH_ALLOWED_EMAIL_DOMAINS."""
+
+
 class RateLimitedError(AuthError):
     def __init__(self, retry_after_seconds: int):
         self.retry_after_seconds = retry_after_seconds
@@ -116,12 +120,30 @@ class AuthService:
             window=timedelta(minutes=self._settings.auth_register_window_minutes),
         )
 
+        self._checar_dominio_permitido(email, ip)
+
         if self._repo.get_user_by_email(email) is not None:
             self._registrar_falha("register", ip or "sem-ip")
             raise EmailJaCadastradoError(f"E-mail {email} já cadastrado.")
 
         record = self._repo.create_user(email=email, password_hash=hash_password(password), name=name)
         return UserPublic(user_id=record.id, email=record.email, name=record.name)
+
+    def _checar_dominio_permitido(self, email: str, ip: str) -> None:
+        """Allowlist de domínios institucionais (vazia = registro aberto).
+
+        Conta como tentativa falha no rate limit: sem isso, alguém poderia
+        varrer domínios indefinidamente, já que a resposta diz qual foi
+        recusado."""
+        permitidos = self._settings.auth_allowed_email_domains_list
+        if not permitidos:
+            return
+        dominio = email.rsplit("@", 1)[-1].lower()
+        if dominio not in permitidos:
+            self._registrar_falha("register", ip or "sem-ip")
+            raise DominioNaoPermitidoError(
+                "Registro restrito a e-mails institucionais."
+            )
 
     def login(self, email: str, password: str, ip: str = "") -> TokenPair:
         self._checar_rate_limit(

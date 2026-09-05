@@ -134,6 +134,42 @@ class Settings(BaseSettings):
     # navegador.
     cors_allow_origins: str = Field(default="*", alias="CORS_ALLOW_ORIGINS")
 
+    # Teto do áudio de reunião aceito em POST /upload. 300 MB cobre com folga
+    # uma reunião de ~2h em WAV 16 kHz mono 16 bits (~230 MB) — o formato que
+    # o app envia. Aplicado DURANTE a gravação (StorageRepository), não depois
+    # de carregar o arquivo: sem isso, quem envia escolhe quanta RAM e quanto
+    # disco o servidor gasta. Passa a valer de verdade quando a API deixa o
+    # loopback e a rede do laboratório alcança o backend (ver docs/DEPLOY.md).
+    max_upload_mb: int = Field(default=300, alias="MAX_UPLOAD_MB")
+    # Amostra de voz é curta por natureza (segundos de fala); teto separado e
+    # muito menor, porque nada legítimo aqui chega perto disso.
+    max_voice_sample_mb: int = Field(default=25, alias="MAX_VOICE_SAMPLE_MB")
+
+    # Domínios de e-mail que podem criar conta, separados por vírgula. Vazio
+    # (default) mantém o registro aberto — o comportamento de desenvolvimento.
+    # Com a API alcançável pela rede do IFG (10.4.0.0/16 é a instituição
+    # inteira, não só o laboratório), registro aberto significa conta para
+    # qualquer pessoa que chegue à porta; uma allowlist institucional
+    # (ex.: "ifg.edu.br,academico.ifg.edu.br") restringe a quem já tem
+    # vínculo, sem inventar um fluxo de convite. Ver docs/DEPLOY.md.
+    auth_allowed_email_domains: str = Field(default="", alias="AUTH_ALLOWED_EMAIL_DOMAINS")
+
+    @property
+    def auth_allowed_email_domains_list(self) -> List[str]:
+        return [
+            dominio.strip().lower()
+            for dominio in self.auth_allowed_email_domains.split(",")
+            if dominio.strip()
+        ]
+
+    @property
+    def max_upload_bytes(self) -> int:
+        return self.max_upload_mb * 1024 * 1024
+
+    @property
+    def max_voice_sample_bytes(self) -> int:
+        return self.max_voice_sample_mb * 1024 * 1024
+
     @property
     def cors_allow_origins_list(self) -> List[str]:
         return [origem.strip() for origem in self.cors_allow_origins.split(",") if origem.strip()]

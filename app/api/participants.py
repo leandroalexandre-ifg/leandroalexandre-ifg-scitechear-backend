@@ -27,7 +27,15 @@ async def upload_voice_sample(
     user_id: str = Depends(get_current_user_id),
 ) -> VoiceSampleUploadResponse:
     _validate_wav(file)
-    content = await file.read()
+    # Lê um byte a mais que o teto: se vier alguma coisa nessa posição, o
+    # arquivo passou do limite — e nada além do teto chega a ficar na memória.
+    limite = get_settings().max_voice_sample_bytes
+    content = await file.read(limite + 1)
+    if len(content) > limite:
+        raise HTTPException(
+            status_code=http_status.HTTP_413_CONTENT_TOO_LARGE,
+            detail=f"Amostra de voz excede o limite de {get_settings().max_voice_sample_mb} MB.",
+        )
 
     service = _enrollment_service()
     try:

@@ -7,6 +7,7 @@ from app.repositories.user_repository import get_user_repository
 from app.services.auth_service import (
     AuthService,
     CredenciaisInvalidasError,
+    DominioNaoPermitidoError,
     EmailJaCadastradoError,
     RateLimitedError,
     TokenInvalidoError,
@@ -25,6 +26,8 @@ async def register(payload: UserRegisterRequest, request: Request) -> UserPublic
         return _auth_service().register(
             email=payload.email, password=payload.password, name=payload.name, ip=_client_ip(request)
         )
+    except DominioNaoPermitidoError as exc:
+        raise HTTPException(status_code=http_status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     except EmailJaCadastradoError as exc:
         raise HTTPException(status_code=http_status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except RateLimitedError as exc:
