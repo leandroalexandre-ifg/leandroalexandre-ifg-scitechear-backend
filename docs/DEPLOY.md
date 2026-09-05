@@ -78,9 +78,9 @@ LLM.
 
 ## Como o app alcança o backend
 
-A API está em loopback, então **um tablet ou celular não a alcança
-diretamente** — é preciso escolher um caminho. Esta decisão ainda está em
-aberto.
+A API responde em `0.0.0.0:18080` desde 2026-09-05, então um tablet ou celular
+na rede do IFG a alcança **se o firewall deixar** — o que ainda não se sabe. O
+túnel SSH abaixo continua valendo como caminho que não depende de ninguém.
 
 ### Recomendado: túnel SSH sobre a VPN
 
@@ -103,11 +103,12 @@ E o app aponta para `http://127.0.0.1:18080` via `--dart-define`
 Cenário do piloto: o professor testando pela VPN com um tablet, e depois os
 alunos usando os próprios aparelhos direto do laboratório, sem VPN.
 
-A máquina tem IP **`10.4.254.201/16`** na interface `eno1` — a rede do IFG.
-Hoje só o SSH escuta fora do loopback, então **nem pela VPN a API é
-alcançável**: o tablet chega à rede 10.4.x.x, mas a API só atende em
-`127.0.0.1`. Vale para os dois cenários — o do professor e o dos alunos é a
-mesma mudança, o que é bom: dá para testar na topologia real antes.
+A máquina tem IP **`10.4.254.201/16`** na interface `eno1` — a rede do IFG,
+por DHCP (a lease renova; **para o piloto, peça reserva de DHCP ao admin**, ou
+o app aponta para um alvo que pode mudar). A API já escuta fora do loopback;
+falta saber se o firewall deixa o pacote chegar. Vale para os dois cenários
+— o do professor e o dos alunos é a mesma mudança, o que é bom: dá para
+testar na topologia real antes.
 
 O que precisa acontecer:
 
