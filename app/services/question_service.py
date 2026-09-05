@@ -51,7 +51,7 @@ from app.services.transcript_formatter import TranscriptFormatter
 logger = logging.getLogger(__name__)
 
 PROMPTS_DIR = Path(__file__).resolve().parents[2] / "prompts"
-EXPLICIT_QUESTIONS_PROMPT = "explicit_questions_v4.json"
+EXPLICIT_QUESTIONS_PROMPT = "explicit_questions_v5.json"
 MEETING_SUMMARY_PROMPT = "meeting_summary_v1.txt"
 IMPLICIT_QUESTIONS_PROMPT = "implicit_questions_v4.txt"
 IMPLICIT_REFINER_PROMPT = "implicit_refiner_v1.txt"

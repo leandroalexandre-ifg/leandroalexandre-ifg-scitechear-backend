@@ -6,7 +6,7 @@ antes de considerar algo definitivamente resolvido, etc. Diferente de
 `docs/BASELINE.md` (retrato pontual da Fase 0): este arquivo é atualizado ao
 longo do projeto.
 
-## Aberta — Perguntas explícitas: prefixo `[Nome]: ` vazando no campo `text`
+## Resolvida — Perguntas explícitas: prefixo `[Nome]: ` vazando no campo `text`
 
 **Onde:** `question_service.extract_explicit_questions` (prompt
 `prompts/explicit_questions_v4.json`).
@@ -56,9 +56,45 @@ sintético e sem semântica de pessoa — é tratado como parte da fala. Se
 confirmado, o ajuste de prompt deve mirar especificamente o caso do falante
 não identificado, e não a instrução geral.
 
-**Status:** aberta. Deixou de ser "reverificar com o modelo de produção" e
-passou a ser "ajustar o prompt para o caso do rótulo `[SPEAKER_XX]`". Não
-bloqueia fases seguintes.
+**Correção (2026-09-05, `prompts/explicit_questions_v5.json`):** feita por
+prompt, versionada, com os critérios de extração intactos — o serviço continua
+repassando `item.pergunta` literalmente, sem cortar string nenhuma em Python.
+Três edições cirúrgicas sobre o v4:
+
+1. uma regra nova dizendo que o rótulo entre colchetes que abre a linha
+   (`[Leandro]: `, `[SPEAKER_00]: `) é formato da transcrição e não pertence ao
+   campo `pergunta`, explicitamente inclusive quando é identificador genérico;
+2. um segundo exemplo few-shot com falante **não identificado** — o v4 só tinha
+   exemplo com nome próprio, que era justamente o caso que já funcionava;
+3. o exemplo de sentença curta em `instrucoes_importantes` passou a mostrar o
+   texto extraído (`extraia 'Verdade?'`) em vez da linha inteira
+   (`'SPEAKER_00: Verdade?'`), que reforçava o comportamento errado.
+
+**Validação A/B nos quatro cenários do E2E, com `qwen3:14b` e os mesmos
+áudios:**
+
+| Cenário | v4 | v5 |
+|---|---|---|
+| R4 (falante não identificado) | `[SPEAKER_00]: Juno, tudo certo?` | `Juno, tudo certo?` |
+| R1 (2 identificados, 2 perguntas) | correto | idêntico ao v4 |
+| R2 (1 pergunta) | correto | idêntico ao v4 |
+| R3 (nenhuma pergunta) | lista vazia | lista vazia |
+
+O único caso ruim foi corrigido e os três bons ficaram idênticos ao baseline —
+inclusive preservando o erro de ASR ("estação" no lugar de "extração"), o que
+confirma que a cópia literal continua valendo.
+
+**Limitação desta validação:** uma execução por cenário, com áudio sintético.
+A geração é determinística (`temperature=0`, `seed=42`), mas isso não descarta
+que outra transcrição provoque o vazamento por outro caminho. Mesma ressalva
+que `docs/PERFORMANCE.md` faz sobre a validação de `think=False`.
+
+`tests/test_question_service.py` trava as duas metades da decisão: que o prompt
+ativo tem a regra e o exemplo com rótulo genérico, e que o código **não**
+sanitiza o texto devolvido pelo LLM (se alguém "ajudar" cortando o prefixo em
+Python, o teste quebra).
+
+**Status:** resolvida.
 
 ---
 

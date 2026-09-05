@@ -370,3 +370,55 @@ def test_gerar_perguntas_chama_refinamento_quando_flag_ativa(monkeypatch):
 def test_prompt_carrega_e_nao_esta_vazio(nome_arquivo):
     conteudo = question_service._carregar_prompt(nome_arquivo)
     assert conteudo.strip()
+
+
+def test_prompt_de_explicitas_proibe_o_rotulo_do_falante_no_campo_pergunta():
+    """O prefixo `[Nome]: `/`[SPEAKER_XX]: ` vazando no campo `text` foi
+    diagnosticado no E2E da Fase 8 (docs/E2E_FASE8.md): acontecia só quando o
+    falante NÃO era identificado e o rótulo da linha era `[SPEAKER_00]` em vez
+    de um nome próprio. O v5 corrigiu por prompt — o serviço continua
+    repassando `item.pergunta` literalmente, sem cortar string nenhuma.
+
+    Este teste trava as duas partes da correção. Não "simplificar" removendo o
+    exemplo com rótulo genérico: era exatamente o caso que faltava no v4."""
+    prompt = json.loads(
+        question_service._carregar_prompt(question_service.EXPLICIT_QUESTIONS_PROMPT)
+    )
+
+    regras = " ".join(prompt["regras"])
+    assert "rótulo do falante" in regras and "[SPEAKER_00]" in regras
+
+    exemplos = prompt["exemplos_few_shot"]
+    com_rotulo_generico = [
+        e for e in exemplos if any("[SPEAKER_" in linha for linha in e["entrada"])
+    ]
+    assert com_rotulo_generico, "faltou exemplo few-shot com falante não identificado"
+    for exemplo in exemplos:
+        for pergunta in exemplo["saida"]["perguntas"]:
+            assert not pergunta["pergunta"].startswith("["), (
+                f"exemplo few-shot ensina o prefixo errado: {pergunta['pergunta']}"
+            )
+
+
+def test_extract_explicit_questions_nao_corrige_o_texto_devolvido_pelo_llm(monkeypatch):
+    """Contrapeso do teste acima: a correção do prefixo foi por PROMPT, não
+    por saneamento no código. Se alguém tentar "ajudar" cortando o prefixo em
+    Python, este teste quebra — a regra do projeto é repassar o texto do LLM
+    literalmente, inclusive quando ele vem errado."""
+    resposta = json.dumps({
+        "perguntas": [{
+            "id": "P1",
+            "pergunta": "[SPEAKER_00]: Subiu?",
+            "falante": "SPEAKER_00",
+            "linha_transcricao": 1,
+            "segmentos_anteriores": [],
+        }],
+        "total_perguntas": 1,
+    })
+    monkeypatch.setattr(
+        question_service, "_chamar_ollama", lambda *a, **k: resposta
+    )
+
+    perguntas = question_service.extract_explicit_questions(_formatter())
+
+    assert perguntas[0].text == "[SPEAKER_00]: Subiu?"

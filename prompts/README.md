@@ -5,7 +5,8 @@ devem ser mínimas e versionadas (ver especificação).
 
 | Arquivo aqui | Origem enviada | Uso |
 |---|---|---|
-| `explicit_questions_v4.json` | PromptDeExtracaoDePerguntasExplicitasV4.json | Perguntas explícitas (só sentenças terminadas em `?`). |
+| `explicit_questions_v4.json` | PromptDeExtracaoDePerguntasExplicitasV4.json | **Superado por v5** — preservado só para rastreabilidade. |
+| `explicit_questions_v5.json` | explicit_questions_v4.json (Fase 8) | **Ativo.** Perguntas explícitas (só sentenças terminadas em `?`). Critérios de extração idênticos aos do v4 — a mudança é de fidelidade de formato, não semântica: (1) uma regra dizendo que o rótulo entre colchetes que abre a linha (`[Leandro]: `, `[SPEAKER_00]: `) é formato da transcrição e não pertence ao campo `pergunta`; (2) um segundo exemplo few-shot com falante NÃO identificado, que era o caso ausente no v4; (3) o exemplo de sentença curta passou a mostrar o texto extraído, não a linha inteira. Motivo em `docs/PENDENCIAS.md` e `docs/E2E_FASE8.md`. |
 | `meeting_summary_v1.txt` | PromptSumarizacaoV1.txt | Sumarização (artefato interno). |
 | `implicit_questions_v2.txt` | PromptGerador.txt | **Superado por v3** — preservado só para rastreabilidade (saída em texto numerado, não JSON). |
 | `implicit_questions_v3.txt` | implicit_questions_v2.txt (Fase 5) | **Superado por v4** — preservado só para rastreabilidade. Saída JSON sem campo de evidência; causou confabulação de perguntas implícitas sem lastro na transcrição (ver `docs/PENDENCIAS.md`). |

@@ -111,6 +111,13 @@ próprio, e o modelo o trate como parte da fala. É um ponto de calibração de
 prompt, não de código — a regra de não corrigir o texto devolvido pelo LLM
 continua valendo.
 
+**Corrigido logo depois deste E2E** (`prompts/explicit_questions_v5.json`),
+usando o próprio diagnóstico acima: uma regra explícita sobre o rótulo e um
+exemplo few-shot com falante não identificado, que era o caso ausente no v4.
+Revalidado nos mesmos quatro cenários — R4 passou a devolver
+`"Juno, tudo certo?"` sem prefixo, e R1/R2/R3 saíram idênticos ao baseline.
+Detalhe e ressalvas em `PENDENCIAS.md`.
+
 ### 2. Fronteira de turno: a primeira palavra curta vai para o falante anterior
 
 Em R3, dois segmentos foram atribuídos ao falante errado, ambos com o mesmo
