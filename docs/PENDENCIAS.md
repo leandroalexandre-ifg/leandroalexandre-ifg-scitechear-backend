@@ -40,7 +40,125 @@ prompt (algo como "não inclua o rótulo `[Nome]:` no campo `pergunta`") —
 mudança de prompt, versionada, sem alterar os critérios semânticos
 existentes (regra do AGENTS.md).
 
-**Status:** aberta, não bloqueia fases seguintes.
+**Reverificação com `qwen3:14b` (2026-09-05, E2E da Fase 8 — ver
+`docs/E2E_FASE8.md`):** o problema **persiste no modelo de produção**, então
+não era limitação do `qwen3:4b`. Mas a reverificação trouxe um recorte que o
+registro original não tinha: das sete perguntas explícitas extraídas nos cinco
+cenários, **as duas que vazaram o prefixo foram exatamente as do único cenário
+em que o falante não foi identificado** — nele o rótulo da linha é
+`[SPEAKER_00]`, e saiu `"[SPEAKER_00]: Juno, tudo certo?"`. Nos cenários com
+falante identificado, em que o rótulo é um nome próprio, nenhuma das cinco
+perguntas veio com prefixo.
+
+Hipótese que isso sugere (ainda não testada isoladamente): um nome próprio é
+reconhecido pelo modelo como rótulo de formato, enquanto `[SPEAKER_00]` —
+sintético e sem semântica de pessoa — é tratado como parte da fala. Se
+confirmado, o ajuste de prompt deve mirar especificamente o caso do falante
+não identificado, e não a instrução geral.
+
+**Status:** aberta. Deixou de ser "reverificar com o modelo de produção" e
+passou a ser "ajustar o prompt para o caso do rótulo `[SPEAKER_XX]`". Não
+bloqueia fases seguintes.
+
+---
+
+## Aberta — Fronteira de turno: primeira palavra curta de um turno é atribuída ao falante anterior
+
+**Onde:** `app/services/diarization_service._atribuir_clusters` (a rigor, a
+fronteira devolvida pelo pipeline do pyannote).
+
+**O quê:** no E2E da Fase 8 (2026-09-05, cenário R3 — `docs/E2E_FASE8.md`),
+dois segmentos saíram com o falante errado, ambos com o mesmo padrão: uma
+interjeição curta que **abre** um turno foi atribuída a quem falou antes.
+
+    26,79-27,99  SPEAKER_00 → p-ana     "Combinado."    (era da Carla)
+    34,63-35,01  SPEAKER_01 → p-carla   "Perfeito."     (era da Ana)
+
+**Causa:** `_atribuir_clusters` escolhe, para cada segmento da transcrição, o
+cluster de maior sobreposição temporal — o que está correto. O deslocamento
+vem da fronteira de turno do pyannote, que chega ~1s atrasada; o segmento
+curto inteiro cai antes dela e herda o cluster anterior.
+
+**Impacto:** 1,6s de 173,8s de fala (0,9%) no E2E, sempre em palavra isolada.
+Não afeta o corpo das falas nem nenhuma pergunta extraída. É sistemático (não
+aleatório), o que facilita reconhecer o padrão em produção.
+
+**Por que não foi corrigido:** qualquer correção aqui é heurística — mover a
+fronteira, ou reatribuir segmentos curtos ao cluster seguinte, exige decidir
+sem evidência qual dos dois lados está certo, e pode piorar casos em que a
+interjeição realmente pertence ao turno anterior ("Combinado." dito por quem
+já estava falando). Precisa de mais dados reais antes de virar regra.
+
+**Status:** aberta, baixo risco, não bloqueia a V1.
+
+---
+
+## Aberta — Falas curtas alternadas colapsam a diarização num cluster só
+
+**Onde:** `app/services/diarization_service.diarizar`.
+
+**O quê:** no E2E da Fase 8 (cenário R4: nove falas de 1 a 3 palavras,
+alternando dois falantes, mais um trecho sobreposto), o pyannote **encontrou**
+dois clusters — o log registra `SPEAKER_00, SPEAKER_01` com
+`Pouca duração de fala para SPEAKER_01: 2,6s` — mas nenhum dos nove segmentos
+da transcrição teve o `SPEAKER_01` como cluster de maior sobreposição. O
+resultado final saiu com **um cluster só**.
+
+**Desdobramento (o comportamento desejado):** o embedding do cluster misturado
+deu 0,609, abaixo do threshold de 0,75, e ninguém foi identificado. O sistema
+preferiu não responder a responder errado — é a política que a recalibração do
+threshold quis garantir, funcionando num caso que ela não foi projetada para
+cobrir.
+
+**Relação com a pendência de áudio distante/ruidoso:** é o mesmo tipo de falha
+(o pyannote não separa bem) por outra causa — ali é a captação, aqui é a
+duração dos turnos. As duas convergem para a mesma mitigação: a identificação
+degrada para "não identificado" em vez de errar a pessoa.
+
+**Achado colateral de custo:** R4 foi o job **mais caro** (24,5s de extração,
+3.397 tokens gerados) apesar de ter o áudio mais curto (20,1s) — 4,6× mais
+tokens de saída que a reunião estruturada de 80s. Áudio fragmentado custa mais
+que áudio longo, não menos. Relevante para o dimensionamento de uma reunião
+real com muitas trocas rápidas de turno.
+
+**Status:** aberta, não bloqueia a V1.
+
+---
+
+## Aberta — Perguntas implícitas: redundância e um detalhe factual alucinado
+
+**Onde:** `question_service.extract_implicit_questions` /
+`summarize_meeting`, com `ENABLE_IMPLICIT_QUESTIONS=true`.
+
+**O quê:** no E2E da Fase 8 (cenário R5, `qwen3:14b`, reunião de 80s com nove
+falas), a extração devolveu 2 perguntas explícitas e **15 implícitas**.
+
+O que funcionou: **todas as 15 apontam para `source_segment_ids` que existem
+de fato** no resultado, e nenhuma é pergunta genérica de roteiro sem lastro —
+a correção de confabulação (commit `94cebe2`) continua valendo com dados
+novos.
+
+Os dois problemas:
+
+1. **Redundância pesada.** Seis das quinze derivam do mesmo `seg_0016`, e
+   várias são paráfrases umas das outras — "Quais critérios serão utilizados
+   para determinar se a redução do contexto é viável e eficaz?" ao lado de
+   "Como a eficácia da redução do contexto será mensurada e validada?".
+   Confirma, com número, o achado de redundância do `qwen3:14b` já registrado
+   em `805fe4d`.
+2. **Um detalhe factual inventado.** Duas perguntas citam "o prazo final de 30
+   de outubro"; a transcrição diz apenas "o dia trinta deste mês". A evidência
+   aponta para um segmento real, mas o **texto da pergunta** acrescenta um
+   fato que não está nele. É uma falha diferente da confabulação já corrigida
+   (que inventava a pergunta inteira, sem lastro): aqui o lastro existe e o
+   enfeite está no enunciado.
+
+**Custo:** 56,4s contra 15,1s no mesmo áudio (3,7×), quase todo concentrado em
+`summarizing` (28,2s).
+
+**Status:** aberta. Reforça a decisão de manter `ENABLE_IMPLICIT_QUESTIONS=false`
+em produção (flag introduzida em `be8dc49`). Não bloqueia a V1, que não depende
+de implícitas.
 
 ## Resolvida — Perguntas implícitas confabulando roteiro genérico sem lastro na transcrição
 

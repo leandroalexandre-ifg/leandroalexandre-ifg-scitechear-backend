@@ -139,3 +139,48 @@ transcrições reais/diferentes.
 comportamento em relação ao início desta investigação. A instrumentação
 (Fase 1) permanece ativa em produção — não tem custo relevante e é o que
 permite qualquer próxima tentativa de otimização ser medida, não adivinhada.
+
+## Medições no servidor NumbERS (RTX 5090) — 2026-09-05
+
+Cinco jobs do E2E da Fase 8 (`docs/E2E_FASE8.md`), pipeline real completo,
+áudio sintetizado com `piper-tts`. As medições acima foram feitas no Mac; estas
+são a primeira série na GPU do servidor de deploy.
+
+| Job | Áudio | transcribing | diarizing | identifying | summarizing | extracting | total |
+|---|---|---|---|---|---|---|---|
+| R1 — 2 falantes, estruturada | 80,0s | 6,37s | 0,45s | 0,07s | 0,00s | 7,18s | **15,13s** |
+| R2 — 1 cadastrado + 1 não | 61,9s | 5,81s | 0,33s | 0,07s | 0,00s | 6,86s | **14,18s** |
+| R3 — sem perguntas | 39,0s | 5,68s | 0,20s | 0,05s | 0,00s | 3,33s | **10,43s** |
+| R4 — falas curtas | 20,1s | 5,28s | 0,10s | 0,02s | 0,00s | 24,50s | **30,32s** |
+| R5 — implícitas ligadas | 80,0s | 6,53s | 1,74s | 0,25s | 28,17s | 18,07s | **56,40s** |
+
+### O que mudou em relação ao perfil do Mac
+
+- **A diarização deixou de ser o gargalo.** No Mac era o maior estágio isolado
+  (114,3s, 38,6% do total). Na 5090 caiu para 0,1–1,7s (3% ou menos). O ganho
+  não é proporcional em todos os estágios: o `transcribing` também caiu muito,
+  mas o `extracting` (Ollama) caiu bem menos, porque é geração de tokens.
+- **A extração pelo LLM continua dominando** o que sobra: 47% do total em R1.
+  A conclusão da Fase 2 desta investigação segue válida — só que agora sobre um
+  total muito menor.
+- R1 processa 80s de reunião em 15,1s, ~**5,3× mais rápido que o tempo real**.
+  Comparação com os 296s do Mac é indicativa, não rigorosa: o áudio é outro.
+
+### Achado novo: áudio fragmentado custa mais que áudio longo
+
+R4 é o **job mais caro da série** (30,3s) apesar de ter o **áudio mais curto**
+(20,1s). A extração sozinha levou 24,5s, gerando 3.397 tokens de saída a partir
+de 1.750 de entrada — 4,6× mais tokens gerados que R1, que tem 4× mais áudio.
+
+Nove falas telegráficas ("Subiu?", "Consigo.", "Obrigada.") fizeram o modelo
+raciocinar muito mais do que uma reunião estruturada. Isso contraria a
+intuição de dimensionar custo por duração de áudio: o driver é a estrutura da
+conversa, não o comprimento. Uma reunião real com muitas trocas rápidas de
+turno pode custar bem mais que a duração sugere.
+
+### Custo das perguntas implícitas, medido
+
+R5 é o mesmo áudio de R1 com `ENABLE_IMPLICIT_QUESTIONS=true`: **56,4s contra
+15,1s, 3,7× mais caro**. O `summarizing` sozinho (28,2s — 4.105 tokens de
+entrada, 3.486 de saída) custa quase o dobro do job inteiro sem implícitas. A
+flag continua `false` em produção, agora com número em vez de estimativa.
