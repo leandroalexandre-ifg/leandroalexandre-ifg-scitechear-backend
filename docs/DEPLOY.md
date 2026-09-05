@@ -43,7 +43,7 @@ quem administra o servidor a cada mudança de configuração.
 
 | Unidade | O que é | Porta |
 |---|---|---|
-| `scitechear-api` | FastAPI/uvicorn | `127.0.0.1:18080` |
+| `scitechear-api` | FastAPI/uvicorn | `0.0.0.0:18080` (ver abaixo) |
 | `scitechear-worker` | consumidor da fila de jobs (usa a GPU) | — |
 | `ollama` | servidor do LLM (`qwen3:14b`) | `127.0.0.1:11434` |
 
@@ -55,9 +55,21 @@ quem administra o servidor a cada mudança de configuração.
 usuário morrem quando a sessão SSH termina. Já está habilitado — mas é a
 primeira coisa a checar se os serviços "somem" depois de um logout.
 
-**Tudo em loopback.** Nada é exposto na rede além do próprio SSH. A porta
-`18080` (e não `8000`) é para não colidir com o default que qualquer outro
-projeto Python da máquina escolheria.
+**A API responde na rede desde o piloto** (2026-09-05); o Ollama continua em
+loopback. A porta `18080` (e não `8000`) é para não colidir com o default que
+qualquer outro projeto Python da máquina escolheria.
+
+O bind é `0.0.0.0` e **não** o IP específico, de propósito: o endereço da
+`eno1` vem por DHCP (`10.4.254.201` via `10.4.0.1`), e fixar um IP que pode
+mudar faria o uvicorn falhar com *cannot assign requested address* e entrar em
+loop de restart — a API simplesmente não subiria, no pior momento possível. As
+demais interfaces (`docker0`, bridges, `wlp101s0`, `enp103s0`) estão DOWN, então
+na prática isso é `eno1` + loopback. **Quem pode chegar à porta é
+responsabilidade do firewall**, que é a camada certa para isso; restringir pelo
+bind seria frágil e daria uma falsa sensação de controle.
+
+Para reverter ao loopback, há cópias datadas da unidade em
+`/data/projects/leandro/scitechear/scitechear-api.service.bak-*`.
 
 O Ollama foi instalado **sem privilégio de root**, em `~/.local/bin`, mesmo com
 o usuário estando no grupo `sudo`: o único ganho do root seria compartilhar o
@@ -99,14 +111,17 @@ mesma mudança, o que é bom: dá para testar na topologia real antes.
 
 O que precisa acontecer:
 
-1. **Bind na interface da rede.** Prefira o IP específico (`10.4.254.201`) a
-   `0.0.0.0`: a máquina tem interfaces de docker e bridges que não têm por que
-   receber a API. É uma linha no `ExecStart` da unidade `scitechear-api`.
+1. ~~**Bind na interface da rede.**~~ **Feito** (2026-09-05): `0.0.0.0:18080`,
+   pelo motivo explicado acima. Verificado respondendo tanto em `127.0.0.1`
+   quanto em `10.4.254.201`.
 2. **Liberar a porta no firewall** — *este item exige quem administra o
-   servidor*. Idealmente restrito à faixa do laboratório, não à `10.4.0.0/16`
-   inteira.
-3. **Fechar as portas de entrada abertas** (feito, ver abaixo): teto de upload
-   e allowlist de e-mail no registro.
+   servidor*, e é o único ainda pendente. Idealmente restrito à faixa do
+   laboratório, não à `10.4.0.0/16` inteira. **Enquanto não se sabe o estado do
+   firewall, considere a API alcançável por qualquer máquina da instituição** —
+   é o que torna os dois tetos abaixo obrigatórios, e não recomendações.
+3. ~~**Fechar as portas de entrada abertas.**~~ **Feito** (ver abaixo): teto de
+   upload e allowlist de e-mail no registro, esta última já ativa em produção
+   com `ifg.edu.br` e confirmada recusando domínio de fora com `403`.
 4. **Decidir sobre TLS.** O tráfego é HTTP puro; na rede institucional isso
    significa senha e áudio de reunião em claro para quem estiver na mesma
    rede. Um certificado próprio exige configuração no app Android
