@@ -74,6 +74,18 @@ def tmp_storage_root(tmp_path, monkeypatch):
     # deploy real (servidor NumbERS). Remover a variável do ambiente do teste
     # força a derivação a partir do tmp_path, independentemente do .env.
     monkeypatch.delenv("DATABASE_URL", raising=False)
+    # Mesma causa raiz do DATABASE_URL acima, segunda ocorrência: um valor de
+    # produção no .env muda a política que a suíte exercita. Com
+    # AUTH_ALLOWED_EMAIL_DOMAINS=ifg.edu.br (o deploy real do servidor
+    # NumbERS), o registro do usuário de teste — @scitechear.example.com —
+    # passou a responder 403 e derrubou a fixture `client` inteira (36 erros
+    # + 9 falhas). Os testes que precisam da allowlist a ligam eles mesmos
+    # (tests/test_auth_dominio.py), então o ambiente de teste parte sempre do
+    # default aberto, independentemente do .env da máquina. Aqui um delenv
+    # NÃO basta: o valor vem do arquivo .env, não do ambiente do processo —
+    # só uma variável de ambiente explícita (vazia) tem precedência sobre o
+    # env_file no pydantic-settings.
+    monkeypatch.setenv("AUTH_ALLOWED_EMAIL_DOMAINS", "")
     monkeypatch.setenv("JWT_SECRET_KEY", "chave-de-teste-nao-usar-em-producao")
     get_settings.cache_clear()
     yield
