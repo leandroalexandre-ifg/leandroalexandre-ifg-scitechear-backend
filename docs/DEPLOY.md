@@ -35,7 +35,7 @@ repositório. `STORAGE_ROOT` no `.env` aponta para lá com caminho absoluto.
 
 A convenção `/data/projects/<usuario>/` é do servidor, criada pelo admin.
 
-## Os três serviços
+## Os quatro serviços
 
 Tudo roda como **unidade systemd de usuário** (`~/.config/systemd/user/`), não
 de sistema. Em máquina compartilhada isso é o que evita ter que coordenar com
@@ -46,8 +46,9 @@ quem administra o servidor a cada mudança de configuração.
 | `scitechear-api` | FastAPI/uvicorn | `127.0.0.1:18080` (ver abaixo) |
 | `scitechear-worker` | consumidor da fila de jobs (usa a GPU) | — |
 | `ollama` | servidor do LLM (`qwen3:14b`) | `127.0.0.1:11434` |
+| `scitechear-proxy` | proxy TLS (Caddy) na frente da API — ver [`TLS.md`](TLS.md) | `127.0.0.1:18443` (ver abaixo) |
 
-    systemctl --user status scitechear-api scitechear-worker ollama
+    systemctl --user status scitechear-api scitechear-worker ollama scitechear-proxy
     systemctl --user restart scitechear-api
     journalctl --user -u scitechear-worker -f
 
@@ -55,9 +56,15 @@ quem administra o servidor a cada mudança de configuração.
 usuário morrem quando a sessão SSH termina. Já está habilitado — mas é a
 primeira coisa a checar se os serviços "somem" depois de um logout.
 
-**A API está em loopback, e os três serviços também.** A porta `18080` (e não
+**A API está em loopback, e os quatro serviços também.** A porta `18080` (e não
 `8000`) é para não colidir com o default que qualquer outro projeto Python da
-máquina escolheria.
+máquina escolheria; a `18443` do proxy segue o mesmo padrão.
+
+O proxy TLS subiu como serviço em 2026-09-06, **também em loopback**. Ele não
+muda o alcance do backend: quem chega às duas portas continua tendo que estar
+dentro da máquina (ou num túnel SSH). O que ele destrava é poder testar por
+HTTPS pelo túnel, sem esperar o admin. Sair do loopback continua sendo um passo
+à parte, com os pré-requisitos abaixo.
 
 Houve um bind em `0.0.0.0` em 2026-09-05, **revertido no mesmo dia** por
 decisão de Leandro. O motivo da reversão é o item 4 abaixo: enquanto o estado

@@ -5,8 +5,12 @@ Este documento resolve o **item 2** dos pré-requisitos do piloto listados em
 já está pronto e verificado, o que ainda depende de quem administra o NumbERS,
 e como o app Android passa a confiar no certificado.
 
-Nada aqui está no ar. O proxy está instalado e testado **em loopback**; a API
-continua em `127.0.0.1:18080` e nenhuma porta nova foi aberta na rede.
+**Estado em 2026-09-06:** o proxy está **no ar como serviço**
+(`scitechear-proxy`, unidade de usuário, habilitada), escutando em
+`127.0.0.1:18443`. A API continua em `127.0.0.1:18080`. **Nada foi para a
+rede** — o `bind` segue em loopback, e a interface `eno1` recusa conexão na
+18443. O que isso destrava hoje é o teste via túnel SSH, que não depende do
+admin; o piloto continua esperando os dois itens abaixo.
 
 ## O problema
 
@@ -146,7 +150,8 @@ truststore do sistema.
 
 ## Como colocar no ar (quando os dois itens estiverem confirmados)
 
-    # 1. instalar a unidade (uma vez)
+    # 1. instalar a unidade (uma vez) — JÁ FEITO em 2026-09-06, a unidade
+    #    está instalada e habilitada; fica aqui para quem remontar a máquina
     cp deploy/scitechear-proxy.service ~/.config/systemd/user/
     systemctl --user daemon-reload
 
@@ -154,8 +159,10 @@ truststore do sistema.
     #    no deploy/Caddyfile, trocar `bind 127.0.0.1` por `bind 0.0.0.0`
     #    (0.0.0.0, NUNCA 10.4.254.201 — ver "DHCP" abaixo)
 
-    # 3. subir
+    # 3. subir (ou recarregar, se já estiver no ar — reload não derruba
+    #    conexão, o que importa se houver upload de reunião em curso)
     systemctl --user enable --now scitechear-proxy
+    systemctl --user reload scitechear-proxy   # depois de editar o Caddyfile
     systemctl --user status scitechear-proxy
 
     # 4. conferir que quem escuta na rede e o proxy, e so ele
