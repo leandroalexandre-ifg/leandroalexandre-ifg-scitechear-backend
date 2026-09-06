@@ -66,7 +66,7 @@ Tudo abaixo foi medido no NumbERS em 2026-09-06, com o proxy escutando em
 | `POST /auth/login` + `GET /meetings` | funcionam através do proxy com token real |
 | **WebSocket** `/ws/{job_id}` sobre `wss` | handshake OK e frame de progresso real recebido |
 | Rate limiting por IP | preservado (ver abaixo) |
-| JWT no log de acesso | redigido (ver abaixo) |
+| JWT no log de acesso | redigido no proxy — e o mesmo vazamento pela API foi corrigido à parte (ver abaixo) |
 
 Duas armadilhas encontradas no caminho, ambas já resolvidas no
 [`../deploy/Caddyfile`](../deploy/Caddyfile) — e as duas falhavam de um jeito
@@ -78,13 +78,28 @@ consegue casar o site pelo nome e o handshake morre com
 `tlsv1 alert internal error` — antes de qualquer resposta HTTP, e sem nada
 útil no log. Parece problema de certificado; não é.
 
-**O token do WebSocket vazava para o log.** O handshake de WS não aceita header
-`Authorization` em todo cliente, então `/ws/{job_id}` autentica por query
-string. O log de acesso do Caddy registra a URI inteira: cada conexão escrevia
-um **JWT válido** no journald. O `Authorization` já é redigido por padrão pelo
-Caddy, mas a query string não. O filtro do `log` resolve — e o caminho do campo
-é `request>uri`, não `uri`; com o caminho errado o filtro é aceito sem erro e
+**O token do WebSocket vazava para o log — e por dois caminhos, não um.** O
+handshake de WS não aceita header `Authorization` em todo cliente, então
+`/ws/{job_id}` autentica por query string; qualquer coisa que registre a URI
+inteira grava um JWT válido junto.
+
+No **proxy**, o `Authorization` já é redigido por padrão pelo Caddy, mas a query
+string não. O filtro do `log` neste `Caddyfile` resolve — e o caminho do campo é
+`request>uri`, não `uri`; com o caminho errado o filtro é aceito sem erro e
 simplesmente não faz nada. Verificado depois da correção: `?token=REDACTED`.
+
+Na **API**, o mesmo vazamento existia por um caminho que não passa pelo proxy: o
+uvicorn registra o caminho com a query, e foi por aí que quatro JWTs reais
+chegaram ao journald do servidor — o primeiro no E2E de 2026-09-05, quando não
+havia Caddy nenhum. Corrigido em `app/main.py` por um filtro de logging preso a
+`uvicorn.error` (que é quem emite a linha do WebSocket — **não**
+`uvicorn.access`, e prender no logger óbvio instala, passa nos testes e não
+protege nada). `JWT_SECRET_KEY` foi rotacionado. Ver o commit `1febf10`.
+
+**Os dois filtros são necessários e não se substituem:** o do Caddy protege o
+log do proxy, o da API protege o dela. Desligar qualquer um traz o vazamento de
+volta pela metade que sobrou. Se algum dia o proxy sair da frente, o da API
+continua sendo o que importa.
 
 ### Rate limiting: o que um proxy costuma quebrar em silêncio
 
