@@ -110,10 +110,12 @@ no lado do frontend), então não é preciso descobrir o IP da máquina nem lida
 com isolamento de rede Wi-Fi entre os aparelhos.
 
 > Isso vale para o backend rodando **na própria máquina de desenvolvimento**.
-> Para alcançar o backend **implantado no servidor** (que fica em loopback, na
-> porta 18080), o caminho é outro — túnel SSH sobre a VPN. Ver
-> [`docs/DEPLOY.md`](docs/DEPLOY.md).
+> O backend **implantado no servidor** é outra história: lá a API escuta só em
+> `127.0.0.1:18080`, e a intenção é que continue assim — pôr a própria API na
+> rede do IFG deixaria senha e áudio de reunião em HTTP puro ao alcance da
+> `10.4.0.0/16`, que é a instituição inteira.
 >
-> O loopback lá é deliberado: o bind na rede só reabre depois de confirmada a
-> regra de firewall da porta e definido um plano de TLS — hoje o tráfego é HTTP
-> puro, e a rede do IFG é a `10.4.0.0/16` inteira.
+> Como alcançá-la de fora (hoje, túnel SSH sobre a VPN; o que muda para o
+> piloto; e o que depende de quem administra o servidor) é assunto de deploy, e
+> [`docs/DEPLOY.md`](docs/DEPLOY.md) é a fonte de verdade — este README não
+> repete portas nem procedimento para não divergir dele.
