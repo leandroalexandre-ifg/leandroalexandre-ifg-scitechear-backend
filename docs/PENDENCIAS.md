@@ -551,7 +551,7 @@ esse perfil de gravação (distante/ruidosa) antes de decidir entre
 calibração de clustering, orientação de captura (aproximar o dispositivo)
 ou aceitar a limitação como conhecida.
 
-## Aberta — `expected_speaker_count` do job nunca vira `num_speakers` exato na diarização (bug de baixo risco, não urgente)
+## Resolvida — `expected_speaker_count` do job nunca virava `num_speakers` exato na diarização
 
 **Onde:** `app/services/pipeline_facade.py` (chamada a
 `diarization_service.diarizar`).
@@ -577,12 +577,22 @@ diarização acima (2026-08-16), ao reproduzir manualmente
 afeta nenhum fluxo em produção agora. Passa a importar quando essa coleta
 for implementada no app.
 
-**Correção (não aplicada agora, por decisão do usuário — só documentação
-nesta rodada):** passar `exact_speaker_count=True` em `pipeline_facade.py`
-quando `job.expected_speaker_count` não for `None`.
+**Correção (aplicada em 2026-09-06):** `pipeline_facade.executar` passa
+`exact_speaker_count=True` na chamada a `diarization_service.diarizar`. Não
+foi preciso condicionar ao valor: `diarizar()` já ignora o pedido de exatidão
+quando `expected_speaker_count` é `None` e cai no range `min`/`max` de
+`Settings` — que é o caminho de hoje, já que o app ainda não coleta o campo.
 
-**Status:** aberta, não bloqueia fases seguintes, correção trivial quando
-priorizada.
+**O que faltava não era o código do serviço, e sim um teste no caminho real.**
+O nível do serviço já cobria as duas ramificações
+(`test_diarizar_usa_num_speakers_exato_so_quando_solicitado` e
+`test_diarizar_usa_expected_speaker_count_como_max_speakers_pista`); o que não
+existia era um teste do facade verificando o que ele de fato repassa — e é
+exatamente aí que o parâmetro se perdia. Foram acrescentados dois em
+`tests/test_pipeline_facade.py`, um para cada caso (com contagem e sem).
+
+**Status:** resolvida. Sem efeito observável hoje, pelo motivo de risco acima:
+fecha a inconsistência para quando o app passar a coletar o campo.
 
 ## Resolvida — Job fica congelado num estado intermediário para sempre se o servidor reiniciar durante o processamento (efeito colateral conhecido da persistência em banco)
 

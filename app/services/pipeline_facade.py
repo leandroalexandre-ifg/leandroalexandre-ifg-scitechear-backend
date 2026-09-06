@@ -61,8 +61,19 @@ class MeetingPipelineFacade:
 
         try:
             self._jobs.update_status(job_id, JobStatusValue.DIARIZING)
+            # exact_speaker_count=True porque, quando o job informa quantas
+            # pessoas estão na reunião, isso é uma contagem, não um teto. Sem
+            # ele o valor virava max_speakers e o pyannote continuava livre
+            # para devolver menos falantes que o informado — o parâmetro exato
+            # existia no serviço e era inalcançável pelo caminho real do
+            # pipeline. Quando expected_speaker_count é None, diarizar() cai
+            # sozinho no range min/max de Settings: passar True aqui não muda
+            # nada nesse caso, que é o de hoje (o app ainda não coleta o campo).
             diarizacao = diarization_service.diarizar(
-                audio_path, transcricao, expected_speaker_count=job.expected_speaker_count
+                audio_path,
+                transcricao,
+                expected_speaker_count=job.expected_speaker_count,
+                exact_speaker_count=True,
             )
         except Exception as exc:  # noqa: BLE001
             self._marcar_erro(job_id, "DIARIZATION_ERROR", str(exc))

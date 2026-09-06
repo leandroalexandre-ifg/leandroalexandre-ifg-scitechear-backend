@@ -24,14 +24,14 @@ def _nova_facade(tmp_path):
     return facade, storage
 
 
-def _preparar_job(facade, storage, job_id="job-1", participants=None):
+def _preparar_job(facade, storage, job_id="job-1", participants=None, expected_speaker_count=None):
     storage.save_audio(job_id, b"fake-wav-bytes", "reuniao.wav")
     facade._jobs.create(
         job_id=job_id,
         user_id="u1",
         title="Reunião de teste",
         participants=participants if participants is not None else [Participant(id="p1", name="Leandro")],
-        expected_speaker_count=None,
+        expected_speaker_count=expected_speaker_count,
     )
 
 
@@ -429,3 +429,58 @@ def test_carregar_banco_nao_ve_perfil_de_outro_usuario(tmp_path):
     banco, _nomes = facade._carregar_banco_e_nomes("u2", participantes)
 
     assert banco == {}
+
+
+# ---------------------------------------------------------------------------
+# expected_speaker_count chega à diarização como contagem, não como teto
+# ---------------------------------------------------------------------------
+
+
+def _capturar_kwargs_da_diarizacao(monkeypatch):
+    recebido = {}
+
+    def fake_diarizar(audio_path, transcricao, expected_speaker_count=None, exact_speaker_count=False):
+        recebido["expected_speaker_count"] = expected_speaker_count
+        recebido["exact_speaker_count"] = exact_speaker_count
+        return _diarizacao_fake()
+
+    monkeypatch.setattr(diarization_service, "diarizar", fake_diarizar)
+    return recebido
+
+
+def test_expected_speaker_count_do_job_chega_como_contagem_exata(tmp_path, monkeypatch):
+    """Regressão: quando o job informa quantas pessoas há, isso é contagem.
+
+    O serviço sempre soube fazer isso (`exact_speaker_count=True` usa
+    `num_speakers`), mas o facade nunca pedia — então o valor virava
+    `max_speakers` e o pyannote seguia livre para devolver menos falantes que
+    o informado. O parâmetro existia e era inalcançável pelo caminho real.
+    Ver docs/PENDENCIAS.md.
+    """
+    facade, storage = _nova_facade(tmp_path)
+    _preparar_job(facade, storage, expected_speaker_count=3)
+    _mock_estagios_felizes(monkeypatch)
+    recebido = _capturar_kwargs_da_diarizacao(monkeypatch)
+
+    facade.executar("job-1")
+
+    assert recebido["expected_speaker_count"] == 3
+    assert recebido["exact_speaker_count"] is True
+
+
+def test_sem_expected_speaker_count_a_diarizacao_decide_sozinha(tmp_path, monkeypatch):
+    """O caso de hoje: o app ainda não coleta o campo, então ele vem None.
+
+    `diarizar()` cai sozinho no range min/max de Settings quando não há
+    contagem — pedir exatidão sobre um valor ausente não pode virar erro nem
+    forçar nada.
+    """
+    facade, storage = _nova_facade(tmp_path)
+    _preparar_job(facade, storage, expected_speaker_count=None)
+    _mock_estagios_felizes(monkeypatch)
+    recebido = _capturar_kwargs_da_diarizacao(monkeypatch)
+
+    facade.executar("job-1")
+
+    assert recebido["expected_speaker_count"] is None
+    assert facade._jobs.get("job-1").status == JobStatusValue.DONE
