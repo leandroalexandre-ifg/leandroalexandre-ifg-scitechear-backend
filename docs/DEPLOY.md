@@ -130,20 +130,27 @@ consequências dele. A ordem importa: 1 e 2 são o que autoriza o 4.
 
 1. **Liberar a porta no firewall** — *exige quem administra o servidor*.
    Idealmente restrito à faixa do laboratório, não à `10.4.0.0/16` inteira.
-   Enquanto o estado do firewall for desconhecido, o bind na rede tem que ser
-   tratado como "alcançável por qualquer máquina da instituição".
-2. **Decidir sobre TLS.** O tráfego é HTTP puro; na rede institucional isso
-   significa senha e áudio de reunião em claro para quem estiver na mesma
-   rede. Um certificado próprio exige configuração no app Android
-   (`network_security_config` ou CA instalada), então tem uma perna na Fase 7 —
-   não dá para resolver só do lado do servidor. Para o piloto, um certificado
-   autoassinado basta (o acesso já é por VPN interna).
+   **Atualizado em 2026-09-06:** o estado do firewall não é mais desconhecido —
+   o `ufw` está ativo com `DEFAULT_INPUT_POLICY="DROP"`, ou seja, nega por
+   padrão e a porta está fechada mesmo que um processo escute nela. As regras
+   em si continuam ilegíveis sem o admin (`0640 root:root`), então *confirmar*
+   a regra segue sendo com ele — mas o risco de "abrir sem saber" acabou.
+   Único item ainda bloqueante.
+2. ~~**Decidir sobre TLS.**~~ **Decidido e montado em 2026-09-06** — ver
+   [`TLS.md`](TLS.md). Um proxy Caddy (binário de usuário, sem root) termina o
+   TLS com uma CA interna e repassa em loopback; a API nunca escuta na rede.
+   Instalado e verificado ponta a ponta **em loopback**, incluindo o WebSocket
+   sobre `wss` — falta só o item 1 e a virada de `bind`. A perna da Fase 7
+   continua existindo (o app precisa carregar a raiz da CA), e o `TLS.md`
+   documenta por que `network_security_config` sozinho não basta em Flutter.
 3. ~~**Fechar as portas de entrada abertas.**~~ **Feito** (ver abaixo): teto de
    upload e allowlist de e-mail no registro, esta última já ativa em produção
    com `ifg.edu.br` e confirmada recusando domínio de fora com `403`. Reduzem a
    superfície, mas **não cifram nada** — não substituem o item 2.
 4. **Bind na interface da rede.** Feito e revertido em 2026-09-05 (ver "Os três
-   serviços"). Só reabrir depois de 1 e 2, com confirmação de Leandro.
+   serviços"). Só reabrir depois de 1 e 2, com confirmação de Leandro. Com o
+   proxy do item 2, quem passa a escutar na rede é **o proxy**, não a API — o
+   bind da API em `127.0.0.1` deixa de ser provisório e vira definitivo.
 
 **`10.4.0.0/16` é a instituição inteira, não só o laboratório.** É a razão de
 os dois tetos abaixo existirem: com a API em loopback, quem chega à porta já

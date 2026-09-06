@@ -1,0 +1,92 @@
+# SciTech Ear - proxy TLS na frente da API
+#
+# Motivo de existir: a API fala HTTP puro e fica em 127.0.0.1:18080. Para o
+# piloto (professor via VPN, alunos no laboratorio) alguem precisa escutar na
+# rede, e nao pode ser a API - senha e audio de reuniao viajariam em claro pela
+# 10.4.0.0/16, que e a instituicao inteira. Este proxy termina o TLS e repassa
+# em loopback. A API NUNCA escuta na rede; ver docs/DEPLOY.md e docs/TLS.md.
+#
+# Copia implantada: este mesmo arquivo, lido direto do checkout pela unidade
+# scitechear-proxy.service (mesma logica dos outros servicos - a branch com
+# checkout e o que roda).
+{
+	# CA local e certificados FORA do checkout, pelo mesmo motivo de storage/
+	# e hf-cache: um `git clean` ou re-clone nao pode levar a chave da CA
+	# embora. Se ela sumir, todo app ja instalado para de confiar no servidor
+	# e precisa de nova build - a chave e o que ha de mais caro de perder aqui.
+	storage file_system /data/projects/leandro/scitechear/caddy
+
+	# Sem root: por padrao o Caddy tentaria instalar a raiz no truststore do
+	# sistema (pede sudo). Nao e preciso - o app Android carrega a raiz
+	# empacotada nele via network_security_config, e o truststore da maquina
+	# compartilhada nao e problema nosso para mexer.
+	skip_install_trust
+
+	# O endpoint de administracao (default 127.0.0.1:2019) reconfigura o Caddy
+	# sem autenticacao. Nada aqui precisa dele; a maquina e compartilhada.
+	admin off
+
+	# Um listener so, uma regra de firewall so: sem redirect 80->443 (que
+	# abriria a porta 80) e sem HTTP/3 (que pediria UDP alem do TCP ao admin).
+	# O cliente e um app Dart/Android, que nao fala h3 mesmo.
+	auto_https disable_redirects
+	servers {
+		protocols h1 h2
+	}
+
+	# Cliente que fala com um ENDERECO IP nao manda SNI - a RFC 6066 proibe
+	# nome que seja endereco. Sem esta linha o Caddy nao acha o site pelo SNI
+	# e o handshake morre com "tlsv1 alert internal error", antes de qualquer
+	# resposta HTTP. Verificado em 2026-09-06; e o erro que mais custa a
+	# diagnosticar aqui, porque nao parece problema de certificado.
+	default_sni 10.4.254.201
+}
+
+# O endereco do site define a IDENTIDADE do certificado (o SAN), nao onde se
+# escuta - quem decide isso e o `bind` abaixo.
+https://10.4.254.201:18443 {
+	# LOOPBACK ate o piloto ser autorizado. Trocar para `bind 0.0.0.0` e o
+	# unico passo que poe este servico na rede - e ele so acontece depois de:
+	#   (a) o administrador do NumbERS confirmar a regra de firewall da porta
+	#       (o ufw esta ativo com politica de entrada DROP, entao hoje a porta
+	#       esta fechada mesmo que o processo escute nela);
+	#   (b) Leandro confirmar.
+	# Use 0.0.0.0, NUNCA 10.4.254.201: o endereco vem por DHCP e bind num IP
+	# que pode mudar quebra o servico na renovacao da lease (a unidade da API
+	# ja carrega esse mesmo aviso).
+	bind 127.0.0.1
+
+	# CA local do proprio Caddy: raiz de 10 anos, folha de 12h renovada
+	# sozinha enquanto o servico roda. E o que dispensa reemitir certificado
+	# na mao - inclusive quando o IP do DHCP mudar, porque a raiz (que e o que
+	# o app confia) nao muda junto.
+	tls internal
+
+	# O X-Forwarded-For nao precisa de configuracao aqui, e isso e menos obvio
+	# do que parece. Desde o Caddy 2.7 a lista `trusted_proxies` comeca VAZIA,
+	# entao um X-Forwarded-For que o CLIENTE mandar e descartado, nao anexado -
+	# medido em 2026-09-06: forjando `X-Forwarded-For: 10.4.1.99` o upstream
+	# recebeu so o endereco real. Do outro lado, o uvicorn confia em 127.0.0.1
+	# por default (--forwarded-allow-ips) e reescreve request.client a partir
+	# do cabecalho - tambem medido, com um cliente vindo de 127.0.0.2. As duas
+	# pontas juntas mantem o rate limiting de /auth por cliente real, que e o
+	# que um proxy costuma quebrar silenciosamente (todo mundo virando
+	# 127.0.0.1 num balde so). Nao adicione `header_up X-Forwarded-For` aqui:
+	# alem de redundante, o Caddy avisa que e desnecessario no `validate`.
+	reverse_proxy 127.0.0.1:18080
+
+	log {
+		# O WebSocket de progresso autentica por query string
+		# (/ws/{job_id}?token=...) porque o handshake nao aceita header
+		# Authorization em todo cliente. Sem este filtro, cada conexao
+		# escreveria um JWT valido no journald - log nao e lugar de credencial.
+		format filter {
+			wrap console
+			fields {
+				request>uri query {
+					replace token REDACTED
+				}
+			}
+		}
+	}
+}

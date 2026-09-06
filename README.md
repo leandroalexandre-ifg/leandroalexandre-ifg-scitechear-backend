@@ -85,6 +85,7 @@ Inclui um glossário de termos, o raciocínio por trás de cada decisão
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Visão geral do sistema, glossário, contexto e motivação, máquina de estados do job, contrato de dados |
 | [`docs/BACKEND_ARCHITECTURE.md`](docs/BACKEND_ARCHITECTURE.md) | Camadas (API/Services/Repositories/Models), cada serviço explicado, `legacy/`, `prompts/`, como rodar localmente |
 | [`docs/DEPLOY.md`](docs/DEPLOY.md) | Como o backend está implantado: serviços, portas, como o app alcança o backend, armadilhas conhecidas |
+| [`docs/TLS.md`](docs/TLS.md) | Plano de TLS: proxy Caddy com CA interna, o que já está verificado, o que depende do admin, e como o app Android confia na CA |
 | [`docs/PENDENCIAS.md`](docs/PENDENCIAS.md) | Pendências de calibração em acompanhamento |
 | [`docs/E2E_FASE8.md`](docs/E2E_FASE8.md) | Relatório do E2E no servidor de deploy: cenários, identificação medida por tempo de fala, achados |
 | [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) | Instrumentação e medições de tempo por estágio (Mac e servidor NumbERS) |

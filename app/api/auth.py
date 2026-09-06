@@ -66,9 +66,14 @@ async def me(user_id: str = Depends(get_current_user_id)) -> UserPublic:
 
 
 def _client_ip(request: Request) -> str:
-    # Sem proxy reverso confiável configurado ainda (dev/V1) — usar
-    # request.client.host direto. Revisar para X-Forwarded-For quando a
-    # topologia de deploy (nginx/load balancer) for definida.
+    # A topologia de deploy foi definida (proxy Caddy terminando TLS, ver
+    # docs/TLS.md) e esta linha continua correta como está — medido em
+    # 2026-09-06, não presumido. O uvicorn confia em 127.0.0.1 por default
+    # (--forwarded-allow-ips) e já reescreve request.client a partir do
+    # X-Forwarded-For que o proxy põe; e o Caddy descarta o X-Forwarded-For
+    # que o cliente mandar, porque sua lista trusted_proxies começa vazia.
+    # Ler o cabeçalho aqui na mão seria pior: passaria a aceitar o valor
+    # forjado pelo cliente quando a API for chamada direto em loopback.
     return request.client.host if request.client else ""
 
 
