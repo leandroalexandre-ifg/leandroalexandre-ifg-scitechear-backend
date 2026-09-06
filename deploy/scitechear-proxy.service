@@ -1,0 +1,34 @@
+# Copia de referencia, VERSIONADA. A copia que o systemd le fica em
+# ~/.config/systemd/user/scitechear-proxy.service - copie, nao aponte para
+# dentro do checkout, senao trocar de branch troca a unidade junto.
+#
+#   cp deploy/scitechear-proxy.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#
+# Unidade de USUARIO, como as outras tres (api, worker, ollama): nao precisa
+# do admin para instalar, atualizar ou reiniciar. Depende de Linger=yes, que
+# ja esta ligado para este usuario - sem ele os servicos morrem no logout.
+
+[Unit]
+Description=SciTech Ear - proxy TLS (Caddy) na frente da API
+Documentation=file:///data/projects/leandro/leandroalexandre-ifg-scitechear-backend/docs/TLS.md
+After=network-online.target scitechear-api.service
+
+[Service]
+Type=notify
+# O Caddyfile e lido do checkout (mesma logica dos outros servicos: a branch
+# com checkout e o que roda). O WorkingDirectory nao e estritamente necessario
+# porque o --config e absoluto, mas mantem os caminhos relativos previsiveis
+# se alguem editar o arquivo.
+WorkingDirectory=/data/projects/leandro/leandroalexandre-ifg-scitechear-backend
+ExecStart=/home/leandro/.local/bin/caddy run --config /data/projects/leandro/leandroalexandre-ifg-scitechear-backend/deploy/Caddyfile
+# Recarrega sem derrubar conexao - troca de porta ou de bind nao precisa de
+# restart, o que importa quando houver upload de reuniao em curso.
+ExecReload=/home/leandro/.local/bin/caddy reload --config /data/projects/leandro/leandroalexandre-ifg-scitechear-backend/deploy/Caddyfile --force
+Restart=always
+RestartSec=5
+NoNewPrivileges=yes
+SyslogIdentifier=scitechear-proxy
+
+[Install]
+WantedBy=default.target
