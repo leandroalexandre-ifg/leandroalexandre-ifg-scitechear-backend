@@ -7,7 +7,9 @@
 Do nosso lado não há nada bloqueado: o §3.2 foi implementado e o contrato
 está em `docs/RESPOSTA_MEETINGS_2026-09-07.md`. O que sobra são pedidos, em
 ordem de importância. O item 1 é o único que eu mandaria mesmo que fosse
-sozinho — ele pode estar produzindo problema agora, em silêncio.
+sozinho — ele pode estar produzindo problema agora, em silêncio. Nenhum dos
+quatro tem prazo: o que muda de item para item é a consequência de deixar
+para depois.
 
 ---
 
@@ -50,26 +52,29 @@ a outra impede que acumule.
 Não é urgente no sentido de travar alguém. É urgente no sentido de que cada
 semana que passa acumula mais, e não temos como medir quanto.
 
-## 2. O teste conjunto — precisamos de uma data
+## 2. O teste conjunto — data em aberto, mas a ordem importa
 
-É o que fecha a conta. Vale reler o que os dois lados já escreveram: os 26
-testes do app usam um adaptador HTTP falso, e o nosso E2E da Fase 8 usou um
-cliente Python. **A conversa real entre o app e o backend nunca aconteceu.**
+Não estamos marcando data: ela fica em aberto dos dois lados, e quando for
+marcada parte daqui. O que pedimos agora é só que ele não seja empurrado para
+depois de mais uma rodada de integração.
 
-Cada rodada de relatório aumenta a superfície de coisas integradas e não
-exercitadas. Hoje isso inclui autenticação inteira, upload com token,
-WebSocket com `?token=`, escopo por usuário e agora as três rotas de
-`/meetings`.
+Vale reler o que os dois lados já escreveram: os 26 testes do app usam um
+adaptador HTTP falso, e o nosso E2E da Fase 8 usou um cliente Python. **A
+conversa real entre o app e o backend nunca aconteceu.** Cada rodada de
+relatório aumenta a superfície de coisas integradas e não exercitadas — hoje
+isso inclui autenticação inteira, upload com token, WebSocket com `?token=`,
+escopo por usuário e agora as três rotas de `/meetings`.
 
-**Sugestão de ordem:** o teste conjunto **antes** da migração do histórico. O
-roteiro de vocês (§8 do primeiro relatório) valida autenticação, upload,
-WebSocket e pipeline ponta a ponta, que é a base de tudo o mais. A migração
-do `/meetings` pode vir depois, com a base já provada — e aí um bug aparece
-com uma causa possível, não com cinco.
+**O pedido concreto é de ordem, não de calendário:** o teste conjunto **antes**
+da migração do histórico. O roteiro de vocês (§8 do primeiro relatório) valida
+autenticação, upload, WebSocket e pipeline ponta a ponta, que é a base de todo
+o resto. A migração do `/meetings` rende mais depois disso — com a base já
+provada, um bug aparece com uma causa possível em vez de cinco.
 
 Do nosso lado o que precisa estar de pé é a API e o worker
 (`python -m app.worker`), e os logs de 401 e de fechamento do WS já estão
-prontos para ajudar a investigar o que aparecer.
+prontos para ajudar a investigar o que aparecer. Quando vocês quiserem rodar,
+é só avisar.
 
 ## 3. Três coisas para a migração do `/meetings`
 
