@@ -174,3 +174,19 @@ def test_ws_fecha_ao_estourar_o_teto_de_vida(client, wav_bytes, monkeypatch):
         assert ws.receive_json()["status"] == "queued"
         with pytest.raises(WebSocketDisconnect):
             ws.receive_json()
+
+
+def test_ws_fecha_4404_quando_a_reuniao_e_removida_com_a_conexao_aberta(client, wav_bytes):
+    """DELETE /meetings de outra tela, com a tela de processamento aberta.
+    Sem o 4404 explícito isto seria um encerramento normal (1000), que do
+    lado do app é indistinguível de "o job terminou"."""
+    job_id = _upload(client, wav_bytes).json()["job_id"]
+
+    with client.websocket_connect(f"/ws/{job_id}?token={_token(client)}") as ws:
+        assert ws.receive_json()["status"] == "queued"
+
+        assert client.delete(f"/meetings/{job_id}").status_code == 204
+
+        with pytest.raises(WebSocketDisconnect) as exc:
+            ws.receive_json()
+    assert exc.value.code == 4404
