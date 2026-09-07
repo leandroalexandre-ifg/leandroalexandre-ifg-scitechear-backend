@@ -1,0 +1,84 @@
+<svg width="920" height="620" viewBox="0 0 920 620" xmlns="http://www.w3.org/2000/svg" font-family="Arial, Helvetica, sans-serif">
+<defs>
+<marker id="aN" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M2 1L8 5L2 9" fill="none" stroke="#5F5E5A" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+</marker>
+<marker id="aR" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M2 1L8 5L2 9" fill="none" stroke="#B42318" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+</marker>
+</defs>
+<rect width="920" height="620" fill="#FFFFFF"/>
+<text x="30" y="34" font-size="18" font-weight="bold" fill="#111827">Autenticação e Ciclo de Vida da Sessão</text>
+<text x="30" y="54" font-size="12" fill="#5F5E5A">Access token stateless de 30 min; refresh rastreado em banco e rotacionado a cada uso. Toda rota fora de /auth exige Bearer.</text>
+
+<!-- entrada -->
+<g font-size="12" text-anchor="middle">
+  <rect x="30" y="86" width="200" height="72" rx="10" fill="#F1EFE8" stroke="#5F5E5A"/>
+  <text x="130" y="110" font-weight="bold" fill="#2C2C2A">POST /auth/register</text>
+  <text x="130" y="128" font-size="11" fill="#5F5E5A">201 + UserPublic</text>
+  <text x="130" y="146" font-size="11" font-weight="bold" fill="#B42318">não devolve tokens</text>
+
+  <rect x="290" y="86" width="200" height="72" rx="10" fill="#EAF3DE" stroke="#3B6D11"/>
+  <text x="390" y="110" font-weight="bold" fill="#173404">POST /auth/login</text>
+  <text x="390" y="128" font-size="11" fill="#3B6D11">200 + TokenPair</text>
+  <text x="390" y="146" font-size="11" fill="#3B6D11">expires_in: 1800 (segundos)</text>
+</g>
+<path d="M232 122 L286 122" fill="none" stroke="#5F5E5A" stroke-width="1.6" marker-end="url(#aN)"/>
+<text x="259" y="114" font-size="10" text-anchor="middle" fill="#5F5E5A">o app</text>
+<text x="259" y="140" font-size="10" text-anchor="middle" fill="#5F5E5A">encadeia</text>
+
+<!-- o par -->
+<g font-size="12" text-anchor="middle">
+  <rect x="30" y="196" width="400" height="86" rx="10" fill="#E6F1FB" stroke="#185FA5"/>
+  <text x="230" y="220" font-weight="bold" fill="#042C53">access_token — 30 min</text>
+  <text x="230" y="240" font-size="11" fill="#0C447C">stateless: validado pela assinatura HS256, nunca lido no banco</text>
+  <text x="230" y="258" font-size="11" fill="#0C447C">Authorization: Bearer &lt;token&gt; em toda rota protegida</text>
+  <text x="230" y="274" font-size="11" fill="#0C447C">WS /ws/{job_id}?token=&lt;token&gt; — handshake não aceita header</text>
+
+  <rect x="470" y="196" width="420" height="86" rx="10" fill="#FAEEDA" stroke="#B45309"/>
+  <text x="680" y="220" font-weight="bold" fill="#7A3A02">refresh_token — 30 dias</text>
+  <text x="680" y="240" font-size="11" fill="#854F0B">rastreado: uma linha por jti em refresh_tokens</text>
+  <text x="680" y="258" font-size="11" fill="#854F0B">é o que torna o logout real em vez de decorativo</text>
+  <text x="680" y="274" font-size="11" fill="#854F0B">nunca aparece em nenhum outro campo de resposta</text>
+</g>
+<g stroke="#3B6D11" stroke-width="1.5" marker-end="url(#aN)">
+  <path d="M370 160 L300 192" fill="none"/>
+  <path d="M420 160 L560 192" fill="none"/>
+</g>
+
+<!-- rotacao -->
+<g font-size="12" text-anchor="middle">
+  <rect x="470" y="320" width="420" height="118" rx="10" fill="#FAECE7" stroke="#993C1D"/>
+  <text x="680" y="344" font-weight="bold" fill="#4A1B0C">POST /auth/refresh — rotação estrita</text>
+  <text x="680" y="366" font-size="11" fill="#993C1D">1. revoga o jti apresentado</text>
+  <text x="680" y="384" font-size="11" fill="#993C1D">2. só então emite um par novo</text>
+  <text x="680" y="406" font-size="11" font-weight="bold" fill="#4A1B0C">uso único, sem janela de graça</text>
+  <text x="680" y="426" font-size="11" fill="#993C1D">o app serializa renovações concorrentes por causa disso</text>
+
+  <rect x="470" y="456" width="420" height="60" rx="10" fill="#F1EFE8" stroke="#5F5E5A"/>
+  <text x="680" y="478" font-size="11" fill="#2C2C2A">Reapresentar um token já revogado devolve 401 só naquela chamada:</text>
+  <text x="680" y="496" font-size="11" font-weight="bold" fill="#2C2C2A">não há detecção de reuso em cascata — a sessão nova sobrevive.</text>
+</g>
+<path d="M680 286 L680 316" fill="none" stroke="#B45309" stroke-width="1.5" marker-end="url(#aN)"/>
+<path d="M780 440 L780 452" fill="none" stroke="#5F5E5A" stroke-width="1.4" marker-end="url(#aN)"/>
+<path d="M470 380 L440 380 L440 250" fill="none" stroke="#993C1D" stroke-width="1.5" stroke-dasharray="5 3" marker-end="url(#aN)"/>
+<text x="452" y="316" font-size="10" fill="#993C1D">par novo</text>
+
+<!-- saida + limites -->
+<g font-size="12" text-anchor="middle">
+  <rect x="30" y="320" width="400" height="60" rx="10" fill="#E1F5EE" stroke="#0F6E56"/>
+  <text x="230" y="344" font-weight="bold" fill="#04342C">POST /auth/logout — revoga UM jti</text>
+  <text x="230" y="364" font-size="11" fill="#0F6E56">idempotente: 204 sempre. Sair num aparelho não derruba os outros.</text>
+
+  <rect x="30" y="398" width="400" height="118" rx="10" fill="#FBE9E7" stroke="#B42318"/>
+  <text x="230" y="420" font-weight="bold" fill="#7A160C">Barreiras antes de existir uma sessão</text>
+  <text x="230" y="442" font-size="11" fill="#4A1B0C">allowlist de domínio institucional → 403 no register</text>
+  <text x="230" y="460" font-size="11" fill="#4A1B0C">login: 5 falhas / 15 min, por e-mail → 429 + Retry-After</text>
+  <text x="230" y="478" font-size="11" fill="#4A1B0C">register: 10 falhas / 60 min, por IP → 429 + Retry-After</text>
+  <text x="230" y="500" font-size="11" font-style="italic" fill="#4A1B0C">403 e 409 contam como falha; um login bem-sucedido zera o contador.</text>
+</g>
+
+<text x="30" y="556" font-size="11" fill="#6B7280">O Retry-After devolve a JANELA inteira, não o tempo restante — por isso o app diz "aguarde até X minutos", não "em X minutos".</text>
+<text x="30" y="576" font-size="11" fill="#6B7280">user_id é um uuid4 imutável e é a chave de escopo de tudo: jobs, resultados e perfis de voz. Não existe rota que apague uma conta.</text>
+<text x="30" y="596" font-size="11" fill="#6B7280">Senha: Argon2id. O token do WebSocket é redigido do log de acesso (app/main.py) — credencial não vai para o journal.</text>
+</svg>

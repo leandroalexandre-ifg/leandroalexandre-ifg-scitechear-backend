@@ -225,6 +225,22 @@ biométrico entre elas. Ver
 
 ![Contrato de dados canônico](diagrams/06-data-contract.svg)
 
+## Topologia de deploy
+
+Como o sistema está implantado, e por que nada dele escuta na rede — o
+diagrama responde à pergunta que mais custa tempo a quem chega:
+"estou na rede do servidor, por que não alcanço a API?".
+
+![Topologia de deploy e alcance de rede](diagrams/05-deploy-topologia.svg)
+
+## Autenticação e sessão
+
+O ciclo de vida de uma sessão, de `register` a `logout`, com as durações, a
+rotação estrita do refresh token e as barreiras que existem antes de haver
+sessão alguma.
+
+![Autenticação e ciclo de vida da sessão](diagrams/07-auth-sessao.svg)
+
 O resultado de uma reunião processada com sucesso tem sempre esta forma:
 
 ```json

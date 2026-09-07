@@ -90,6 +90,7 @@ Inclui um glossário de termos, o raciocínio por trás de cada decisão
 | [`docs/E2E_FASE8.md`](docs/E2E_FASE8.md) | Relatório do E2E no servidor de deploy: cenários, identificação medida por tempo de fala, achados |
 | [`docs/E2E_APP_2026-09-07.md`](docs/E2E_APP_2026-09-07.md) | Relatório do primeiro E2E com o **app real** contra o backend implantado: medições, achados e o que ficou de fora |
 | [`docs/TESTE_CONJUNTO_NUMBERS.md`](docs/TESTE_CONJUNTO_NUMBERS.md) | Como ligar o aparelho ao backend do servidor (túnel SSH + `adb reverse`), contas, limites e o que olhar quando falha |
+| [`docs/ROTEIRO_TESTES_PENDENTES.md`](docs/ROTEIRO_TESTES_PENDENTES.md) | Os três testes que faltam: reunião longa, reinstalação do app e migração do histórico — com o que medir em cada um |
 | [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) | Instrumentação e medições de tempo por estágio (Mac e servidor NumbERS) |
 
 Se você é novo neste projeto, comece por

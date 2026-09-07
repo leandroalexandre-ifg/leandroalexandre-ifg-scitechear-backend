@@ -1,0 +1,87 @@
+<svg width="920" height="640" viewBox="0 0 920 640" xmlns="http://www.w3.org/2000/svg" font-family="Arial, Helvetica, sans-serif">
+<defs>
+<marker id="arrN" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M2 1L8 5L2 9" fill="none" stroke="#5F5E5A" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+</marker>
+<marker id="arrR" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M2 1L8 5L2 9" fill="none" stroke="#B42318" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+</marker>
+</defs>
+<rect width="920" height="640" fill="#FFFFFF"/>
+<text x="30" y="34" font-size="18" font-weight="bold" fill="#111827">Topologia de Deploy e Alcance de Rede</text>
+<text x="30" y="54" font-size="12" fill="#5F5E5A">Nada do backend escuta na rede. O único ponto exposto é o SSH — e é por dentro dele que o aparelho alcança a API.</text>
+
+<!-- cadeia: aparelho -> mac -> servidor -->
+<g font-size="12" text-anchor="middle">
+  <rect x="30" y="92" width="180" height="72" rx="10" fill="#F1EFE8" stroke="#5F5E5A"/>
+  <text x="120" y="118" font-weight="bold" fill="#2C2C2A">Aparelho Android</text>
+  <text x="120" y="136" font-size="11" fill="#5F5E5A">app aponta para</text>
+  <text x="120" y="152" font-size="11" font-weight="bold" fill="#2C2C2A">127.0.0.1:8000</text>
+
+  <rect x="300" y="92" width="210" height="72" rx="10" fill="#F1EFE8" stroke="#5F5E5A"/>
+  <text x="405" y="118" font-weight="bold" fill="#2C2C2A">Máquina de desenvolvimento</text>
+  <text x="405" y="136" font-size="11" fill="#5F5E5A">ssh -L 8000 : 127.0.0.1 : 18080</text>
+  <text x="405" y="152" font-size="11" fill="#5F5E5A">ExitOnForwardFailure=yes</text>
+
+  <rect x="600" y="92" width="290" height="72" rx="10" fill="#E6F1FB" stroke="#185FA5"/>
+  <text x="745" y="118" font-weight="bold" fill="#042C53">Servidor NumbERS — 10.4.254.201</text>
+  <text x="745" y="136" font-size="11" fill="#0C447C">sshd 0.0.0.0:22</text>
+  <text x="745" y="152" font-size="11" font-weight="bold" fill="#0C447C">a única porta aberta na rede</text>
+</g>
+<g stroke="#5F5E5A" stroke-width="1.6" marker-end="url(#arrN)">
+  <path d="M212 128 L296 128" fill="none"/>
+  <path d="M512 128 L596 128" fill="none"/>
+</g>
+<g font-size="10" text-anchor="middle" fill="#5F5E5A">
+  <text x="254" y="120">adb reverse</text>
+  <text x="254" y="146">(cabo USB)</text>
+  <text x="554" y="120">túnel SSH</text>
+  <text x="554" y="146">(porta 22)</text>
+</g>
+
+<!-- painel: dentro do servidor -->
+<rect x="30" y="200" width="860" height="280" rx="12" fill="none" stroke="#5F5E5A" stroke-width="1.2" stroke-dasharray="6 4"/>
+<text x="46" y="224" font-size="13" font-weight="bold" fill="#2C2C2A">Dentro do NumbERS — quatro unidades systemd de usuário, todas em loopback</text>
+
+<g font-size="12" text-anchor="middle">
+  <rect x="52" y="242" width="192" height="66" rx="9" fill="#E6F1FB" stroke="#185FA5"/>
+  <text x="148" y="266" font-weight="bold" fill="#042C53">scitechear-api</text>
+  <text x="148" y="286" font-size="11" fill="#0C447C">127.0.0.1:18080</text>
+
+  <rect x="264" y="242" width="192" height="66" rx="9" fill="#E6F1FB" stroke="#185FA5"/>
+  <text x="360" y="262" font-weight="bold" fill="#042C53">scitechear-proxy</text>
+  <text x="360" y="278" font-size="11" fill="#0C447C">Caddy — termina TLS</text>
+  <text x="360" y="294" font-size="11" fill="#0C447C">127.0.0.1:18443</text>
+
+  <rect x="476" y="242" width="176" height="66" rx="9" fill="#EEEDFE" stroke="#5B3FA8"/>
+  <text x="564" y="266" font-weight="bold" fill="#26215C">ollama</text>
+  <text x="564" y="286" font-size="11" fill="#3B2E82">127.0.0.1:11434</text>
+
+  <rect x="672" y="242" width="196" height="66" rx="9" fill="#EAF3DE" stroke="#3B6D11"/>
+  <text x="770" y="262" font-weight="bold" fill="#173404">scitechear-worker</text>
+  <text x="770" y="278" font-size="11" fill="#3B6D11">consome a fila · GPU</text>
+  <text x="770" y="294" font-size="11" fill="#3B6D11">RTX 5090 compartilhada</text>
+</g>
+
+<!-- storage -->
+<g font-size="12" text-anchor="middle">
+  <rect x="150" y="374" width="620" height="82" rx="9" fill="#FAEEDA" stroke="#B45309"/>
+  <text x="460" y="398" font-weight="bold" fill="#7A3A02">/data/projects/leandro/scitechear/storage — fora do checkout git</text>
+  <text x="460" y="418" font-size="11" fill="#854F0B">jobs.db (SQLite/WAL) · jobs/&lt;job_id&gt;/{audio.wav, result.json} · voices/&lt;user_id&gt;/&lt;participant_id&gt;/</text>
+  <text x="460" y="440" font-size="11" font-style="italic" fill="#854F0B">API e worker são processos separados: o banco é o único ponto de encontro entre eles.</text>
+</g>
+<g stroke="#5F5E5A" stroke-width="1.4" marker-end="url(#arrN)">
+  <path d="M148 310 L148 352 L296 352 L296 370" fill="none"/>
+  <path d="M770 310 L770 352 L624 352 L624 370" fill="none"/>
+</g>
+<g stroke="#5B3FA8" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#arrN)">
+  <path d="M672 275 L656 275" fill="none"/>
+</g>
+
+<!-- alerta de alcance -->
+<rect x="30" y="504" width="860" height="106" rx="10" fill="#FBE9E7" stroke="#B42318"/>
+<text x="50" y="530" font-size="13" font-weight="bold" fill="#7A160C">Estar na rede do IFG não torna o backend alcançável</text>
+<text x="50" y="552" font-size="12" fill="#4A1B0C">A rede 10.4.0.0/16 é a instituição inteira, e o ufw nega por padrão (DEFAULT_INPUT_POLICY=DROP). A API e o proxy escutam só em</text>
+<text x="50" y="570" font-size="12" fill="#4A1B0C">127.0.0.1 — verificado em 07/09/2026: pelo IP da rede, tanto a :18080 quanto a :18443 recusam a conexão.</text>
+<text x="50" y="592" font-size="12" font-weight="bold" fill="#7A160C">Consequência prática: o túnel SSH é necessário na rede do IFG também. O que muda lá é só não precisar da VPN.</text>
+</svg>
