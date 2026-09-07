@@ -275,13 +275,23 @@ async def job_progress_ws(websocket: WebSocket, job_id: str, token: Optional[str
     """
     user_id = user_id_from_ws_token(token)
     if user_id is None:
-        # O app distingue 4401 de 4404 pelo código, mas de fora do app os dois
-        # eram indistinguíveis: a conexão só fechava, sem nenhum registro do
-        # motivo. Pedido do frontend para o teste conjunto de 07/09/2026.
-        # Sem o token e sem a query string na mensagem — o access token é
-        # credencial, e mantê-lo fora do journal é o mesmo motivo do
-        # RedigirTokenDeQueryString em app/main.py.
+        # accept() ANTES do close(4401), e a ordem é o ponto: fechar sem
+        # aceitar faz o servidor ASGI recusar o próprio handshake com HTTP
+        # 403, e o cliente recebe um erro de conexão sem close code nenhum —
+        # o 4401 que este código parece emitir jamais chegava ao app.
+        # Medido contra a API real em 07/09/2026 ('server rejected WebSocket
+        # connection: HTTP 403'); os testes com TestClient não pegam, porque
+        # ele entrega a mensagem de close direto pelo ASGI, sem handshake
+        # HTTP. Ver test_ws_codigos_de_fechamento_reais.py, que sobe um
+        # uvicorn de verdade justamente para esta classe de bug.
+        #
+        # O custo é aceitar por alguns milissegundos um handshake não
+        # autenticado, sem enviar byte nenhum de conteúdo. Vale: sem isso, o
+        # 4404 logo abaixo (que já aceita antes) e este se comportariam de
+        # formas diferentes parecendo idênticos no código — que foi
+        # exatamente como este bug nasceu.
         logger.info("WS /ws/%s fechado com 4401: token de acesso ausente ou inválido.", job_id)
+        await websocket.accept()
         await websocket.close(code=4401)
         return
 
