@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
 from fastapi import status as http_status
@@ -7,7 +7,7 @@ from fastapi import status as http_status
 from app.api.dependencies import get_current_user_id
 from app.api.jobs import _validate_wav
 from app.config import get_settings
-from app.models.participant import VoiceProfile, VoiceSampleUploadResponse
+from app.models.participant import EnrolledParticipant, VoiceProfile, VoiceSampleUploadResponse
 from app.repositories.voice_repository import VoiceRepository
 from app.services.voice_enrollment_service import VoiceEnrollmentService
 
@@ -17,6 +17,35 @@ router = APIRouter(tags=["participants"])
 def _enrollment_service() -> VoiceEnrollmentService:
     voices_root = Path(get_settings().storage_root) / "voices"
     return VoiceEnrollmentService(VoiceRepository(voices_root))
+
+
+@router.get("/participants", response_model=List[EnrolledParticipant])
+async def list_enrolled_participants(
+    user_id: str = Depends(get_current_user_id),
+) -> List[EnrolledParticipant]:
+    """Participantes do usuário autenticado que têm perfil de voz aqui.
+
+    Serve para o app RECUPERAR o cadastro depois de reinstalar. O
+    `participant_id` é gerado pelo app e vivia só no armazenamento local
+    dele, então desinstalar apagava o conjunto inteiro de ids de uma conta:
+    o usuário recadastrava as mesmas pessoas, recebia ids novos, e os perfis
+    antigos ficavam aqui inalcançáveis — sem rota que os listasse, ninguém
+    conseguia nem contar quantos eram, quanto mais apagá-los.
+
+    Devolve o `display_name` junto do id justamente para isto: com os dois, o
+    app reconstrói a lista local em vez de recomeçar do zero.
+    """
+    perfis = _enrollment_service().list_profiles(user_id)
+    return [
+        EnrolledParticipant(
+            participant_id=p.participant_id,
+            name=p.display_name,
+            sample_count=p.sample_count,
+            model_version=p.model_version,
+            updated_at=p.updated_at,
+        )
+        for p in perfis
+    ]
 
 
 @router.post("/participants/{participant_id}/voice-samples", response_model=VoiceSampleUploadResponse)

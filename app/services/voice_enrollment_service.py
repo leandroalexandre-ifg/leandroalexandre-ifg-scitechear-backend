@@ -7,7 +7,7 @@ guardadas a cada cadastro/atualização — nunca incremental), só migrando a
 chave de nome para participant_id. Recalcula o embedding SÓ aqui (cadastro),
 nunca a cada reunião.
 """
-from typing import Optional
+from typing import List, Optional
 
 import torch
 
@@ -56,6 +56,9 @@ class VoiceEnrollmentService:
 
     def get_profile(self, user_id: str, participant_id: str) -> Optional[VoiceProfileRecord]:
         return self._repository.load_profile(user_id, participant_id)
+
+    def list_profiles(self, user_id: str) -> List[VoiceProfileRecord]:
+        return self._repository.list_profiles(user_id)
 
     def delete_profile(self, user_id: str, participant_id: str) -> bool:
         return self._repository.delete_profile(user_id, participant_id)
