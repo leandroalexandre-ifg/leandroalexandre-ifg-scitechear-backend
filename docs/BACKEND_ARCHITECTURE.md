@@ -394,7 +394,13 @@ essa igualdade explicitamente.
   completo continua em `job_status_events`;
 - mesmo isolamento por `user_id` das rotas HTTP: job de outro usuário fecha com
   `4404`, indistinguível de inexistente (token ausente ou inválido fecha com
-  `4401`);
+  `4401` — e o `accept()` **antes** do `close(4401)` não é decorativo: fechar
+  sem aceitar faz o servidor ASGI recusar o handshake com HTTP 403, e o
+  cliente nunca vê close code nenhum. O bug existiu, passou por toda a suíte
+  com `TestClient` — que entrega a mensagem de close pelo ASGI, sem handshake
+  — e só apareceu ao exercitar a API implantada em 07/09/2026. Coberto agora
+  por `tests/test_ws_codigos_de_fechamento_reais.py`, que sobe um uvicorn de
+  verdade, e por `scripts/smoke_contrato.py`);
 - teto de vida por conexão (`WS_MAX_DURATION_SECONDS`, default 1h): job travado
   não segura a conexão para sempre — a API fecha e o app volta ao polling;
 - erro real do job chega ao app como `status: "error"` com `error.code`/
