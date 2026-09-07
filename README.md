@@ -88,6 +88,8 @@ Inclui um glossário de termos, o raciocínio por trás de cada decisão
 | [`docs/TLS.md`](docs/TLS.md) | Plano de TLS: proxy Caddy com CA interna, o que já está verificado, o que depende do admin, e como o app Android confia na CA |
 | [`docs/PENDENCIAS.md`](docs/PENDENCIAS.md) | Pendências de calibração em acompanhamento |
 | [`docs/E2E_FASE8.md`](docs/E2E_FASE8.md) | Relatório do E2E no servidor de deploy: cenários, identificação medida por tempo de fala, achados |
+| [`docs/E2E_APP_2026-09-07.md`](docs/E2E_APP_2026-09-07.md) | Relatório do primeiro E2E com o **app real** contra o backend implantado: medições, achados e o que ficou de fora |
+| [`docs/TESTE_CONJUNTO_NUMBERS.md`](docs/TESTE_CONJUNTO_NUMBERS.md) | Como ligar o aparelho ao backend do servidor (túnel SSH + `adb reverse`), contas, limites e o que olhar quando falha |
 | [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) | Instrumentação e medições de tempo por estágio (Mac e servidor NumbERS) |
 
 Se você é novo neste projeto, comece por
