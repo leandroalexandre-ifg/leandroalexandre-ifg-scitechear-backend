@@ -11,6 +11,42 @@
 
 ![Autenticação e ciclo de vida da sessão](diagrams/07-auth-sessao.svg)
 
+## Ferramental — o que de fato roda
+
+O diagrama abaixo é o inventário do ambiente real (levantado do servidor em
+07/09/2026, não do `requirements.txt`), com versões. Serve para responder
+sem ambiguidade a pergunta "qual banco de dados vocês usam?".
+
+![Ferramental e versões em produção](diagrams/08-stack-tecnologico.svg)
+
+**O banco é SQLite** — versão 3.45.1, um arquivo único (`jobs.db`, dentro do
+`STORAGE_ROOT`), em `journal_mode=WAL`, acessado pelo ORM do SQLAlchemy
+2.0.51. Não há servidor de banco, nem fila (Celery/Redis), nem cache.
+
+Cinco tabelas, divididas entre dois módulos que declaram `Base` próprias e
+compartilham o mesmo arquivo:
+
+| Tabela | Módulo | Para quê |
+|---|---|---|
+| `jobs` | `job_repository.py` | a reunião e o estado dela; é também a fila que o worker consome |
+| `job_status_events` | `job_repository.py` | histórico de transições, usado para medir tempo por estágio |
+| `users` | `user_repository.py` | contas |
+| `refresh_tokens` | `user_repository.py` | um registro por refresh token emitido — é o que torna o logout real |
+| `auth_failed_attempts` | `user_repository.py` | rate limiting de login e registro, sem infraestrutura nova |
+
+**Não há migração.** O schema é criado por `create_all()` no primeiro uso.
+O binário do Alembic existe no venv, mas é dependência transitiva: não há
+`alembic.ini` nem diretório de migrações, e nada no código o importa. A
+escolha se sustenta enquanto não houver dado de produção que não se possa
+recriar; quando houver, é aqui que a decisão muda.
+
+**Por que SQLite aguenta.** O volume de escrita é de poucas transições por
+job, o WAL faz leitores concorrentes não bloquearem o escritor, e o desenho
+pressupõe **um worker por vez** — o pipeline é GPU-bound e a máquina tem uma
+GPU compartilhada, então concorrência de escrita nunca foi o gargalo. Trocar
+por PostgreSQL é uma mudança de `DATABASE_URL`, sem mexer em código: o
+`database_url_efetivo` já aceita qualquer URL do SQLAlchemy.
+
 O backend segue uma separação estrita de responsabilidades, organizada em
 quatro camadas que só conversam em uma direção — de cima para baixo:
 
