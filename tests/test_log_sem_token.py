@@ -8,8 +8,10 @@ ainda dentro da validade. Ver app/main.py.
 import logging
 
 import pytest
+from fastapi.testclient import TestClient
 
 from app.main import (
+    app,
     _LOGGERS_QUE_REGISTRAM_A_URL,
     RedigirTokenDeQueryString,
     instalar_filtro_de_token,
@@ -141,3 +143,23 @@ def test_o_filtro_fica_preso_em_cada_logger_que_pode_emitir(nome_do_logger, capl
         assert "token=REDACTED" in caplog.text
     finally:
         logger_alvo.filters = filtros_antes
+
+
+def test_401_loga_o_motivo_sem_vazar_o_token(caplog):
+    """Pedido do frontend para o teste conjunto (07/09/2026): distinguir, do
+    lado do servidor, "o app não mandou token" de "mandou um que não serve".
+    A restrição que anda junto: o motivo vai para o log, a credencial não."""
+    sem_header = TestClient(app)
+
+    with caplog.at_level(logging.INFO, logger="app.api.dependencies"):
+        assert sem_header.get("/meetings").status_code == 401
+    assert "401 em GET /meetings" in caplog.text
+    assert "Authorization ausente" in caplog.text
+
+    caplog.clear()
+    token_falso = "nao.e.um.jwt.valido"
+    sem_header.headers.update({"Authorization": f"Bearer {token_falso}"})
+    with caplog.at_level(logging.INFO, logger="app.api.dependencies"):
+        assert sem_header.get("/meetings").status_code == 401
+    assert "inválido ou expirado" in caplog.text
+    assert token_falso not in caplog.text

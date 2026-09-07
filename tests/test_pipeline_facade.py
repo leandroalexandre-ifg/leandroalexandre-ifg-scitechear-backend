@@ -484,3 +484,30 @@ def test_sem_expected_speaker_count_a_diarizacao_decide_sozinha(tmp_path, monkey
 
     assert recebido["expected_speaker_count"] is None
     assert facade._jobs.get("job-1").status == JobStatusValue.DONE
+
+
+def test_job_removido_durante_o_processamento_nao_deixa_lixo_em_disco(tmp_path, monkeypatch):
+    """DELETE /meetings recusa remover um job em processamento, mas sobra uma
+    janela: entre o worker escolher um job em `queued` e o pipeline sair de
+    `queued`, a remoção ainda é permitida. Sem a guarda no fim de executar(),
+    _results.save() recriaria o diretório que a remoção acabou de apagar —
+    órfão em disco que ninguém mais lista, num servidor compartilhado."""
+    facade, storage = _nova_facade(tmp_path)
+    _preparar_job(facade, storage)
+    _mock_estagios_felizes(monkeypatch)
+
+    original = question_service.extract_explicit_questions
+
+    def _remover_o_job_no_meio(formatter):
+        # Simula a remoção chegando com o pipeline já rodando.
+        facade._jobs.delete_owned("job-1", "u1")
+        storage.delete_job("job-1")
+        return original(formatter)
+
+    monkeypatch.setattr(question_service, "extract_explicit_questions", _remover_o_job_no_meio)
+
+    facade.executar("job-1")
+
+    assert facade._jobs.get("job-1") is None
+    assert facade._results.load("job-1") is None
+    assert not storage.job_dir("job-1").exists()
