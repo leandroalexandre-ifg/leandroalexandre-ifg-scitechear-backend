@@ -106,6 +106,38 @@ class VoiceRepository:
             updated_at=datetime.fromisoformat(data["updated_at"]),
         )
 
+    def list_profiles(self, user_id: str) -> List[VoiceProfileRecord]:
+        """Todos os perfis de voz de um usuário.
+
+        Existe porque o `participant_id` é gerado pelo APP e vivia só no
+        armazenamento local dele (confirmado pelo frontend em 07/09/2026:
+        `DateTime.now().microsecondsSinceEpoch` em shared_preferences).
+        Desinstalar o app apagava o conjunto inteiro de ids de uma conta, e
+        sem uma listagem os perfis correspondentes ficavam aqui invisíveis e
+        inapagáveis — gravação de voz de pessoa real acumulando para sempre
+        num servidor compartilhado, sem ninguém conseguir sequer contar
+        quantas.
+
+        Com o `display_name` que o profile.json já guardava, isto deixa de ser
+        uma rota de limpeza e vira uma de recuperação: o app reconstrói o
+        cadastro (id + nome) depois de reinstalar, em vez de recadastrar as
+        mesmas pessoas com ids novos.
+
+        Ordenado por nome (depois por id, para quem não tem nome) — ordem
+        estável, para a tela não embaralhar entre duas chamadas."""
+        user_dir = self._root / user_id
+        if not user_dir.is_dir():
+            return []
+
+        perfis = [
+            perfil
+            for participant_dir in user_dir.iterdir()
+            if participant_dir.is_dir()
+            for perfil in [self.load_profile(user_id, participant_dir.name)]
+            if perfil is not None
+        ]
+        return sorted(perfis, key=lambda p: ((p.display_name or "").lower(), p.participant_id))
+
     def load_embedding(self, user_id: str, participant_id: str) -> Optional[torch.Tensor]:
         embedding_path = self._embedding_path(user_id, participant_id)
         if not embedding_path.is_file():

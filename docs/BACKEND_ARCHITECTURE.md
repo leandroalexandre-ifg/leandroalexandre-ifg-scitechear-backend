@@ -446,6 +446,33 @@ worker escolhe o job entre a checagem da rota e a remoção — é fechada do
 outro lado: `pipeline_facade.executar()` reconfere se o job ainda existe
 antes de persistir o resultado, e limpa o diretório se ele sumiu.
 
+### `GET /participants` — reinstalar deixa de órfar o cadastro (07/09/2026)
+
+O `participant_id` é gerado pelo **app** (`DateTime.now().microsecondsSinceEpoch`,
+confirmado pelo frontend) e vivia só no `shared_preferences` dele. Desinstalar
+o app apagava o conjunto inteiro de ids de uma conta: o usuário recadastrava
+as mesmas pessoas, recebia ids novos, e os perfis antigos ficavam em
+`storage/voices/<user_id>/<participant_id>/` **invisíveis e inapagáveis** —
+não havia rota que os listasse, e as outras três exigem saber o id. Gravação
+de voz de pessoa real acumulando num servidor compartilhado, sem ninguém
+conseguir sequer contar quantas.
+
+A rota podia ter sido uma vassoura (listar para apagar). Virou uma volta
+atrás, por um fato que só apareceu na implementação: o `profile.json` **já
+guardava o `display_name`** — o campo `name` que o app manda junto da amostra
+— e nunca havia sido devolvido a ninguém. Com id e nome, o app reconstrói o
+cadastro depois de reinstalar em vez de recomeçar; o órfão não é limpo
+depois, ele não chega a existir.
+
+Escopada pelo usuário autenticado, ordenada por nome (id como desempate, para
+ordem estável entre chamadas), `name` podendo ser nulo — é opcional no
+cadastro. Nenhuma das outras três rotas de participante mudou.
+
+Verificado antes de decidir o desenho: em 07/09/2026 o servidor tinha um
+único usuário com perfil de voz (o do E2E, com `p-ana`/`p-bruno`/`p-carla`) e
+nenhum perfil vindo do app — a rota entra antes da primeira gravação de uma
+pessoa real, então não há limpeza retroativa a fazer.
+
 ## 4. `app/repositories` — onde os dados moram
 
 Cada repositório abstrai uma forma de persistência, para que o resto do
