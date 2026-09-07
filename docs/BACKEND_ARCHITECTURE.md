@@ -9,6 +9,8 @@
 
 ![Arquitetura em camadas do backend](diagrams/02-backend-layers.svg)
 
+![Autenticação e ciclo de vida da sessão](diagrams/07-auth-sessao.svg)
+
 O backend segue uma separação estrita de responsabilidades, organizada em
 quatro camadas que só conversam em uma direção — de cima para baixo:
 

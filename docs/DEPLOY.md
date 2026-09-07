@@ -1,5 +1,7 @@
 # Deploy — SciTech Ear · Backend
 
+![Topologia de deploy e alcance de rede](diagrams/05-deploy-topologia.svg)
+
 Como o backend está implantado hoje, e por quê. Até aqui isso não estava em
 lugar nenhum do repositório: quem pegasse o projeto do zero não teria como
 saber onde ele roda, em que porta, ou o que quebra ao mexer.

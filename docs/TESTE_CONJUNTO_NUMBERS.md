@@ -62,6 +62,42 @@ As três opções do `ssh` não são enfeite, e a primeira é a que mais importa
   deixa o túnel pendurado sem que ninguém perceba; assim ele cai em ~90s e o
   terminal avisa, em vez de o app passar a rodada inteira levando timeout.
 
+## 1b. Na rede do IFG: o túnel continua necessário
+
+![Topologia de deploy e alcance de rede](diagrams/05-deploy-topologia.svg)
+
+**Estar na rede onde o servidor está NÃO o torna alcançável.** É a suposição
+mais natural do mundo e ela está errada — vale gastar duas linhas com isso
+antes de alguém perder uma manhã.
+
+A API escuta só em `127.0.0.1:18080` e o proxy TLS só em `127.0.0.1:18443`.
+Nenhum dos dois está na `eno1`. Verificado em 07/09/2026, do próprio servidor,
+usando o IP da rede:
+
+    curl http://10.4.254.201:18080/health    → conexão recusada
+    curl https://10.4.254.201:18443/health   → conexão recusada
+
+Some-se a isso o `ufw` com `DEFAULT_INPUT_POLICY="DROP"`. **A única porta que a
+rede alcança é a 22.** É deliberado: a `10.4.0.0/16` é a instituição inteira,
+e pôr a API ali significaria senha e áudio de reunião trafegando em HTTP puro
+ao alcance de qualquer máquina do IFG.
+
+**O que muda ao estar no IFG, então: só a VPN, que deixa de ser necessária.**
+O resto do procedimento do §1 é idêntico — o mesmo `ssh -L`, o mesmo
+`adb reverse`, o app apontando para o mesmo `127.0.0.1:8000`:
+
+```bash
+# na rede do IFG, sem VPN:
+ssh -N -L 8000:127.0.0.1:18080 \
+    -o ExitOnForwardFailure=yes \
+    -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
+    leandro@10.4.254.201
+```
+
+Expor a API de verdade na rede é outro assunto, depende do admin (regra de
+`ufw`) e exigiria a CA interna na build do app. Ver `docs/DEPLOY.md` e
+`docs/TLS.md`.
+
 ## 2. Por que não é HTTPS nesta rodada
 
 Existe um proxy TLS no ar (`scitechear-proxy`, Caddy em `127.0.0.1:18443`, ver
