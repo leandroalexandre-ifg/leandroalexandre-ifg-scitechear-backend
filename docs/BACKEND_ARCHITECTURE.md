@@ -408,6 +408,44 @@ usuário — de propósito, para não revelar a outros usuários que um
 sem ela "Suas Reuniões" não tinha como ser alimentada pelo backend) lista
 as reuniões do usuário autenticado.
 
+### Histórico editável (`/meetings`, 07/09/2026)
+
+O app mantinha o histórico de reuniões em `shared_preferences`, duplicando o
+que o servidor já sabia e divergindo dele entre aparelhos. A migração para
+`GET /meetings` estava bloqueada por uma razão que não era de campos: o
+histórico do app **não é só leitura** — renomear e remover eram operações
+locais, e sem equivalente no servidor a migração ou perdia as duas
+funcionalidades ou reintroduzia o estado local que ela existe para eliminar.
+
+Três mudanças destravam isso:
+
+- **`MeetingSummary` ganhou `participants` e `error`.** O cartão do histórico
+  mostra os NOMES dos participantes (contagem não serve), e um job em `error`
+  precisa do `error.code` para o app traduzir a falha — o `error.message` é
+  `str(exc)` da exceção Python, texto de log, não de usuário. Os dois já
+  viviam na linha do job; faltava exportá-los.
+- **`PATCH /meetings/{job_id}`** com `{"title": ...}`. Só o título é editável:
+  todo o resto do registro é produzido pelo pipeline. `null` limpa o título.
+  Não registra transição em `job_status_events` — o status não mudou, e o
+  histórico existe para medir o pipeline, não para auditar edições.
+- **`DELETE /meetings/{job_id}`** apaga a linha no banco **e** o diretório
+  `storage/jobs/<job_id>` (áudio e `result.json`). "Remover" apaga de
+  verdade: um WAV de reunião chega a centenas de MB e o servidor é
+  compartilhado, então guardar o arquivo de algo que o usuário mandou remover
+  vazaria disco para sempre, sem ninguém para limpar depois.
+
+Os dois seguem a mesma regra de ownership do resto: `404` para job
+inexistente e para job de outro usuário, sem distinguir.
+
+**Por que o DELETE recusa job em processamento (`409`).** O worker é um
+processo separado; apagar por baixo dele deixaria o pipeline terminando um
+job que já não existe e recriando o diretório para gravar o `result.json` —
+órfão em disco, exatamente o que a remoção existe para evitar. `queued` é
+permitido (ninguém pegou o job ainda), e a janela de corrida que sobra — o
+worker escolhe o job entre a checagem da rota e a remoção — é fechada do
+outro lado: `pipeline_facade.executar()` reconfere se o job ainda existe
+antes de persistir o resultado, e limpa o diretório se ele sumiu.
+
 ## 4. `app/repositories` — onde os dados moram
 
 Cada repositório abstrai uma forma de persistência, para que o resto do
