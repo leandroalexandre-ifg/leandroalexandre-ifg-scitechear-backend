@@ -471,6 +471,43 @@ para (a) confirmar o piso genuíno humano com mais de 1 amostra/pessoa e
 (b) medir impostor real. Só então decidir um novo número, com o mesmo
 rigor da calibração anterior.
 
+**Tentativa de mitigação via AS-Norm — INVESTIGADA E NÃO RESOLVIDA
+(2026-08-31), registrada aqui em 07/09/2026:** o experimento inteiro e a
+implementação vivem na branch `feat/voice-asnorm-decision`, que **não foi
+mesclada de propósito** — mas `main` não tinha nenhuma menção a ele, e um
+resultado negativo invisível é um convite a refazer o mesmo trabalho. O
+resumo, para que a decisão sobreviva na trunk:
+
+Foi prototipado Adaptive Score Normalization (z-score do candidato contra o
+cohort dos impostores mais parecidos do próprio banco) em lugar do corte de
+cosseno fixo, atrás da flag `ENABLE_VOICE_ASNORM` (default `false`). Contra o
+mesmo cenário real desta investigação:
+
+- o falso positivo que motivou tudo (Reed/Eddy, 0.9555) **continuou** falso
+  positivo;
+- e apareceram **dois falsos positivos novos** (0.4126 e 0.6214) que o
+  threshold fixo de 0.75 rejeitava corretamente;
+- as 15 amostras genuínas seguiram corretas — não houve regressão nesse eixo.
+
+**A causa não é a implementação, é uma pré-condição não atendida:** com 3
+perfis cadastrados, o "cohort de impostores" de cada candidato são as outras
+2 pessoas do banco — não uma população independente. Dois pontos
+correlacionados ao mesmo áudio inflam o z-score e mascaram o problema.
+
+**Critério para revisitar, e só então:** o banco ter **8-10 perfis**, de
+pessoas diferentes das que serão identificadas. Hoje o servidor tem 4 (3 do
+E2E sintético + 1 real). Até lá **não reabrir** — a causa é estrutural e o
+resultado tende a se repetir. Código, testes e a análise completa estão na
+branch; nada disso está em `main` além deste registro.
+
+**Primeira medição com voz humana real em condição de produção
+(07/09/2026):** no E2E com o app (`docs/E2E_APP_2026-09-07.md`), um falante
+com **uma única amostra** cadastrada foi identificado com `confidence`
+**0,889** — folga confortável sobre o threshold de 0,75. É um falante só, não
+fecha nada, mas é o primeiro ponto medido fora de TTS e do dataset de
+diagnóstico.
+
+
 ## Aberta — Performance do pipeline: extração de perguntas explícitas é ~42% do tempo total; think=False testado e revertido
 
 **Onde:** `app/services/question_service.py` (`_chamar_ollama`,
