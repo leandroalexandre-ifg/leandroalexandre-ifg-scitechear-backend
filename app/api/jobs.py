@@ -321,7 +321,15 @@ async def job_progress_ws(websocket: WebSocket, job_id: str, token: Optional[str
             await asyncio.sleep(settings.ws_poll_interval_seconds)
             record = await run_in_threadpool(repositorio.get_owned, job_id, user_id)
             if record is None:
-                break
+                # O job sumiu com a conexão aberta — hoje só por
+                # DELETE /meetings/{job_id} de outra tela do mesmo usuário.
+                # Fecha com 4404, o mesmo código de "não existe ou não é seu"
+                # da checagem de entrada: sem ele, isto seria um encerramento
+                # normal (1000), indistinguível de "o job terminou" para quem
+                # está do outro lado.
+                logger.info("WS /ws/%s fechado com 4404: job removido com a conexão aberta.", job_id)
+                await websocket.close(code=4404)
+                return
     except WebSocketDisconnect:
         # Cliente sumiu no meio do caminho — nada a fazer, e não é erro.
         pass
