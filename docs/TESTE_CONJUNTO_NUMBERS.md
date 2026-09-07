@@ -31,7 +31,10 @@ Na **máquina de desenvolvimento**, nesta ordem:
 # 1. VPN do IFG ligada (sem ela o NumbERS não é alcançável)
 
 # 2. túnel: porta 8000 local -> API do servidor. Deixe rodando.
-ssh -N -L 8000:127.0.0.1:18080 leandro@10.4.254.201
+ssh -N -L 8000:127.0.0.1:18080 \
+    -o ExitOnForwardFailure=yes \
+    -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
+    leandro@10.4.254.201
 
 # 3. com o aparelho conectado por USB, em outro terminal:
 adb reverse tcp:8000 tcp:8000
@@ -45,6 +48,19 @@ curl -s http://127.0.0.1:8000/health     # {"status":"ok"}
 
 Se o `/health` responder e o app não conectar, o problema está no
 `adb reverse`, não no túnel: `adb reverse --list` deve mostrar a linha.
+
+As três opções do `ssh` não são enfeite, e a primeira é a que mais importa:
+
+- **`ExitOnForwardFailure=yes`** — sem ela, se a porta 8000 já estiver ocupada
+  na máquina de dev (outra sessão do teste, um servidor local esquecido), o
+  ssh imprime um aviso e **continua conectado sem o encaminhamento**. O túnel
+  parece de pé, o `/health` não responde, e o sintoma no aparelho é
+  indistinguível de um bug do app — exatamente a falha silenciosa que o §2 do
+  documento do frontend quer evitar. Com a opção, o ssh morre na hora e o erro
+  fica na tela.
+- **`ServerAliveInterval=30` / `ServerAliveCountMax=3`** — a VPN oscilando
+  deixa o túnel pendurado sem que ninguém perceba; assim ele cai em ~90s e o
+  terminal avisa, em vez de o app passar a rodada inteira levando timeout.
 
 ## 2. Por que não é HTTPS nesta rodada
 
@@ -92,6 +108,19 @@ e foi verificado:
 Senha de **no mínimo 8 caracteres**. O cadastro é feito **pelo app**, não por
 `curl` — o passo 3 do roteiro é parte do que está sendo testado (o 403, o 409
 e o mínimo de 8 são justamente o que a rodada de ajustes mexeu).
+
+O **403 foi verificado contra a API implantada** em 07/09 20:28 UTC, com a
+allowlist ligada. Responde o que o app espera exibir no campo do e-mail:
+
+    403  {"detail": "Registro restrito a e-mails institucionais."}
+
+Custou 1 das 10 vagas da hora — restam 9, e a janela zera sozinha.
+
+O caminho de sucesso (`201` → `login` → `/auth/me`) **não** foi verificado de
+propósito: só dá para exercitá-lo criando uma conta, e não existe rota para
+apagá-la depois — a conta ficaria para sempre no banco de produção. O passo 3
+do roteiro é essa verificação, e se ele falhar, falha no primeiro minuto do
+teste com um erro na tela.
 
 ## 5. Antes de começar, no servidor
 
