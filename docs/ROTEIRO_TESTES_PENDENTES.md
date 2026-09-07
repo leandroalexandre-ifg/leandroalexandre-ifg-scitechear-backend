@@ -102,8 +102,8 @@ nada.
 
 **Este é trabalho do app, não um teste.** O backend está pronto desde
 07/09/2026: `GET /meetings` com `participants` e `error`, `PATCH` para
-renomear e `DELETE` para remover. Contrato em
-`docs/RESPOSTA_MEETINGS_2026-09-07.md`.
+renomear e `DELETE` para remover. Contrato na seção "Histórico editável" de
+`docs/BACKEND_ARCHITECTURE.md`.
 
 Quando o app migrar, três coisas mudam de comportamento na tela e valem teste
 manual:

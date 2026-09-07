@@ -5,3 +5,4 @@ __pycache__/
 .pytest_cache/
 storage/*
 !storage/.gitkeep
+.DS_Store

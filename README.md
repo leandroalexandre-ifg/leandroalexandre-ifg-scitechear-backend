@@ -92,7 +92,6 @@ Inclui um glossário de termos, o raciocínio por trás de cada decisão
 | [`docs/TESTE_CONJUNTO_NUMBERS.md`](docs/TESTE_CONJUNTO_NUMBERS.md) | Como ligar o aparelho ao backend do servidor (túnel SSH + `adb reverse`), contas, limites e o que olhar quando falha |
 | [`docs/ROTEIRO_TESTES_PENDENTES.md`](docs/ROTEIRO_TESTES_PENDENTES.md) | Os três testes que faltam: reunião longa, reinstalação do app e migração do histórico — com o que medir em cada um |
 | [`docs/diagrams/08-stack-tecnologico.svg`](docs/diagrams/08-stack-tecnologico.svg) | Inventário do ferramental com versões: banco (SQLite), stack da API, do worker, do LLM e do hardware |
-| [`docs/RESPOSTA_DIAGRAMAS_2026-09-07.md`](docs/RESPOSTA_DIAGRAMAS_2026-09-07.md) | Auditoria dos diagramas com o frontend, e o teste que passou a conferi-los contra o código |
 | [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) | Instrumentação e medições de tempo por estágio (Mac e servidor NumbERS) |
 
 Se você é novo neste projeto, comece por
