@@ -27,7 +27,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, create_engine, event, select
+from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, create_engine, delete, event, select
 from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
@@ -193,6 +193,43 @@ class JobRepository:
                 .offset(offset)
             ).all()
         return [self._to_record(row, []) for row in rows]
+
+    def update_title(self, job_id: str, user_id: str, title: Optional[str]) -> Optional[JobRecord]:
+        """Renomear é a única edição que o usuário faz num job — o resto do
+        registro é produzido pelo pipeline. Escopado por dono como get_owned:
+        devolve None (a rota vira 404) tanto para job inexistente quanto para
+        job de outro usuário, sem distinguir os dois casos.
+
+        Não registra transição em job_status_events: o status não mudou, e o
+        histórico existe para medir o pipeline, não para auditar edições."""
+        agora = datetime.now(timezone.utc)
+        with self._lock, self._session_factory() as session:
+            row = session.get(JobRow, job_id)
+            if row is None or row.user_id != user_id:
+                return None
+            row.title = title
+            row.updated_at = agora
+            session.commit()
+            return self._to_record(row, self._carregar_historico(session, job_id))
+
+    def delete_owned(self, job_id: str, user_id: str) -> bool:
+        """Apaga a linha do job e suas transições. Mesmo escopo de dono e
+        mesma indistinção de get_owned (False para inexistente e para job
+        alheio).
+
+        Apaga só o BANCO — o diretório em storage/jobs/<job_id> é do
+        StorageRepository e a rota (app/api/jobs.py) cuida dele depois, nessa
+        ordem: se a remoção dos arquivos falhar, sobra diretório órfão em
+        disco, que é bem melhor que o inverso (reunião listada no histórico
+        cujo áudio e resultado já não existem)."""
+        with self._lock, self._session_factory() as session:
+            row = session.get(JobRow, job_id)
+            if row is None or row.user_id != user_id:
+                return False
+            session.execute(delete(JobStatusEventRow).where(JobStatusEventRow.job_id == job_id))
+            session.delete(row)
+            session.commit()
+        return True
 
     def update_status(
         self, job_id: str, status: JobStatusValue, error: Optional[JobError] = None

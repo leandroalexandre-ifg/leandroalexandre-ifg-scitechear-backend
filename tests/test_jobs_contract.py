@@ -212,3 +212,90 @@ def test_meetings_lista_so_reunioes_do_usuario_autenticado(client, wav_bytes):
     response_outro = outro.get("/meetings")
     assert len(response_outro.json()) == 1
     assert response_outro.json()[0]["job_id"] != job_id
+
+
+def test_meetings_traz_participantes_e_erro_do_job(client, wav_bytes):
+    """Os dois campos que o app pediu em 07/09/2026 para poder trocar o
+    histórico local pelo do servidor: nomes dos participantes (o cartão os
+    exibe, contagem não serve) e error.code (o app traduz por código, e nunca
+    exibe o error.message, que é str(exc) da exceção Python)."""
+    participants = [{"id": "p1", "name": "Leandro"}, {"id": "p2", "name": "Ana"}]
+    job_id = _upload(client, wav_bytes, participants=participants).json()["job_id"]
+
+    item = client.get("/meetings").json()[0]
+    assert item["participants"] == participants
+    assert item["error"] is None
+
+    get_job_repository().update_status(
+        job_id, JobStatusValue.ERROR, error=JobError(code="TRANSCRIPTION_ERROR", message="boom")
+    )
+    item = client.get("/meetings").json()[0]
+    assert item["error"] == {"code": "TRANSCRIPTION_ERROR", "message": "boom"}
+
+
+def test_patch_meetings_renomeia(client, wav_bytes):
+    job_id = _upload(client, wav_bytes, title="Nome antigo").json()["job_id"]
+
+    response = client.patch(f"/meetings/{job_id}", json={"title": "Nome novo"})
+    assert response.status_code == 200
+    assert response.json()["title"] == "Nome novo"
+    assert client.get("/meetings").json()[0]["title"] == "Nome novo"
+
+
+def test_patch_meetings_aceita_titulo_nulo(client, wav_bytes):
+    job_id = _upload(client, wav_bytes, title="Nome antigo").json()["job_id"]
+
+    response = client.patch(f"/meetings/{job_id}", json={"title": None})
+    assert response.status_code == 200
+    assert response.json()["title"] is None
+
+
+def test_patch_meetings_de_outro_usuario_retorna_404(client, wav_bytes):
+    job_id = _upload(client, wav_bytes, title="Minha reunião").json()["job_id"]
+
+    outro = _outro_usuario_logado(None, client)
+    assert outro.patch(f"/meetings/{job_id}", json={"title": "sequestrada"}).status_code == 404
+    # E não mexeu em nada.
+    assert client.get("/meetings").json()[0]["title"] == "Minha reunião"
+
+
+def test_delete_meetings_remove_do_banco_e_do_disco(client, wav_bytes):
+    job_id = _upload(client, wav_bytes).json()["job_id"]
+    job_dir = StorageRepository(Path(get_settings().storage_root)).job_dir(job_id)
+    assert job_dir.is_dir()
+
+    assert client.delete(f"/meetings/{job_id}").status_code == 204
+
+    assert client.get("/meetings").json() == []
+    assert client.get(f"/status/{job_id}").status_code == 404
+    assert not job_dir.exists()
+
+
+def test_delete_meetings_recusa_job_em_processamento(client, wav_bytes):
+    """409 enquanto o worker está com o job na mão: apagar por baixo dele
+    deixaria o pipeline recriando o diretório para gravar o result.json."""
+    job_id = _upload(client, wav_bytes).json()["job_id"]
+    get_job_repository().update_status(job_id, JobStatusValue.TRANSCRIBING)
+
+    response = client.delete(f"/meetings/{job_id}")
+    assert response.status_code == 409
+    assert "transcribing" in response.json()["detail"]
+    assert client.get(f"/status/{job_id}").status_code == 200
+
+
+def test_delete_meetings_permite_job_em_erro_e_concluido(client, wav_bytes):
+    for status in (JobStatusValue.DONE, JobStatusValue.ERROR):
+        job_id = _upload(client, wav_bytes).json()["job_id"]
+        get_job_repository().update_status(job_id, status)
+        assert client.delete(f"/meetings/{job_id}").status_code == 204, status
+
+
+def test_delete_meetings_de_outro_usuario_retorna_404(client, wav_bytes):
+    job_id = _upload(client, wav_bytes).json()["job_id"]
+    job_dir = StorageRepository(Path(get_settings().storage_root)).job_dir(job_id)
+
+    outro = _outro_usuario_logado(None, client)
+    assert outro.delete(f"/meetings/{job_id}").status_code == 404
+    # 404 é a resposta para "não é seu" — e o job do dono continua intacto.
+    assert job_dir.is_dir()
+    assert client.get(f"/status/{job_id}").status_code == 200

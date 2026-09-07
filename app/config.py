@@ -124,6 +124,14 @@ class Settings(BaseSettings):
     # implícitas, não tem outro consumidor.
     enable_implicit_questions: bool = Field(default=False, alias="ENABLE_IMPLICIT_QUESTIONS")
     enable_implicit_refinement: bool = Field(default=False, alias="ENABLE_IMPLICIT_REFINEMENT")
+    # NÃO é lido por nenhum caminho do backend, e é intencional: quem tem
+    # modo demo é o app (--dart-define=SCITECH_DEMO_MODE), que decide sozinho
+    # se mostra dados fictícios. Fica declarado porque DEMO_MODE=false é
+    # parte da configuração de produção documentada (AGENTS.md, BASELINE.md)
+    # e some do .env se ninguém o reconhecer aqui. Se o backend um dia
+    # precisar de um modo demo próprio, é aqui que ele entra — mas hoje a
+    # regra invólavel (erro real nunca vira resultado fictício) é garantida
+    # pela ausência de qualquer caminho de fallback, não por esta flag.
     demo_mode: bool = Field(default=False, alias="DEMO_MODE")
 
     # Origens aceitas pelo CORS, separadas por vírgula. O default "*" mantém o
@@ -187,7 +195,6 @@ class Settings(BaseSettings):
     # ver app/services/auth_service.py e docs/BACKEND_ARCHITECTURE.md.
     auth_login_max_attempts: int = Field(default=5, alias="AUTH_LOGIN_MAX_ATTEMPTS")
     auth_login_window_minutes: int = Field(default=15, alias="AUTH_LOGIN_WINDOW_MINUTES")
-    auth_login_lockout_minutes: int = Field(default=15, alias="AUTH_LOGIN_LOCKOUT_MINUTES")
     auth_register_max_attempts: int = Field(default=10, alias="AUTH_REGISTER_MAX_ATTEMPTS")
     auth_register_window_minutes: int = Field(default=60, alias="AUTH_REGISTER_WINDOW_MINUTES")
 

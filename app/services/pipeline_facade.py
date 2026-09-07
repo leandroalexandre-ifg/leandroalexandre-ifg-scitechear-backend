@@ -109,6 +109,21 @@ class MeetingPipelineFacade:
             self._marcar_erro(job_id, "EXTRACTION_ERROR", str(exc))
             return
 
+        # O usuário pode ter removido a reunião (DELETE /meetings/{job_id})
+        # depois de o worker pegar este job. A rota recusa a remoção durante o
+        # processamento justamente para isto não acontecer, mas sobra uma
+        # janela: entre o `get()` lá em cima e o update_status(TRANSCRIBING)
+        # abaixo dele, o job ainda estava em `queued` e a remoção era
+        # permitida. Sem esta checagem, `_results.save()` recriaria o
+        # diretório que a remoção acabou de apagar — órfão em disco que
+        # ninguém mais vai listar, num servidor compartilhado. update_status
+        # já é inofensivo (não faz nada se a linha sumiu); quem precisa saber
+        # é o disco.
+        if self._jobs.get(job_id) is None:
+            logger.info("Job %s removido durante o processamento — resultado descartado.", job_id)
+            self._storage.delete_job(job_id)
+            return
+
         resultado = self._montar_resultado(job_id, segments, perguntas)
         self._results.save(resultado)
         self._jobs.update_status(job_id, JobStatusValue.DONE)

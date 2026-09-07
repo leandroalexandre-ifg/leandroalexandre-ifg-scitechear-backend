@@ -1,23 +1,43 @@
 import asyncio
 import contextlib
 import json
+import logging
 import time
 import uuid
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Response,
+    UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi import status as http_status
 from pydantic import TypeAdapter, ValidationError
 from starlette.concurrency import run_in_threadpool
 
 from app.api.dependencies import get_current_user_id, user_id_from_ws_token
 from app.config import get_settings
-from app.models.job import JobStatusResponse, JobStatusValue, MeetingSummary, UploadResponse
+from app.models.job import (
+    JobStatusResponse,
+    JobStatusValue,
+    MeetingSummary,
+    MeetingTitleUpdate,
+    UploadResponse,
+)
 from app.models.participant import Participant
 from app.models.result import MeetingResult
 from app.repositories.job_repository import get_job_repository
 from app.repositories.storage_repository import ArquivoGrandeDemaisError
 from app.services.job_runner import result_repository, storage_repository
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["jobs"])
 
@@ -101,12 +121,64 @@ async def list_meetings(
     user_id: str = Depends(get_current_user_id),
 ) -> List[MeetingSummary]:
     records = get_job_repository().list_by_user(user_id, limit=limit, offset=offset)
-    return [
-        MeetingSummary(
-            job_id=r.job_id, title=r.title, status=r.status, created_at=r.created_at, updated_at=r.updated_at
+    return [_meeting_summary(r) for r in records]
+
+
+def _meeting_summary(record) -> MeetingSummary:
+    return MeetingSummary(
+        job_id=record.job_id,
+        title=record.title,
+        status=record.status,
+        participants=record.participants,
+        error=record.error,
+        created_at=record.created_at,
+        updated_at=record.updated_at,
+    )
+
+
+@router.patch("/meetings/{job_id}", response_model=MeetingSummary)
+async def rename_meeting(
+    job_id: str, payload: MeetingTitleUpdate, user_id: str = Depends(get_current_user_id)
+) -> MeetingSummary:
+    record = get_job_repository().update_title(job_id, user_id, payload.title)
+    if record is None:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Job não encontrado.")
+    return _meeting_summary(record)
+
+
+@router.delete("/meetings/{job_id}", status_code=http_status.HTTP_204_NO_CONTENT)
+async def delete_meeting(job_id: str, user_id: str = Depends(get_current_user_id)) -> Response:
+    """Remove a reunião: linha no banco e diretório em storage/jobs/<job_id>.
+
+    Recusa com 409 enquanto o job está em processamento. O motivo é o worker
+    ser um PROCESSO SEPARADO: apagar por baixo dele deixaria o pipeline
+    terminando um job que já não existe e recriando o diretório para gravar o
+    result.json — órfão em disco, exatamente o que a remoção existe para
+    evitar. `queued` é permitido porque ali ninguém pegou o job ainda; a
+    janela de corrida que sobra (o worker escolhe o job entre a checagem e a
+    remoção) é fechada do outro lado, em pipeline_facade.executar().
+    """
+    repositorio = get_job_repository()
+    record = repositorio.get_owned(job_id, user_id)
+    if record is None:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Job não encontrado.")
+
+    if record.status in _ESTAGIOS_EM_PROCESSAMENTO:
+        raise HTTPException(
+            status_code=http_status.HTTP_409_CONFLICT,
+            detail=(
+                f"Reunião em processamento (status atual: {record.status.value}). "
+                "Aguarde terminar para remover."
+            ),
         )
-        for r in records
-    ]
+
+    if not repositorio.delete_owned(job_id, user_id):
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Job não encontrado.")
+
+    # Banco primeiro, arquivos depois — ver o docstring de delete_owned.
+    await run_in_threadpool(storage_repository().delete_job, job_id)
+    logger.info("Reunião %s removida a pedido do usuário %s.", job_id, user_id)
+    return Response(status_code=http_status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/status/{job_id}", response_model=JobStatusResponse)
@@ -143,6 +215,16 @@ async def get_job_result(job_id: str, user_id: str = Depends(get_current_user_id
 
 
 _ESTADOS_FINAIS = {JobStatusValue.DONE, JobStatusValue.ERROR}
+
+# Estágios em que o worker está com o job na mão — DELETE /meetings recusa
+# nesses (ver delete_meeting). `queued` fica de fora de propósito.
+_ESTAGIOS_EM_PROCESSAMENTO = {
+    JobStatusValue.TRANSCRIBING,
+    JobStatusValue.DIARIZING,
+    JobStatusValue.IDENTIFYING,
+    JobStatusValue.SUMMARIZING,
+    JobStatusValue.EXTRACTING,
+}
 
 
 def _status_payload(record) -> dict:
@@ -193,6 +275,13 @@ async def job_progress_ws(websocket: WebSocket, job_id: str, token: Optional[str
     """
     user_id = user_id_from_ws_token(token)
     if user_id is None:
+        # O app distingue 4401 de 4404 pelo código, mas de fora do app os dois
+        # eram indistinguíveis: a conexão só fechava, sem nenhum registro do
+        # motivo. Pedido do frontend para o teste conjunto de 07/09/2026.
+        # Sem o token e sem a query string na mensagem — o access token é
+        # credencial, e mantê-lo fora do journal é o mesmo motivo do
+        # RedigirTokenDeQueryString em app/main.py.
+        logger.info("WS /ws/%s fechado com 4401: token de acesso ausente ou inválido.", job_id)
         await websocket.close(code=4401)
         return
 
@@ -202,6 +291,11 @@ async def job_progress_ws(websocket: WebSocket, job_id: str, token: Optional[str
     # atrasar as outras requisições da API.
     record = await run_in_threadpool(repositorio.get_owned, job_id, user_id)
     if record is None:
+        logger.info(
+            "WS /ws/%s fechado com 4404: job inexistente ou de outro dono (user_id do token: %s).",
+            job_id,
+            user_id,
+        )
         await websocket.close(code=4404)
         return
 

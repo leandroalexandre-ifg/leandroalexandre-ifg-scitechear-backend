@@ -7,6 +7,7 @@ Layout:
         audio.<ext>     # WAV enviado no /upload
         result.json     # resultado canônico (gerenciado por ResultRepository)
 """
+import shutil
 from pathlib import Path
 from typing import BinaryIO, Optional
 
@@ -69,6 +70,27 @@ class StorageRepository:
             path.unlink(missing_ok=True)
             raise
         return path
+
+    def delete_job(self, job_id: str) -> None:
+        """Apaga o diretório do job inteiro — áudio e result.json. Usado por
+        DELETE /meetings/{job_id}, depois de a rota confirmar o dono.
+
+        "Remover a reunião" apaga de verdade, decisão tomada em 07/09/2026:
+        um WAV de reunião chega a centenas de MB e o servidor é compartilhado,
+        então guardar o arquivo de algo que o usuário mandou remover vazaria
+        disco para sempre, sem ninguém para limpar depois.
+
+        A checagem de contenção não é teatro: `job_id` chega da URL, e um
+        valor como "../../voices" sairia do diretório de jobs por
+        composição de caminho. Hoje ele sempre passou antes por get_owned()
+        (só casa com um uuid4 que nós mesmos geramos), mas rmtree é
+        irreversível — a garantia fica aqui, ao lado da chamada perigosa, e
+        não na confiança de que todo chamador futuro vai lembrar disso."""
+        raiz_jobs = (self._root / "jobs").resolve()
+        alvo = self.job_dir(job_id).resolve()
+        if alvo == raiz_jobs or raiz_jobs not in alvo.parents:
+            raise ValueError(f"job_id inválido para remoção: {job_id!r}")
+        shutil.rmtree(alvo, ignore_errors=True)
 
     def audio_path(self, job_id: str) -> Optional[Path]:
         job_dir = self.job_dir(job_id)
