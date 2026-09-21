@@ -4,11 +4,15 @@
 `docs/E2E_APP_2026-09-07.md`. Restaram três itens, todos **fora** daquele
 roteiro. Nenhum é bloqueante; estão em ordem de valor.
 
-**Antes de qualquer um deles**, leia `docs/TESTE_CONJUNTO_NUMBERS.md`, em
-especial a **§1b**: chegar até a máquina não a torna alcançável. Desde
-2026-09-21 ela tem IP público, e isso **continua valendo** — o `ufw` nega por
-padrão e os serviços seguem em loopback, então o túnel SSH permanece
-necessário. O IP público resolveu o roteamento, não a escuta.
+**O túnel SSH deixou de ser necessário em 2026-09-21.** O backend responde em
+`https://200.17.57.229` (porta 443) de qualquer rede — a borda do IFG liberou
+a porta e o proxy saiu do loopback. `docs/TESTE_CONJUNTO_NUMBERS.md` §1b, que
+manda montar o túnel, é registro de 07/09 e descreve um mundo que acabou: o
+`ufw` desta máquina nunca esteve ativo, e quem filtrava era a borda. Ver
+`docs/DEPLOY.md` e `docs/TLS.md`.
+
+O que **continua valendo** daquele documento é o resto: a CA interna precisa
+estar na build do app, e o SNI é o IP.
 
 ---
 
@@ -132,9 +136,11 @@ O que sobra são os itens que dependem de decisão, não de teste:
   do app (`deploy/scitechear-root-ca.crt`) e o SNI `200.17.57.229`. Ver
   `docs/TLS.md`. O arquivo da raiz **não** mudou com a troca de endereço de
   2026-09-21; o SNI e os `--dart-define`, sim.
-- **Backend alcançável de fora** — depende do admin (regra de `ufw` na 18443) e
-  não deveria acontecer sem o TLS acima. A reserva de DHCP saiu da lista: o
-  endereço virou estático. Ver `docs/PLANO_EXPOSICAO_REDE.md`.
+- ~~**Backend alcançável de fora**~~ — **feito em 2026-09-21**, e não dependia
+  do admin: o `ufw` daqui está desligado, quem filtrava era a borda do IFG, e
+  a porta **443** foi liberada lá. O proxy escuta em `0.0.0.0:443`; a API
+  segue em loopback. Falta exercitar isso **do aparelho**, que é o item de TLS
+  acima. Ver `docs/PLANO_EXPOSICAO_REDE.md`.
 - **Revalidar o threshold de biometria com mais vozes humanas.** A medição de
   07/09 (0,889 com uma amostra) é de um falante só; a calibração de 0,75
   continua baseada em TTS. Ver `docs/PENDENCIAS.md`.

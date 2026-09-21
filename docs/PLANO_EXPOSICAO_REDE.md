@@ -64,8 +64,12 @@ justamente os que expõem o serviço, e por isso ficaram para depois.
 | 1 | Identidade do certificado → `200.17.57.229` | **feito** — `deploy/Caddyfile` |
 | 2 | Endurecer o `.env` antes de existir porta | **feito** — CORS e tetos explicitados |
 | 3 | Documentação e diagrama acompanhando o endereço novo | **feito** |
-| 4 | Regra de `ufw` para a 18443 | **bloqueado no admin** |
-| 5 | `bind 127.0.0.1` → `bind 0.0.0.0` | **aguarda 4 + confirmação de Leandro** |
+| 4 | ~~Regra de `ufw` para a 18443~~ → **porta 443 liberada na borda** | **feito** — e nunca dependeu do admin da máquina |
+| 5 | `bind 127.0.0.1` → `bind 0.0.0.0`, na **443** | **feito** — 2026-09-21, com Leandro presente |
+
+**O plano acabou.** As duas linhas abaixo continuam aqui porque o *caminho*
+até elas é a parte que vale guardar — sobretudo a do passo 4, que ficou duas
+semanas classificado como bloqueado em terceiro sem nunca ter sido.
 
 ### 1. Identidade do certificado — feito
 
@@ -110,20 +114,40 @@ se algum diagrama voltar a citá-la, o teste falha. Os relatórios datados
 (`E2E_APP_2026-09-07.md`, `TESTE_CONJUNTO_NUMBERS.md`) **não** foram mexidos —
 são registro do que era verdade naquele dia, não descrição do presente.
 
-### 4. Regra de firewall — bloqueado no admin
+### 4. Firewall — o pedido que nunca teve destinatário
 
-O `ufw` está ativo com `DEFAULT_INPUT_POLICY="DROP"` (lido em
-`/etc/default/ufw`; as regras em si são `0640 root:root` e continuam ilegíveis
-sem root). A porta está fechada mesmo com um processo escutando nela.
+**O `ufw` desta máquina está desligado**, e este plano afirmou o contrário por
+duas semanas. A leitura errada foi de `/etc/default/ufw`
+(`DEFAULT_INPUT_POLICY="DROP"`), arquivo que diz a política que o ufw *usaria
+se estivesse ligado*. O estado real está em `/etc/ufw/ufw.conf`
+(`ENABLED=no`) e em `ufw status` (`inactive`) — e `systemctl is-active ufw`
+responde `active` mesmo assim, porque a unidade *oneshot* rodou.
 
-Pedido, em uma linha:
+Prova sem root, do próprio servidor:
 
-> Abrir no firewall a porta TCP **18443** do host `numbersia`
-> (`200.17.57.229`). É porta alta, não privilegiada; o serviço roda como
-> usuário comum, sem root; o tráfego é HTTPS.
+    bash -c 'cat </dev/null >/dev/tcp/200.17.57.229/<porta>'
 
-Nada além disso é preciso do admin. Não há reserva de DHCP a pedir (endereço
-estático) e não há faixa a restringir.
+Porta sem ouvinte: `Connection refused` **imediato**. Regra `DROP` travaria até
+o timeout — o RST instantâneo prova que não há filtro local.
+
+**Quem descartava era a borda do IFG, que é do CTI.** Medido em 2026-09-21:
+ouvinte em `0.0.0.0:18444` na máquina + `curl` de uma rede externa (Linq
+Telecom) = `Connection timed out`. Mas a borda filtra **por porta**, não em
+bloco: há sessões SSH estabelecidas vindas da internet para a `:22`. Daí a
+virada do plano — em vez de pedir a abertura da 18443, **procurar uma porta já
+permitida**.
+
+**A 443 foi liberada**, e com isso o passo 4 deixou de existir em vez de ser
+cumprido: o proxy se mudou para a porta que já passava. O que restou é local e
+do próprio Leandro (grupo `sudo`): um `setcap` para o Caddy abrir porta
+privilegiada, mais a remoção do `NoNewPrivileges=yes` da unidade sem o qual o
+`setcap` não tem efeito. Ver `TLS.md`, *Porta privilegiada sem root*.
+
+> **A lição, que vale além deste caso.** Duas semanas de espera saíram de uma
+> inferência (*o arquivo diz DROP, logo o firewall nega*) tratada como
+> medição. O custo não foi o erro técnico — foi ter classificado o item como
+> *bloqueado em terceiro*, o que desliga a investigação. Medir o efeito custava
+> um comando.
 
 #### Por que a regra é aberta, e não restrita por origem
 
@@ -160,11 +184,16 @@ O que guardar: um aparelho numa rede **sem IPv4** não alcançaria o backend.
 Hoje é situação rara, mas é motivo para pedir IPv6 ao CTI junto do registro
 DNS, se ele for mexer no endereçamento de qualquer forma.
 
-### 5. Virar o bind — aguarda o passo 4 e confirmação
+### 5. Virar o bind — feito em 2026-09-21
 
-Uma linha em `deploy/Caddyfile`:
+Duas linhas em `deploy/Caddyfile`, não uma, porque a porta mudou junto:
 
-    bind 127.0.0.1   →   bind 0.0.0.0
+    https://200.17.57.229:18443   →   https://200.17.57.229:443
+    bind 127.0.0.1                →   bind 0.0.0.0
+
+**Não houve reemissão de certificado.** Porta não entra em certificado: o SAN
+continua `IP:200.17.57.229` e a raiz da CA interna não mudou, então nenhuma
+build nova do app — só o `--dart-define`, que perde o `:18443`.
 
 `0.0.0.0`, **nunca** `200.17.57.229` literal. O argumento antigo era o DHCP;
 com endereço estático o bind num IP virou tecnicamente possível e continua
@@ -232,8 +261,11 @@ quanto muda o risco de **fila**: é o teto real de capacidade do piloto.
 O procedimento completo está em `TLS.md`; o essencial, com o endereço novo:
 
 1. Apontar via `--dart-define`:
-   `SCITECH_API_BASE_URL=https://200.17.57.229:18443` e
-   `SCITECH_WS_BASE_URL=wss://200.17.57.229:18443`.
+   `SCITECH_API_BASE_URL=https://200.17.57.229` e
+   `SCITECH_WS_BASE_URL=wss://200.17.57.229`.
+   **Sem porta**: o backend está na 443, que é o default de `https`/`wss`. Se
+   algum artefato do app ainda disser `:18443`, está apontando para uma porta
+   que não escuta mais — e o sintoma é *connection refused*, não erro de TLS.
 2. **Carregar a raiz da CA no `SecurityContext`** — o passo que a maioria das
    tentativas erra. `network_security_config.xml` é aplicado pelo *framework*
    do Android, mas o `dart:io HttpClient` (e o `WebSocket` por trás dele) usa
@@ -257,26 +289,25 @@ vínculo com o MacBook é de **rede**, não de bundle.
 
 Parar no primeiro que falhar.
 
-Antes de virar o bind (dá para rodar hoje):
+Antes de reiniciar o proxy:
 
-1. `ss -ltn` mostra `127.0.0.1:18443` e `127.0.0.1:18080` — nada em `0.0.0.0`
-   além do `sshd`.
-2. Certificado com o SAN certo:
+1. `getcap ~/.local/bin/caddy` responde `cap_net_bind_service=ep`, e a unidade
+   **não** tem mais `NoNewPrivileges=yes`. Faltando qualquer um dos dois, o
+   bind na 443 falha com `permission denied`.
+2. `caddy validate --config deploy/Caddyfile` diz `Valid configuration`.
+3. Certificado com o SAN certo (porta não aparece nele — é para conferir o IP):
    `openssl x509 -in /data/projects/leandro/scitechear/caddy/certificates/local/200.17.57.229/200.17.57.229.crt -noout -ext subjectAltName`
-3. Health por TLS, forçando loopback (o IP público não escuta ainda — é esse o
-   ponto):
-   `curl --cacert deploy/scitechear-root-ca.crt --connect-to 200.17.57.229:18443:127.0.0.1:18443 https://200.17.57.229:18443/health`
-4. `curl -m 5 https://200.17.57.229:18443/health` **tem que falhar** por
-   conexão recusada. Se responder, o serviço está exposto sem que ninguém
-   tenha decidido isso.
 
-Depois de virar o bind:
+Depois do restart:
 
-5. `ss -ltn` mostra `0.0.0.0:18443` e **`127.0.0.1:18080`**. Se aparecer
+4. `ss -ltn` mostra `0.0.0.0:443` e **`127.0.0.1:18080`**. Se aparecer
    `0.0.0.0:18080`, parar tudo — a API não pode estar na rede.
-6. De outra máquina:
-   `curl --cacert deploy/scitechear-root-ca.crt https://200.17.57.229:18443/health`
-7. `.venv/bin/python -m scripts.smoke_contrato https://200.17.57.229:18443` —
+5. Health pelo IP público, da própria máquina:
+   `curl --cacert deploy/scitechear-root-ca.crt https://200.17.57.229/health`
+6. **De outra máquina, e numa rede que não seja a do IFG** — é o único teste
+   que exercita a borda, e é o que estava bloqueado até hoje:
+   `curl --cacert deploy/scitechear-root-ca.crt https://200.17.57.229/health`
+7. `.venv/bin/python -m scripts.smoke_contrato https://200.17.57.229` —
    referência: **21 OK, 0 falhas**.
 8. **Upload grande através do proxy** — pendência aberta em `TLS.md`, nunca
    testada. Um WAV perto do teto de 300 MB.
@@ -292,13 +323,17 @@ Depois de virar o bind:
 
 | Bloqueio | Quem resolve | O que trava |
 |---|---|---|
-| Regra de `ufw` na 18443 | **Admin do NumbERS** | o passo 5, e com ele o piloto |
-| Confirmar o registro aberto na internet | **Leandro** | nada — já confirmado em 2026-09-21 |
+| ~~Regra de `ufw` na 18443~~ | ~~Admin do NumbERS~~ | **não existia** — o ufw está desligado |
+| Porta permitida na borda | CTI do IFG | **resolvido**: a 443 foi liberada |
+| `setcap` para a porta privilegiada | **Leandro** (grupo `sudo`) | **feito** — não passa pelo admin |
+| Confirmar o registro aberto na internet | **Leandro** | nada — confirmado em 2026-09-21 |
 | Registro DNS público | CTI do IFG | nada; é melhoria, não bloqueio |
-| `--dart-define` e `network_security_config` | Leandro (outro repositório) | o app conectar |
+| `--dart-define` e `network_security_config` | Leandro (outro repositório) | **o app conectar** — é o que sobrou |
 
-Nada no lado do servidor exige root: as mudanças são no checkout e em unidades
-de usuário, no mesmo padrão do resto do projeto.
+O lado do servidor precisou de **um** `sudo`, uma vez, e ele é do próprio
+Leandro: a capability do Caddy. Fora isso tudo segue no checkout e em unidades
+de usuário, no mesmo padrão do resto do projeto — nenhum serviço de sistema,
+nenhum pacote via `apt`, nada rodando como root.
 
 ## Melhoria que deixou de ser bloqueio: nome DNS
 
@@ -310,7 +345,9 @@ O `default_sni` também sairia sozinho, já que ele só existe porque cliente qu
 fala com um IP não manda SNI (RFC 6066).
 
 Basta a 443 para o ACME: o Caddy resolve o desafio **TLS-ALPN-01** na própria
-443, sem precisar da 80.
+443, sem precisar da 80. **E desde 2026-09-21 é exatamente nela que o proxy
+escuta** — ou seja, o pré-requisito de porta para um certificado público já
+está satisfeito; falta só o nome.
 
 **Por que não fazer isso com o IP puro, já que ele é público.** A Let's Encrypt
 passou a emitir certificado para IP nu, mas só no perfil `shortlived`

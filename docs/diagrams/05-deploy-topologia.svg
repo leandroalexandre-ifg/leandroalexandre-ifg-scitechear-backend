@@ -9,39 +9,39 @@
 </defs>
 <rect width="920" height="640" fill="#FFFFFF"/>
 <text x="30" y="34" font-size="18" font-weight="bold" fill="#111827">Topologia de Deploy e Alcance de Rede</text>
-<text x="30" y="54" font-size="12" fill="#5F5E5A">Nada do backend escuta na rede. O único ponto exposto é o SSH — e é por dentro dele que o aparelho alcança a API.</text>
+<text x="30" y="54" font-size="12" fill="#5F5E5A">Desde 21/09/2026 o aparelho fala direto com o servidor, na 443. Quem escuta na rede é só o proxy TLS; a API nunca escutou.</text>
 
 <!-- cadeia: aparelho -> mac -> servidor -->
 <g font-size="12" text-anchor="middle">
   <rect x="30" y="92" width="180" height="72" rx="10" fill="#F1EFE8" stroke="#5F5E5A"/>
-  <text x="120" y="118" font-weight="bold" fill="#2C2C2A">Aparelho Android</text>
-  <text x="120" y="136" font-size="11" fill="#5F5E5A">app aponta para</text>
-  <text x="120" y="152" font-size="11" font-weight="bold" fill="#2C2C2A">127.0.0.1:8000</text>
+  <text x="120" y="114" font-weight="bold" fill="#2C2C2A">Aparelho Android</text>
+  <text x="120" y="132" font-size="11" fill="#5F5E5A">de qualquer rede</text>
+  <text x="120" y="150" font-size="11" font-weight="bold" fill="#2C2C2A">https://200.17.57.229</text>
 
-  <rect x="300" y="92" width="210" height="72" rx="10" fill="#F1EFE8" stroke="#5F5E5A"/>
-  <text x="405" y="118" font-weight="bold" fill="#2C2C2A">Máquina de desenvolvimento</text>
-  <text x="405" y="136" font-size="11" fill="#5F5E5A">ssh -L 8000 : 127.0.0.1 : 18080</text>
-  <text x="405" y="152" font-size="11" fill="#5F5E5A">ExitOnForwardFailure=yes</text>
+  <rect x="300" y="92" width="210" height="72" rx="10" fill="#FAEEDA" stroke="#B45309"/>
+  <text x="405" y="114" font-weight="bold" fill="#7A3A02">Borda do IFG — CTI</text>
+  <text x="405" y="132" font-size="11" fill="#854F0B">filtra POR PORTA, não em bloco</text>
+  <text x="405" y="150" font-size="11" font-weight="bold" fill="#7A3A02">22 e 443 permitidas</text>
 
   <rect x="600" y="92" width="290" height="72" rx="10" fill="#E6F1FB" stroke="#185FA5"/>
-  <text x="745" y="118" font-weight="bold" fill="#042C53">Servidor NumbERS — 200.17.57.229 (público)</text>
-  <text x="745" y="136" font-size="11" fill="#0C447C">sshd 0.0.0.0:22</text>
-  <text x="745" y="152" font-size="11" font-weight="bold" fill="#0C447C">a única porta aberta na rede</text>
+  <text x="745" y="114" font-weight="bold" fill="#042C53">Servidor NumbERS — 200.17.57.229 (público)</text>
+  <text x="745" y="132" font-size="11" fill="#0C447C">sshd 0.0.0.0:22 · proxy 0.0.0.0:443</text>
+  <text x="745" y="150" font-size="11" font-weight="bold" fill="#0C447C">o ufw daqui está DESLIGADO</text>
 </g>
 <g stroke="#5F5E5A" stroke-width="1.6" marker-end="url(#arrN)">
   <path d="M212 128 L296 128" fill="none"/>
   <path d="M512 128 L596 128" fill="none"/>
 </g>
 <g font-size="10" text-anchor="middle" fill="#5F5E5A">
-  <text x="254" y="120">adb reverse</text>
-  <text x="254" y="146">(cabo USB)</text>
-  <text x="554" y="120">túnel SSH</text>
-  <text x="554" y="146">(porta 22)</text>
+  <text x="254" y="120">HTTPS · TLS 443</text>
+  <text x="254" y="146">CA interna na build</text>
+  <text x="554" y="120">sem NAT desde 21/09</text>
+  <text x="554" y="146">roteamento direto</text>
 </g>
 
 <!-- painel: dentro do servidor -->
 <rect x="30" y="200" width="860" height="280" rx="12" fill="none" stroke="#5F5E5A" stroke-width="1.2" stroke-dasharray="6 4"/>
-<text x="46" y="224" font-size="13" font-weight="bold" fill="#2C2C2A">Dentro do NumbERS — quatro unidades systemd de usuário, todas em loopback</text>
+<text x="46" y="224" font-size="13" font-weight="bold" fill="#2C2C2A">Dentro do NumbERS — quatro unidades systemd de usuário; só o proxy fala com a rede</text>
 
 <g font-size="12" text-anchor="middle">
   <rect x="52" y="242" width="192" height="66" rx="9" fill="#E6F1FB" stroke="#185FA5"/>
@@ -51,7 +51,7 @@
   <rect x="264" y="242" width="192" height="66" rx="9" fill="#E6F1FB" stroke="#185FA5"/>
   <text x="360" y="262" font-weight="bold" fill="#042C53">scitechear-proxy</text>
   <text x="360" y="278" font-size="11" fill="#0C447C">Caddy — termina TLS</text>
-  <text x="360" y="294" font-size="11" fill="#0C447C">127.0.0.1:18443</text>
+  <text x="360" y="294" font-size="11" font-weight="bold" fill="#0C447C">0.0.0.0:443</text>
 
   <rect x="476" y="242" width="176" height="66" rx="9" fill="#EEEDFE" stroke="#5B3FA8"/>
   <text x="564" y="266" font-weight="bold" fill="#26215C">ollama</text>
@@ -80,8 +80,8 @@
 
 <!-- alerta de alcance -->
 <rect x="30" y="504" width="860" height="106" rx="10" fill="#FBE9E7" stroke="#B42318"/>
-<text x="50" y="530" font-size="13" font-weight="bold" fill="#7A160C">Ter IP público não torna o backend alcançável</text>
-<text x="50" y="552" font-size="12" fill="#4A1B0C">Desde 21/09/2026 a eno1 tem IP público roteável — mas o ufw nega por padrão (DEFAULT_INPUT_POLICY=DROP) e a API e o proxy escutam só em</text>
-<text x="50" y="570" font-size="12" fill="#4A1B0C">127.0.0.1 — verificado em 21/09/2026: pelo IP público, tanto a :18080 quanto a :18443 recusam a conexão.</text>
-<text x="50" y="592" font-size="12" font-weight="bold" fill="#7A160C">Consequência prática: o túnel SSH segue necessário. Ter IP público removeu o obstáculo de roteamento, não o de escuta.</text>
+<text x="50" y="530" font-size="13" font-weight="bold" fill="#7A160C">O que está publicado na internet — 21/09/2026</text>
+<text x="50" y="552" font-size="12" fill="#4A1B0C">O proxy escuta em 0.0.0.0:443 (porta privilegiada: setcap no binário do Caddy, sem root). A API segue em 127.0.0.1:18080 e</text>
+<text x="50" y="570" font-size="12" fill="#4A1B0C">nunca escutou na rede. O registro de contas está ABERTO a qualquer e-mail — decisão de Leandro, reafirmada sabendo disto.</text>
+<text x="50" y="592" font-size="12" font-weight="bold" fill="#7A160C">O que segura a porta não é firewall nenhum: é o rate limit de registro (10/h por IP). O teto real do piloto é a fila da GPU.</text>
 </svg>

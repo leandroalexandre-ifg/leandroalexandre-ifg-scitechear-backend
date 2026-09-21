@@ -8,6 +8,29 @@
 # Unidade de USUARIO, como as outras tres (api, worker, ollama): nao precisa
 # do admin para instalar, atualizar ou reiniciar. Depende de Linger=yes, que
 # ja esta ligado para este usuario - sem ele os servicos morrem no logout.
+#
+# PORTA 443 SEM RODAR COMO ROOT (2026-09-21). A borda do IFG so deixa entrar
+# na 443, que e porta privilegiada - e este servico continua sendo do usuario
+# leandro. O que paga essa conta, UMA VEZ, fora daqui:
+#
+#   sudo setcap cap_net_bind_service=+ep /home/leandro/.local/bin/caddy
+#
+# Foi a opcao de MENOR alcance entre as duas possiveis. A outra era
+# `sysctl net.ipv4.ip_unprivileged_port_start=443`, que dispensaria capability
+# nenhuma - mas e politica da MAQUINA INTEIRA: liberaria 443-1023 para todos
+# os usuarios de um servidor compartilhado. O setcap alcanca um binario so,
+# que so o leandro escreve.
+#
+# DUAS ARMADILHAS QUE VEM JUNTO:
+# 1. `NoNewPrivileges=yes` estava aqui e foi REMOVIDO de proposito (ver
+#    abaixo). Com ele, o kernel ignora capability de arquivo e o setcap acima
+#    nao surte efeito nenhum - o bind falha com `permission denied`, que nao
+#    aponta para a unidade.
+# 2. A capability vive no INODE do binario. ATUALIZAR O CADDY A APAGA
+#    (`caddy upgrade`, ou baixar o tgz por cima), e o servico passa a falhar
+#    em loop de restart no proximo boot. Depois de qualquer atualizacao:
+#    `getcap /home/leandro/.local/bin/caddy` e, se voltar vazio, repetir o
+#    setcap.
 
 [Unit]
 Description=SciTech Ear - proxy TLS (Caddy) na frente da API
@@ -35,7 +58,14 @@ ExecStart=/home/leandro/.local/bin/caddy run --config /data/projects/leandro/lea
 ExecReload=/home/leandro/.local/bin/caddy reload --config /data/projects/leandro/leandroalexandre-ifg-scitechear-backend/deploy/Caddyfile --force
 Restart=always
 RestartSec=5
-NoNewPrivileges=yes
+# NoNewPrivileges=yes REMOVIDO em 2026-09-21, e a troca e consciente: ele e
+# exatamente o que impede o processo de ganhar privilegio novo - inclusive o
+# CAP_NET_BIND_SERVICE do setcap, sem o qual nao ha porta 443. Nao e possivel
+# ter os dois. O que se perde e o endurecimento generico; o que se ganha e
+# nao precisar de um servico de sistema rodando como root. Numa maquina
+# compartilhada, trocar "root permanente" por "um binario que abre porta
+# baixa" e o lado certo. Se um dia houver nome DNS e a 443 continuar sendo a
+# porta, a conta e a mesma.
 SyslogIdentifier=scitechear-proxy
 
 [Install]

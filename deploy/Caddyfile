@@ -10,7 +10,13 @@
 # estaticamente pelo admin - nao ha lease DHCP. O endereco antigo,
 # 10.4.254.201, NAO EXISTE MAIS nesta maquina: todo artefato que o citava
 # (SAN do certificado, default_sni, --dart-define do app) virou obsoleto de
-# uma vez. O que este arquivo faz e mover essa identidade para o IP novo.
+# uma vez.
+#
+# 2026-09-21, mais tarde: a borda do IFG liberou a entrada na porta 443, e o
+# proxy saiu do loopback. Escolher a 443 nao foi preferencia - foi o unico
+# jeito de dispensar o CTI, porque a borda filtra POR PORTA e a 443 era a
+# candidata ja permitida. O preco e que 443 e porta privilegiada; como ele foi
+# pago sem virar o servico de root esta no bloco do site, abaixo.
 #
 # Copia implantada: este mesmo arquivo, lido direto do checkout pela unidade
 # scitechear-proxy.service (mesma logica dos outros servicos - a branch com
@@ -60,30 +66,45 @@
 	default_sni 200.17.57.229
 }
 
-# O endereco do site define a IDENTIDADE do certificado (o SAN), nao onde se
-# escuta - quem decide isso e o `bind` abaixo.
-https://200.17.57.229:18443 {
-	# LOOPBACK ate o piloto ser autorizado. Trocar para `bind 0.0.0.0` e o
-	# unico passo que poe este servico na rede - e ele so acontece depois de:
-	#   (a) o administrador do NumbERS confirmar a regra de firewall da porta
-	#       (o ufw esta ativo com politica de entrada DROP, entao hoje a porta
-	#       esta fechada mesmo que o processo escute nela);
-	#   (b) Leandro confirmar.
+# O endereco do site define a IDENTIDADE do certificado (o SAN) e a porta em
+# que se escuta; o `bind` abaixo decide em qual INTERFACE. A porta nao entra
+# no certificado, entao sair da 18443 para a 443 nao exigiu reemitir nada - a
+# folha continua com `IP:200.17.57.229` como unico SAN.
+https://200.17.57.229:443 {
+	# NA REDE desde 2026-09-21. Quem filtrava era a BORDA DO IFG, nunca esta
+	# maquina: o ufw daqui esta DESLIGADO (`ENABLED=no` em /etc/ufw/ufw.conf),
+	# e a prova sem root e que uma porta sem ouvinte recusa a conexao
+	# INSTANTANEAMENTE pelo IP publico - regra DROP daria travamento. Com a
+	# borda liberando a 443, o piloto deixou de depender do CTI e do admin.
 	#
-	# O peso desse passo AUMENTOU com o IP publico. Antes dele, abrir a porta
-	# alcancava a rede do IFG; agora alcanca a internet, e o registro de
-	# contas esta deliberadamente ABERTO a qualquer e-mail (decisao de Leandro
-	# em 2026-09-21, ver .env). Os dois fatos juntos significam que virar este
-	# bind e publicar um cadastro aberto na internet - releia essa decisao
-	# antes, nao depois.
+	# O QUE ESTE BIND PUBLICA, dito em voz alta porque nao se ve daqui: o
+	# registro de contas esta deliberadamente ABERTO a qualquer e-mail
+	# (AUTH_ALLOWED_EMAIL_DOMAINS vazia no .env). Era decisao inofensiva
+	# enquanto a unica entrada era o tunel SSH; Leandro a reafirmou em
+	# 2026-09-21 ja sabendo do IP publico. Daqui em diante "aberto" significa
+	# qualquer pessoa DA INTERNET, e o unico amortecedor que restou e o rate
+	# limit de registro (10/h por IP), dimensionado para um universo
+	# institucional em que um IP ainda identificava alguem.
 	#
-	# Use 0.0.0.0, NUNCA 200.17.57.229 literal. Hoje o endereco e estatico
-	# (posto no netplan pelo admin, sem lease DHCP), o que torna o bind num IP
-	# tecnicamente possivel - mas ele continua sendo a escolha errada: amarra
-	# o servico a uma decisao do admin que pode mudar sem nos avisar, e a
-	# falha resultante e `cannot assign requested address` em loop de restart,
-	# no boot, sem ninguem olhando.
-	bind 127.0.0.1
+	# PRECO DA 443: e porta privilegiada, e este proxy roda como unidade de
+	# USUARIO, sem root. Duas coisas destravam isso, e sao inseparaveis:
+	#
+	#   sudo setcap cap_net_bind_service=+ep ~/.local/bin/caddy
+	#   + remover `NoNewPrivileges=yes` da unidade
+	#
+	# Sozinho, o setcap NAO TEM EFEITO: com NoNewPrivileges o kernel ignora
+	# capability de arquivo. A falha e `permission denied` no bind, que nao
+	# sugere a causa. E a capability mora no INODE do binario: atualizar o
+	# Caddy a apaga, e o servico entra em loop de restart no proximo boot.
+	# Ver deploy/scitechear-proxy.service e docs/TLS.md.
+	#
+	# Use 0.0.0.0, NUNCA 200.17.57.229 literal. O endereco e estatico (posto
+	# no netplan pelo admin), o que torna o bind num IP tecnicamente possivel
+	# - mas ele continua sendo a escolha errada: amarra o servico a uma
+	# decisao do admin que pode mudar sem nos avisar, e a falha resultante e
+	# `cannot assign requested address` em loop de restart, no boot, sem
+	# ninguem olhando.
+	bind 0.0.0.0
 
 	# CA local do proprio Caddy: raiz de 10 anos, folha de 12h renovada
 	# sozinha enquanto o servico roda. E o que dispensa reemitir certificado

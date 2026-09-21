@@ -5,12 +5,17 @@ Este documento resolve o **item 2** dos pré-requisitos do piloto listados em
 já está pronto e verificado, o que ainda depende de quem administra o NumbERS,
 e como o app Android passa a confiar no certificado.
 
-**Estado em 2026-09-06:** o proxy está **no ar como serviço**
-(`scitechear-proxy`, unidade de usuário, habilitada), escutando em
-`127.0.0.1:18443`. A API continua em `127.0.0.1:18080`. **Nada foi para a
-rede** — o `bind` segue em loopback, e a interface `eno1` recusa conexão na
-18443. O que isso destrava hoje é o teste via túnel SSH, que não depende do
-admin; o piloto continua esperando os dois itens abaixo.
+**Estado em 2026-09-21:** o proxy está **na rede**, escutando em
+`0.0.0.0:443` (`scitechear-proxy`, unidade de usuário, habilitada). A API
+continua em `127.0.0.1:18080` e **nunca escutou fora do loopback** — essa parte
+não mudou e não muda. Entre 2026-09-06 e 2026-09-21 o proxy também esteve em
+loopback (`127.0.0.1:18443`), servindo para testar HTTPS por túnel SSH; foi a
+liberação da **443 na borda do IFG** que encerrou esse estágio.
+
+Por que 443 e não a 18443 que este documento propunha: a borda filtra **por
+porta**, e a 443 era a porta já permitida. Não houve escolha de estética — a
+18443 nunca passaria. O preço é que 443 é privilegiada; ver
+[Porta privilegiada sem root](#porta-privilegiada-sem-root).
 
 ## O problema
 
@@ -62,7 +67,9 @@ IP mudar.
 > privada para `200.17.57.229` pública. Mudança bem maior do que uma renovação
 > de lease — e ainda assim custou só um `restart` do proxy, sem reemitir
 > certificado na mão e **sem nova build do app**, porque a raiz não muda junto.
-> Se fosse um autoassinado avulso, toda instalação existente teria parado. O certificado ainda é "autoassinado" no sentido que importa
+> Se fosse um autoassinado avulso, toda instalação existente teria parado. A
+> mudança de porta no mesmo dia (18443 → 443) saiu ainda mais barata: porta não
+> faz parte da identidade do certificado, então nem reemissão houve. O certificado ainda é "autoassinado" no sentido que importa
 (não há CA pública envolvida, nenhuma CA da IFG foi confirmada), mas a parte
 que o app carrega para de ser um alvo móvel.
 
@@ -131,68 +138,103 @@ E o uvicorn 0.39 confia em `127.0.0.1` por default e reescreve
 `request.client` a partir do cabeçalho (testado com um cliente vindo de
 `127.0.0.2`: a aplicação viu `127.0.0.2`, não `127.0.0.1`).
 
-## O que depende do administrador do NumbERS
+## O firewall: duas semanas de espera por uma autorização inexistente
 
-Um pedido só, e ele é o **único bloqueio** que sobrou:
+Esta seção se chamava *"O que depende do administrador do NumbERS"* e pedia
+uma regra de firewall para a porta 18443. **O pedido nunca teve destinatário.**
+Vale registrar o erro inteiro, porque ele é barato de repetir.
 
-> Abrir no firewall a porta TCP **18443** do host `numbersia`
-> (`200.17.57.229`). É uma porta alta, não privilegiada — não precisa ser 443,
-> e o serviço roda como usuário comum, sem root. O tráfego é HTTPS.
+O que se afirmava: *"o `ufw` está ativo com `DEFAULT_INPUT_POLICY=DROP`"*. A
+leitura era de `/etc/default/ufw`, que diz a política que o ufw **usaria se
+estivesse ligado** — não se ele está. O estado real:
 
-**Atualizado em 2026-09-21.** O pedido encolheu e engordou ao mesmo tempo:
+| Onde olhar | O que diz |
+|---|---|
+| `/etc/default/ufw` | `DEFAULT_INPUT_POLICY="DROP"` — a política *hipotética* |
+| `/etc/ufw/ufw.conf` | **`ENABLED=no`** — o ufw não roda |
+| `sudo ufw status` | `inactive` — a resposta que manda |
+| `systemctl is-active ufw` | `active` — **e mente**: a unidade *oneshot* rodou |
 
-- **Saiu a reserva de DHCP.** O endereço virou estático no netplan — não há
-  lease para reservar. O que substitui, se quisermos parar de depender de um IP
-  literal, é um **registro DNS**, e esse é com o CTI, não com o admin.
-- **Saiu "restrita à faixa do laboratório".** Com IP público não há mais faixa
-  interna entre o aparelho e a máquina; o escopo de quem pode usar o serviço
-  passa a ser decidido pela allowlist de e-mail e pelo rate limit, não pelo
-  firewall.
-- **Cresceu o que a porta alcança.** Antes a rede do IFG, agora a internet.
+Prova sem root, do próprio servidor, de que a máquina não filtra:
 
-Contexto que mudou desde o revert de 2026-09-05, e que vale registrar: o estado
-do firewall **não é mais desconhecido**. O `ufw` está ativo com
-`DEFAULT_INPUT_POLICY="DROP"` (lido de `/etc/default/ufw`; as regras em si estão
-em arquivos `0640 root:root`, ilegíveis sem o admin). Ou seja, a postura é
-negar-por-padrão e a porta hoje está fechada mesmo que um processo escute nela
-— o que é a hipótese boa. Confirmar a regra continua sendo com o admin, mas o
-risco de "abrir sem saber" deixou de existir.
+    bash -c 'cat </dev/null >/dev/tcp/200.17.57.229/<porta>'
 
-Sobre a porta: **18443** é a proposta, livre hoje e no mesmo padrão do 18080 da
-API (porta alta, escolhida para não colidir com o default óbvio de outro
-projeto). Se o admin preferir outra, muda uma linha do `Caddyfile` — a porta não
-faz parte da identidade do certificado.
+Porta sem ouvinte deu `Connection refused` **imediato**. Regra `DROP` travaria
+até o timeout; RST instantâneo prova que não há filtro local.
 
-Não é preciso: root, `apt`, porta privilegiada, entrar em grupo, nem tocar no
-truststore do sistema.
+**Quem descartava era a borda do IFG**, que é do CTI. Medido em 2026-09-21:
+ouvinte em `0.0.0.0:18444` aqui + `curl` de uma rede externa = `Connection
+timed out`. Mas a borda filtra **por porta** — há sessões SSH vindas da
+internet para a `:22`. Foi essa observação que mudou o plano: em vez de pedir a
+18443, achar uma porta já permitida. A **443** foi liberada, e o proxy se mudou
+para ela.
 
-## Como colocar no ar (quando os dois itens estiverem confirmados)
+Sobra desta seção, e é pouco: **a borda continua sendo de outro dono.** Abrir
+uma porta que o CTI não libere segue fora do nosso alcance. Do lado de cá, nada
+depende do admin da máquina.
 
-    # 1. instalar a unidade (uma vez) — JÁ FEITO em 2026-09-06, a unidade
-    #    está instalada e habilitada; fica aqui para quem remontar a máquina
+### Porta privilegiada sem root
+
+443 é porta privilegiada (<1024) e o proxy é unidade de **usuário**. Duas
+coisas destravam isso, e são inseparáveis:
+
+    sudo setcap cap_net_bind_service=+ep ~/.local/bin/caddy
+    # + remover NoNewPrivileges=yes de scitechear-proxy.service
+
+**O `setcap` sozinho não faz nada.** Com `NoNewPrivileges=yes` o kernel ignora
+capability de arquivo; o bind falha com `permission denied` e o erro não
+aponta para a unidade. É a combinação que custa a diagnosticar, por isso está
+escrita nos dois arquivos e aqui.
+
+A alternativa era `sysctl net.ipv4.ip_unprivileged_port_start=443`, que
+dispensaria capability — e foi **descartada por alcance**: é política da
+máquina inteira, liberaria 443–1023 para todos os usuários de um servidor
+compartilhado. O `setcap` alcança um binário só, que só o leandro escreve.
+
+> **A capability mora no inode do binário.** `caddy upgrade`, ou baixar o
+> `.tar.zst` por cima, **apaga** — e o serviço entra em loop de restart no
+> próximo boot, sem ninguém olhando. Depois de qualquer atualização do Caddy:
+> `getcap ~/.local/bin/caddy` e, se vier vazio, repetir o `setcap`.
+
+O `sudo` é do próprio Leandro (grupo `sudo`, uid 1003). Continua não sendo
+preciso: `apt`, serviço de sistema, entrar em grupo, nem tocar no truststore.
+
+## Como colocar no ar — feito em 2026-09-21, na ordem em que foi feito
+
+    # 1. instalar a unidade (uma vez) — a unidade ja esta instalada e
+    #    habilitada desde 2026-09-06; fica aqui para quem remontar a maquina
     cp deploy/scitechear-proxy.service ~/.config/systemd/user/
     systemctl --user daemon-reload
 
-    # 2. ajustar a porta, se o admin decidiu outra, e sair do loopback:
-    #    no deploy/Caddyfile, trocar `bind 127.0.0.1` por `bind 0.0.0.0`
-    #    (0.0.0.0, NUNCA 200.17.57.229 — ver "Bind" abaixo)
+    # 2. a porta privilegiada, ANTES de qualquer outra coisa. Sozinho o
+    #    setcap nao faz efeito: a unidade tinha NoNewPrivileges=yes, que faz
+    #    o kernel ignorar capability de arquivo. Os dois, ou nenhum.
+    sudo setcap cap_net_bind_service=+ep ~/.local/bin/caddy
+    getcap ~/.local/bin/caddy   # tem que responder cap_net_bind_service=ep
 
-    # 3. subir (ou REINICIAR, se já estiver no ar — ver a nota sobre
-    #    `reload` logo abaixo: ele não funciona nesta configuração)
-    #    conexão, o que importa se houver upload de reunião em curso)
-    systemctl --user enable --now scitechear-proxy
-    systemctl --user restart scitechear-proxy  # depois de editar o Caddyfile
+    # 3. no deploy/Caddyfile: porta 443 no endereco do site e `bind 0.0.0.0`
+    #    (0.0.0.0, NUNCA 200.17.57.229 — ver "Bind" abaixo)
+    caddy validate --config deploy/Caddyfile
+
+    # 4. aplicar. RESTART, nao reload: o `reload` e incompativel com o
+    #    `admin off` e falha sempre, DEIXANDO O SERVICO NO AR COM A
+    #    CONFIGURACAO ANTIGA. Restart derruba conexao — nao faca isso com
+    #    upload de reuniao em curso.
+    systemctl --user restart scitechear-proxy
     systemctl --user status scitechear-proxy
 
-    # 4. conferir que quem escuta na rede e o proxy, e so ele
-    ss -ltn | grep -E '18080|18443'
-    #   esperado: 127.0.0.1:18080 (API)  e  0.0.0.0:18443 (proxy)
+    # 5. conferir que quem escuta na rede e o proxy, e so ele
+    ss -ltn | grep -E '18080|:443'
+    #   esperado: 127.0.0.1:18080 (API)  e  0.0.0.0:443 (proxy)
+    #   se aparecer 0.0.0.0:18080, PARE TUDO: a API nao pode estar na rede
 
-    # 5. do lado de fora (outra maquina na VPN)
-    curl --cacert scitechear-root-ca.crt https://200.17.57.229:18443/health
+    # 6. de fora da maquina, por uma rede que nao seja a do IFG
+    curl --cacert deploy/scitechear-root-ca.crt https://200.17.57.229/health
 
-Para voltar atrás: `systemctl --user disable --now scitechear-proxy` devolve o
-estado exato de hoje. A API não é tocada em nenhum dos passos.
+Para voltar atrás: `bind 127.0.0.1` e porta `18443` no `Caddyfile`, mais um
+`restart`, devolvem o loopback — a capability no binário pode ficar, ela não
+abre nada sozinha. `systemctl --user disable --now scitechear-proxy` desliga o
+proxy por inteiro. A API não é tocada em nenhum dos caminhos.
 
 ## Android: fazer o app confiar na CA
 
@@ -273,8 +315,10 @@ serviço roda; se ficar parado além disso, emite outra ao subir. A raiz vale at
 ela sumir, todo app já instalado deixa de confiar no servidor e precisa de nova
 build. É o item que mais merece backup nesta máquina.
 
-**Bind.** No `Caddyfile`, o endereço do site (`https://200.17.57.229:18443`)
-define a **identidade do certificado**; quem decide onde escutar é o `bind`.
+**Bind.** No `Caddyfile`, o endereço do site (`https://200.17.57.229:443`)
+define a **identidade do certificado** e a porta; quem decide em qual interface
+escutar é o `bind`. Porta não entra em certificado — sair da 18443 para a 443
+não reemitiu nada.
 Use `bind 0.0.0.0`, nunca o IP. O argumento era o DHCP; desde 2026-09-21 o
 endereço é estático, e mesmo assim a conclusão é a mesma: bind num IP literal
 amarra o serviço a uma decisão do admin que pode mudar sem aviso, e a falha
@@ -319,4 +363,10 @@ bloco `log`.
   upload real de reunião no primeiro ensaio do piloto, junto com o `413` do teto
   voltando através do proxy.
 - **O lado Flutter** (seção acima), que é Fase 7.
-- **As regras concretas do `ufw`**, que só o admin lê.
+- ~~**As regras concretas do `ufw`**, que só o admin lê.~~ **Respondido em
+  2026-09-21, e a resposta é que não existem:** o `ufw` está desligado. O que
+  filtra é a borda do IFG, e dela não se lê a regra — mede-se o efeito, de
+  fora, porta a porta.
+- **O que mais a borda do IFG permite.** Sabe-se da `22` e da `443`; o resto
+  nunca foi varrido, e varrer a borda de uma instituição não é algo a fazer
+  sem falar com o CTI.
