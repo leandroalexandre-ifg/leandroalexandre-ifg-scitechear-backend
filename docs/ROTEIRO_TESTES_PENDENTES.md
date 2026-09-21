@@ -5,8 +5,10 @@
 roteiro. Nenhum é bloqueante; estão em ordem de valor.
 
 **Antes de qualquer um deles**, leia `docs/TESTE_CONJUNTO_NUMBERS.md`, em
-especial a **§1b**: estar na rede do IFG não torna o servidor alcançável, o
-túnel SSH continua necessário. O que muda lá é só a VPN deixar de ser precisa.
+especial a **§1b**: chegar até a máquina não a torna alcançável. Desde
+2026-09-21 ela tem IP público, e isso **continua valendo** — o `ufw` nega por
+padrão e os serviços seguem em loopback, então o túnel SSH permanece
+necessário. O IP público resolveu o roteamento, não a escuta.
 
 ---
 
@@ -127,10 +129,12 @@ ls /data/projects/leandro/scitechear/storage/jobs/ | wc -l   # deve cair de 1
 O que sobra são os itens que dependem de decisão, não de teste:
 
 - **TLS ponta a ponta** — a tela nunca viu HTTPS. Exige a CA interna na build
-  do app (`deploy/scitechear-root-ca.crt`) e o SNI `10.4.254.201`. Ver
-  `docs/TLS.md`.
-- **API alcançável na rede do IFG** — depende do admin (regra de `ufw`,
-  reserva de DHCP ou registro DNS) e não deveria acontecer sem o TLS acima.
+  do app (`deploy/scitechear-root-ca.crt`) e o SNI `200.17.57.229`. Ver
+  `docs/TLS.md`. O arquivo da raiz **não** mudou com a troca de endereço de
+  2026-09-21; o SNI e os `--dart-define`, sim.
+- **Backend alcançável de fora** — depende do admin (regra de `ufw` na 18443) e
+  não deveria acontecer sem o TLS acima. A reserva de DHCP saiu da lista: o
+  endereço virou estático. Ver `docs/PLANO_EXPOSICAO_REDE.md`.
 - **Revalidar o threshold de biometria com mais vozes humanas.** A medição de
   07/09 (0,889 com uma amostra) é de um falante só; a calibração de 0,75
   continua baseada em TTS. Ver `docs/PENDENCIAS.md`.

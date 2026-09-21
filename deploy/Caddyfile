@@ -1,10 +1,16 @@
 # SciTech Ear - proxy TLS na frente da API
 #
 # Motivo de existir: a API fala HTTP puro e fica em 127.0.0.1:18080. Para o
-# piloto (professor via VPN, alunos no laboratorio) alguem precisa escutar na
-# rede, e nao pode ser a API - senha e audio de reuniao viajariam em claro pela
-# 10.4.0.0/16, que e a instituicao inteira. Este proxy termina o TLS e repassa
-# em loopback. A API NUNCA escuta na rede; ver docs/DEPLOY.md e docs/TLS.md.
+# piloto alguem precisa escutar na rede, e nao pode ser a API - senha e audio
+# de reuniao viajariam em claro. Este proxy termina o TLS e repassa em
+# loopback. A API NUNCA escuta na rede; ver docs/DEPLOY.md e docs/TLS.md.
+#
+# 2026-09-21: a maquina deixou de estar atras do NAT do IFG. A eno1 tem agora
+# 200.17.57.229/28 PUBLICO e roteavel (gateway 200.17.57.225), configurado
+# estaticamente pelo admin - nao ha lease DHCP. O endereco antigo,
+# 10.4.254.201, NAO EXISTE MAIS nesta maquina: todo artefato que o citava
+# (SAN do certificado, default_sni, --dart-define do app) virou obsoleto de
+# uma vez. O que este arquivo faz e mover essa identidade para o IP novo.
 #
 # Copia implantada: este mesmo arquivo, lido direto do checkout pela unidade
 # scitechear-proxy.service (mesma logica dos outros servicos - a branch com
@@ -24,6 +30,15 @@
 
 	# O endpoint de administracao (default 127.0.0.1:2019) reconfigura o Caddy
 	# sem autenticacao. Nada aqui precisa dele; a maquina e compartilhada.
+	#
+	# PRECO DISSO, descoberto em 2026-09-21: `caddy reload` aplica configuracao
+	# FALANDO COM ESSA ADMIN API. Com ela desligada, o ExecReload da unidade
+	# sempre falha ("dial tcp 127.0.0.1:2019: connect: connection refused") e o
+	# servico segue no ar com a configuracao ANTIGA - falha silenciosa do pior
+	# tipo, porque o systemd reporta erro mas o proxy continua respondendo.
+	# Para aplicar mudanca daqui use `systemctl --user restart`, que derruba
+	# conexao. Ver docs/TLS.md, secao Operacao, inclusive a alternativa de
+	# admin em socket unix (nao adotada; e decisao de postura de seguranca).
 	admin off
 
 	# Um listener so, uma regra de firewall so: sem redirect 80->443 (que
@@ -39,21 +54,35 @@
 	# e o handshake morre com "tlsv1 alert internal error", antes de qualquer
 	# resposta HTTP. Verificado em 2026-09-06; e o erro que mais custa a
 	# diagnosticar aqui, porque nao parece problema de certificado.
-	default_sni 10.4.254.201
+	#
+	# Este linha sai sozinha no dia em que houver nome DNS - ela so existe
+	# porque o cliente fala com um IP.
+	default_sni 200.17.57.229
 }
 
 # O endereco do site define a IDENTIDADE do certificado (o SAN), nao onde se
 # escuta - quem decide isso e o `bind` abaixo.
-https://10.4.254.201:18443 {
+https://200.17.57.229:18443 {
 	# LOOPBACK ate o piloto ser autorizado. Trocar para `bind 0.0.0.0` e o
 	# unico passo que poe este servico na rede - e ele so acontece depois de:
 	#   (a) o administrador do NumbERS confirmar a regra de firewall da porta
 	#       (o ufw esta ativo com politica de entrada DROP, entao hoje a porta
 	#       esta fechada mesmo que o processo escute nela);
 	#   (b) Leandro confirmar.
-	# Use 0.0.0.0, NUNCA 10.4.254.201: o endereco vem por DHCP e bind num IP
-	# que pode mudar quebra o servico na renovacao da lease (a unidade da API
-	# ja carrega esse mesmo aviso).
+	#
+	# O peso desse passo AUMENTOU com o IP publico. Antes dele, abrir a porta
+	# alcancava a rede do IFG; agora alcanca a internet, e o registro de
+	# contas esta deliberadamente ABERTO a qualquer e-mail (decisao de Leandro
+	# em 2026-09-21, ver .env). Os dois fatos juntos significam que virar este
+	# bind e publicar um cadastro aberto na internet - releia essa decisao
+	# antes, nao depois.
+	#
+	# Use 0.0.0.0, NUNCA 200.17.57.229 literal. Hoje o endereco e estatico
+	# (posto no netplan pelo admin, sem lease DHCP), o que torna o bind num IP
+	# tecnicamente possivel - mas ele continua sendo a escolha errada: amarra
+	# o servico a uma decisao do admin que pode mudar sem nos avisar, e a
+	# falha resultante e `cannot assign requested address` em loop de restart,
+	# no boot, sem ninguem olhando.
 	bind 127.0.0.1
 
 	# CA local do proprio Caddy: raiz de 10 anos, folha de 12h renovada
