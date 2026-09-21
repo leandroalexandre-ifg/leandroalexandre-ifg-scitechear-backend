@@ -6,70 +6,112 @@ antes de considerar algo definitivamente resolvido, etc. Diferente de
 `docs/BASELINE.md` (retrato pontual da Fase 0): este arquivo é atualizado ao
 longo do projeto.
 
-## Aberta — O fechamento `4401` do WebSocket não atravessa o proxy TLS: o cliente fica pendurado no handshake
+## Resolvida — O "4401 que não atravessava o proxy" era o cliente do smoke, não o Caddy nem a API
 
-**Onde:** `deploy/Caddyfile` (proxy Caddy 2.11.4) + `app/api/jobs.py`. Medido
-em 21/09/2026, ao rodar o smoke de contrato através do proxy pela primeira vez.
+**Onde:** `scripts/smoke_contrato.py` (corrigido em 21/09/2026). O
+`deploy/Caddyfile` e o `app/api/jobs.py` estão **corretos** e não foram
+alterados por causa disto.
 
-**O quê:** com token inválido ou expirado em `/ws/{job_id}?token=...`:
+**O que se acreditava, e por quanto tempo.** Desde 06/09/2026 acreditava-se que
+o fechamento `4401` do WebSocket não atravessava o proxy TLS: com token
+inválido, o cliente ficava pendurado no handshake. Em 21/09, ao ser
+investigado de novo, o diagnóstico foi *refinado* para uma tese de duas
+condições (TLS **e** `permessage-deflate`). **As duas versões estavam erradas**,
+pelo mesmo motivo de método: cada célula da matriz de isolamento foi medida
+**uma única vez**, num defeito que se manifesta de forma intermitente. Com
+n=1, a matriz mostra o que o acaso quiser.
 
-| Caminho | O que o cliente recebe |
+**O que foi medido, com n alto, contra o proxy de produção e o mesmo alvo:**
+
+| cliente | entregou o `101` + close |
 |---|---|
-| Direto na API (`http://127.0.0.1:18080`) | `close` com **4401** — correto |
-| Através do proxy TLS | **nada**: o handshake nunca responde, e a conexão morre em timeout (ou `1006`, conforme o tempo que o cliente espera) |
+| TLS cru de stdlib (`socket` + `ssl`) | **20/20** |
+| `websockets` **assíncrono** (mesmo pacote, mesma versão 17.1) | **15/15** |
+| `websockets.sync` (o que o smoke usava) | 1/15 a 9/12 **conforme a rodada** |
 
-A API faz a parte dela — o journal registra
-`WS /ws/... fechado com 4401: token de acesso ausente ou inválido.` em ambos os
-casos. O que não chega ao cliente é o `101` seguido do frame de close.
+Dois clientes independentes recebem o fechamento pelo mesmo proxy TLS, sem
+uma falha. **Logo o servidor entrega corretamente, e sempre entregou.** O que
+pendura é um cliente só.
 
-**Isolamento, para ninguém refazer a conta.** Cada linha é um Caddy
-descartável, em loopback, fora da produção:
+**E não era nada do que se suspeitava.** Cada hipótese foi medida e descartada:
 
-| Configuração | Resultado |
-|---|---|
-| Caddy simples, HTTP puro, `reverse_proxy` | **4401 chega** |
-| Caddy com `tls internal` | **pendura** |
-| idem, `protocols h1` (sem h2) | **pendura** |
-| idem, `flush_interval -1` | **pendura** |
+- **Não é o código de fechamento nem o token.** Com token *válido* e job
+  inexistente (close 4404 imediato) pendura igual: 15/20. Com um **job real**,
+  recebendo progresso, pendura 17/20 — enquanto a mesma conexão **direto na
+  API** funciona **20/20**.
+- **Não é `permessage-deflate`.** No repro, 24/30 penduram com deflate e 24/30
+  sem. Na produção, sem deflate ainda pendura 31/50. A tese das duas condições
+  não sobrevive a n=30.
+- **Não é o `bind tcp4/`** introduzido em 21/09 (`6cb7eb0`): 19/20 penduram com
+  e sem o prefixo.
+- **Não é HTTP/2 nem ALPN:** forçando `ALPN=http/1.1` no cliente, 18/20.
+- **Não é o close imediato.** Atrasar o close em 5, 50, 500 e 2000 ms não muda
+  nada, e um upstream que **fica aberto** também pendura.
+- **Não é versão do Caddy:** o 2.10.0 falha igual ao 2.11.4 (18/20 contra
+  19/20), lado a lado, mesmo upstream.
+- **Não é a rede nem a exposição na 443:** pelo loopback `127.0.0.1:443` é
+  ainda pior (0/20).
 
-Ou seja: **é o caminho TLS**, não a porta 443, não o `bind` na rede, não o
-HTTP/2 e não bufferização do `reverse_proxy`. **Não é regressão da exposição
-de 21/09** — está assim desde que o proxy subiu, em 06/09, e passou
-despercebido porque a verificação de WS daquele dia usou token *válido*, e o
-smoke de contrato de referência (21 OK) foi medido direto na API.
+**O que o proxy registra** fecha o argumento: `status=101`, `duration=0.003s`,
+`size=124` — o Caddy responde e contabiliza a resposta. Quem não a processa é
+o cliente.
 
-**A condição que dispara:** o upstream fechar a conexão *imediatamente* depois
-do `101`. Com token válido o WS fica aberto e tudo funciona — inclusive o
-fechamento **4404** ao remover a reunião, que atravessa o proxy normalmente
-(medido: `[5]` do smoke passa). É o close instantâneo que se perde.
+**A correção:** `scripts/smoke_contrato.py` passou a usar
+`websockets.asyncio.client` no lugar de `websockets.sync.client` (blocos `[5]`
+e `[6]`). Rodado 3× seguidas pelo proxy TLS depois da troca: **21 OK, 0 falhas**
+nas três. Antes da troca, três rodadas seguidas davam `21 OK`, `20 OK/1 falha`
+e um `TimeoutError` cru no meio do check `[5]` — **com token válido**. A
+referência "20 OK/1 falha pelo proxy", repetida em vários documentos, nunca foi
+um número estável: era um sorteio.
 
-**Por que importa no piloto, e não é detalhe de teste.** O JWT dura 30 min e o
-app reconecta o WebSocket para acompanhar o processamento. Token expirado é
-evento *rotineiro*, não caso de erro exótico — e, através do proxy, o app não
-recebe "sua sessão expirou, faça login de novo": recebe um handshake que nunca
-responde, indistinguível de rede caída. Existe um arquivo de teste inteiro
-(`tests/test_ws_codigos_de_fechamento_reais.py`) criado justamente para
-garantir que o 4401 chegasse a clientes reais; ele passa, porque testa a API
-direto — a camada que ele não cobre é o proxy.
+**Por que passou despercebido por duas semanas.** O caminho direto na API não
+usa TLS, e ali o cliente síncrono funciona sempre (30/30) — então toda
+verificação local passava. Pelo proxy, cada verificação anterior foi uma
+amostra só, e "passou" bastava para seguir adiante.
 
-**Caminhos possíveis, nenhum tomado ainda** (é decisão de Leandro, e nenhum é
-de uma linha):
+### Os quatro caminhos, todos descartados
 
-1. **Recusar o handshake** com HTTP 401/403 em vez de aceitar-e-fechar. É a
-   forma que atravessa qualquer proxy — mas foi *deliberadamente evitada* no
-   projeto, porque cliente nenhum consegue distinguir o motivo de um handshake
-   recusado. Reabriria a discussão que gerou aquele arquivo de teste.
-2. **Segurar o close por alguns milissegundos** no lado da API, dando ao Caddy
-   a chance de emitir o `101`. Conserta o sintoma sem entender a causa, e
-   depende de temporização — o pior tipo de correção para manter.
-3. **Reportar ao Caddy** e conferir em versão nova. É o caminho limpo, e o
-   isolamento acima já é metade de um relato reproduzível.
-4. **Conviver, e tratar no app**: timeout curto no handshake do WS seguido de
-   uma chamada REST autenticada para descobrir se o problema é o token. Custa
-   uma ida ao servidor, e é do outro repositório.
+1. ~~Recusar o handshake com HTTP 401/403.~~ **Descartado antes**, e segue
+   descartado: cliente nenhum distingue o motivo de um handshake recusado.
+2. ~~Segurar o close por alguns milissegundos na API.~~ **Descartado**:
+   consertaria um sintoma que não existe no servidor — e a medição do atraso
+   (5 a 2000 ms) mostra que nem sintoma resolveria.
+3. ~~**Relatar ao Caddy.**~~ **Descartado: não há bug do Caddy para relatar.**
+   O rascunho que chegou a ser escrito está versionado em
+   `docs/repro/ws-handshake-mudo/RELATO-CADDY-REFUTADO.md`, com o cabeçalho
+   dizendo por que **não deve ser enviado**. Enviá-lo custaria o tempo de um
+   mantenedor e a credibilidade de um relato futuro.
+4. ~~**App tratar handshake mudo como sessão expirada.**~~ **Descartado: o
+   Flutter nunca foi afetado.** O app não usa a biblioteca Python com o
+   defeito; ele fala pela pilha do Dart (`web_socket_channel` sobre
+   `dart:io`). E, se tivesse sido implementado, seria **ativamente errado**:
+   traduziria um handshake mudo em "sua sessão expirou" justamente nos casos
+   em que o token está válido.
 
-**Enquanto não houver decisão**, o smoke de contrato através do proxy dá
-**20 OK, 1 falha**, e a falha é esta. Direto na API continua **21 OK**.
+**Nota sobre o cliente Flutter, que motivou a investigação.** Foi verificado
+na fonte dos pacotes que o app pede `permessage-deflate` por padrão —
+`CompressionOptions.compressionDefault` tem `enabled = true`, e nem
+`IOWebSocketChannel.connect` nem o caminho cross-platform
+(`package:web_socket` → `io.WebSocket.connect`) repassam `compression`. O dado
+está correto e ficou registrado, mas **deixou de ter consequência**: como o
+deflate não é a causa, não há nada a mudar no app. Se algum dia for preciso
+desligar a compressão lá, note que `IOWebSocketChannel.connect` não expõe o
+parâmetro — seria preciso `WebSocket.connect(..., compression:
+CompressionOptions.compressionOff)` e embrulhar com `IOWebSocketChannel(ws)`.
+
+**Fica em aberto, fora do escopo deste projeto:** *por que* o cliente
+`websockets.sync` 17.1 pendura sob TLS. A causa interna não foi investigada
+(descartada a hipótese de `select()`, que no pacote só aparece no servidor), e
+nada foi relatado ao projeto — não repita aqui o erro de relatar sem entender.
+Para o backend isso não é pendência: o smoke não usa mais esse cliente.
+
+**O que ainda usa o cliente síncrono, e pode continuar usando:**
+`tests/test_ws_codigos_de_fechamento_reais.py` sobe um uvicorn real em
+`ws://127.0.0.1` — **sem TLS**, condição em que o cliente síncrono entregou
+30/30. O teste passa de forma estável e não precisa mudar; se um dia ele
+passar a falar TLS, troque o cliente junto.
+
+**Repro e evidências:** `docs/repro/ws-handshake-mudo/`.
 
 ## Resolvida — Perguntas explícitas: prefixo `[Nome]: ` vazando no campo `text`
 
