@@ -123,7 +123,42 @@ Pedido, em uma linha:
 > usuário comum, sem root; o tráfego é HTTPS.
 
 Nada além disso é preciso do admin. Não há reserva de DHCP a pedir (endereço
-estático) e não há faixa a restringir (não há mais rede interna no caminho).
+estático) e não há faixa a restringir.
+
+#### Por que a regra é aberta, e não restrita por origem
+
+Decisão de Leandro em 2026-09-21, depois de medir. A alternativa considerada
+era restringir a regra à origem dos aparelhos do piloto, o que daria o mesmo
+resultado prático sem publicar o serviço na internet. **Foi descartada por
+medição, não por preferência**, e vale registrar o caminho para ninguém
+refazer a conta:
+
+- A saída do MacBook por IPv6 é `2804:3d90:8288:a0:ac74:5d94:bee3:7cea`. O
+  identificador de interface é aleatório (não é EUI-64), ou seja é um
+  **endereço temporário de privacidade** (RFC 4941), que o macOS rotaciona
+  a cada ~24 h. Não serve de âncora para regra nenhuma.
+- A saída por IPv4 é `177.223.36.83`, que resolve para
+  `177-223-36-83.linqtelecom.com.br` — **provedor regional, não o IFG**. A
+  suposição inicial (de que os aparelhos sairiam pelo NAT institucional
+  `200.17.57.4`) estava errada.
+- E a decisão de fundo: **os aparelhos do piloto estarão em qualquer lugar** —
+  casa, 4G, campus. Origens múltiplas e dinâmicas não cabem numa regra de
+  firewall.
+
+Com isso, quem pode usar o serviço deixa de ser decidido pelo firewall. Ver a
+seção seguinte para o que passa a segurar essa porta — e o que não segura.
+
+#### Detalhe de pilha que vale saber antes do piloto
+
+**O servidor é IPv4-only.** Medido em 2026-09-21: a `eno1` só tem `fe80::`
+(link-local), não há rota IPv6 default e `curl -6` de dentro da máquina falha
+com exit 7. O cliente típico é dual-stack e cai em IPv4 sozinho por *happy
+eyeballs*, então isso **não** bloqueia nada hoje — custa no máximo alguns
+milissegundos no primeiro contato.
+
+O que guardar: um aparelho numa rede **sem IPv4** não alcançaria o backend.
+Hoje é situação rara, mas é motivo para pedir IPv6 ao CTI junto do registro
+DNS, se ele for mexer no endereçamento de qualquer forma.
 
 ### 5. Virar o bind — aguarda o passo 4 e confirmação
 
@@ -155,8 +190,16 @@ publica junto, porque não é óbvio olhando só para o `Caddyfile`:
 
 **`AUTH_ALLOWED_EMAIL_DOMAINS` está vazia — registro aberto a qualquer
 e-mail.** Foi desligada em 2026-09-08, quando a única entrada era o túnel SSH e
-isso era inofensivo, e a decisão foi **reafirmada por Leandro em 2026-09-21**,
-já com o IP público à vista. É escolha consciente, não omissão.
+isso era inofensivo. A decisão foi **reafirmada duas vezes em 2026-09-21**:
+primeiro ao saber do IP público, e de novo depois que a regra restrita por
+origem se mostrou impraticável — ou seja, sabendo que ela era o último
+amortecedor disponível. É escolha consciente, não omissão, e não precisa ser
+reaberta a cada revisão.
+
+Registrado para quem pegar isto depois: foram avaliadas duas formas de estreitar
+o acesso sem mexer no produto — allowlist de e-mail e regra de firewall por
+origem. A segunda caiu por medição (ver §4). A primeira foi recusada. O que
+sobra é o rate limit.
 
 O que muda com a porta aberta é só o alcance: qualquer pessoa **da internet**
 cria conta e enfileira áudio na GPU. O amortecedor que resta é o rate limit de
