@@ -62,6 +62,8 @@ FRASES_MORTAS = [
     ("exibe error.message", "o app traduz o error.code; o message nunca chega à tela"),
     ("estado do job em memória", "os jobs vivem em SQLite (WAL), não em memória"),
     ("10.4.254.201", "endereço morto: a eno1 virou 200.17.57.229 pública em 21/09/2026"),
+    ("127.0.0.1:18443", "o proxy saiu do loopback em 21/09/2026: escuta em 0.0.0.0:443"),
+    ("DEFAULT_INPUT_POLICY", "o ufw desta máquina está DESLIGADO (ENABLED=no); quem filtra é a borda do IFG"),
 ]
 
 

@@ -42,17 +42,50 @@ que mais dá trabalho:
    qualquer coisa apontada para lá falha com *connection timeout*, não com erro
    de TLS — sintoma que não sugere a causa.
 
-O que **não** mudou: o `ufw` segue ativo com `DEFAULT_INPUT_POLICY="DROP"`, e
-os quatro serviços seguem em loopback. **Ter IP público não expôs nada.** O
-endereço resolveu o problema de *roteamento*; o de *escuta* e o de *firewall*
-continuam abertos, e são eles que este documento descreve abaixo.
+**Ter IP público não expôs nada por si só.** O endereço resolveu o problema de
+*roteamento*; a *escuta* e o *filtro* continuaram de pé por mais algumas horas
+— e é a seção seguinte que os derruba.
 
-Uma coisa ficou mais pesada, e merece ser dita aqui e não numa nota de rodapé:
-virar o `bind` para `0.0.0.0` agora alcança **a internet**, não mais a rede do
-IFG. Some isso a `AUTH_ALLOWED_EMAIL_DOMAINS` estar deliberadamente vazia
-(registro aberto a qualquer e-mail — decisão de Leandro, reafirmada em
-2026-09-21 já ciente do IP público) e o que se publica é um cadastro aberto na
-internet, servido por uma GPU compartilhada com outros pesquisadores.
+### Ainda em 2026-09-21: quem filtrava era a borda, e a 443 foi liberada
+
+Duas correções de fato, nesta ordem, porque a segunda só faz sentido depois da
+primeira.
+
+**O `ufw` desta máquina está DESLIGADO.** Esta documentação afirmou o contrário
+por duas semanas, e o erro tem uma causa específica que vale registrar para
+ninguém repetir: `/etc/default/ufw` traz `DEFAULT_INPUT_POLICY="DROP"`, e esse
+arquivo diz a política que o ufw *usaria se estivesse ligado* — não que ele
+esteja. Quem responde é `ufw status` (`inactive`), e o estado real está em
+`/etc/ufw/ufw.conf` (`ENABLED=no`). Armadilha extra: `systemctl is-active ufw`
+responde `active` mesmo assim, porque a unidade *oneshot* rodou.
+
+Prova sem root, do próprio servidor, que vale reusar:
+
+    bash -c 'cat </dev/null >/dev/tcp/200.17.57.229/443'
+
+Numa porta sem ouvinte isso deu **`Connection refused` imediato**. Regra `DROP`
+daria travamento até o timeout; RST instantâneo prova que **não há filtro
+local**. Na `22` conecta normalmente.
+
+**Quem descarta é a borda do IFG — e isso é do CTI, não do admin da máquina.**
+Medido em 2026-09-21: um ouvinte em `0.0.0.0:18444` aqui, mais um `curl` de
+fora (MacBook, rede da Linq Telecom), deu `Connection timed out`. Mas a borda
+filtra **por porta**, não bloqueia tudo — há sessões SSH estabelecidas vindas
+da internet para a `:22`. Daí a conclusão que redesenhou o plano: achar uma
+porta já permitida dispensaria o pedido ao CTI.
+
+**A porta liberada foi a 443**, e o proxy se mudou para ela. Não foi
+preferência: a 18443 nunca passaria pela borda, e a 443 já passava. O custo é
+que 443 é **porta privilegiada** — ver [a seção do proxy](#o-proxy-tls-na-443)
+para como ela é aberta sem o serviço virar root.
+
+O que isso publica, dito aqui e não em nota de rodapé: o backend está **na
+internet**, não na rede do IFG. Some-se a `AUTH_ALLOWED_EMAIL_DOMAINS`
+deliberadamente vazia (registro aberto a qualquer e-mail — decisão de Leandro,
+reafirmada em 2026-09-21 já ciente do IP público) e o que está publicado é um
+**cadastro aberto na internet**, servido por uma GPU compartilhada com outros
+pesquisadores. O amortecedor que resta é o rate limit de registro (10/h por
+IP), dimensionado para quando um IP ainda identificava alguém.
 
 ## Layout no disco
 
@@ -81,7 +114,7 @@ quem administra o servidor a cada mudança de configuração.
 | `scitechear-api` | FastAPI/uvicorn | `127.0.0.1:18080` (ver abaixo) |
 | `scitechear-worker` | consumidor da fila de jobs (usa a GPU) | — |
 | `ollama` | servidor do LLM (`qwen3:14b`) | `127.0.0.1:11434` |
-| `scitechear-proxy` | proxy TLS (Caddy) na frente da API — ver [`TLS.md`](TLS.md) | `127.0.0.1:18443` (ver abaixo) |
+| `scitechear-proxy` | proxy TLS (Caddy) na frente da API — ver [`TLS.md`](TLS.md) | **`0.0.0.0:443`** — o único na rede (ver abaixo) |
 
     systemctl --user status scitechear-api scitechear-worker ollama scitechear-proxy
     systemctl --user restart scitechear-api
@@ -91,35 +124,56 @@ quem administra o servidor a cada mudança de configuração.
 usuário morrem quando a sessão SSH termina. Já está habilitado — mas é a
 primeira coisa a checar se os serviços "somem" depois de um logout.
 
-**A API está em loopback, e os quatro serviços também.** A porta `18080` (e não
-`8000`) é para não colidir com o default que qualquer outro projeto Python da
-máquina escolheria; a `18443` do proxy segue o mesmo padrão.
+**A API está em loopback, e três dos quatro serviços também.** A porta `18080`
+(e não `8000`) é para não colidir com o default que qualquer outro projeto
+Python da máquina escolheria. Quem fala com a rede é **só o proxy**, e essa
+divisão é a regra que não se negocia aqui: a API nunca escuta fora do
+loopback, porque ela fala HTTP puro — senha e áudio de reunião em claro.
 
-O proxy TLS subiu como serviço em 2026-09-06, **também em loopback**. Ele não
-muda o alcance do backend: quem chega às duas portas continua tendo que estar
-dentro da máquina (ou num túnel SSH). O que ele destrava é poder testar por
-HTTPS pelo túnel, sem esperar o admin. Sair do loopback continua sendo um passo
-à parte, com os pré-requisitos abaixo.
+### O proxy TLS na 443
 
-Houve um bind em `0.0.0.0` em 2026-09-05, **revertido no mesmo dia** por
-decisão de Leandro. O motivo da reversão é o item 4 abaixo: enquanto o estado
-do firewall for desconhecido, escutar na `eno1` significa senha e áudio de
-reunião em **HTTP puro** ao alcance de quem chegar à porta. Na época isso
-queria dizer a `10.4.0.0/16`, a instituição inteira; desde o IP público de
-2026-09-21 quer dizer a internet. O teto de upload reduz a superfície, mas
-não cifra nada — e a allowlist de domínio, que na época também ajudava, está
-desligada desde 2026-09-08.
+O proxy subiu como serviço em 2026-09-06 escutando em `127.0.0.1:18443`, e
+ficou nesse loopback por duas semanas: servia para testar HTTPS por túnel SSH
+sem depender de ninguém. Em 2026-09-21 ele passou a `0.0.0.0:443`.
 
-**Não reabra o bind sem as duas condições**, ambas confirmadas por Leandro:
+A troca de porta **não exigiu reemitir o certificado** — porta não entra em
+certificado. O SAN continua sendo `IP:200.17.57.229`, e a raiz da CA interna
+(válida até 2036) não mudou, então **nenhuma build nova do app**: só o endereço
+do `--dart-define` muda, e muda para melhor, perdendo o `:18443`.
 
-1. o administrador do NumbERS confirmou a regra de firewall da `18080`;
-2. existe plano concreto de TLS — mesmo provisório (certificado autoassinado,
-   já que o acesso é por VPN interna).
+    https://200.17.57.229:18443   →   https://200.17.57.229
 
-Até lá o caminho é o túnel SSH abaixo, que não depende de ninguém.
+**443 é porta privilegiada, e este serviço não roda como root.** As duas
+linhas que pagam essa conta, ambas inseparáveis:
 
-Quando reabrir, use `0.0.0.0` e **não** o IP específico. A justificativa
-original era o DHCP; ela mudou de forma em 2026-09-21 sem mudar de conclusão.
+    sudo setcap cap_net_bind_service=+ep ~/.local/bin/caddy
+    # + remover NoNewPrivileges=yes de scitechear-proxy.service
+
+Sozinho, o `setcap` **não tem efeito nenhum**: com `NoNewPrivileges=yes` o
+kernel ignora capability de arquivo, e o bind falha com `permission denied` sem
+apontar para a unidade. Foi a opção de menor alcance entre as duas possíveis —
+a outra, `sysctl net.ipv4.ip_unprivileged_port_start=443`, liberaria a faixa
+`443–1023` para **todos os usuários** de uma máquina compartilhada.
+
+> **Depois de atualizar o Caddy, confira `getcap ~/.local/bin/caddy`.** A
+> capability mora no inode do binário: trocar o arquivo a apaga, e o serviço
+> entra em loop de restart no próximo boot — sem ninguém olhando.
+
+Houve um bind da **API** em `0.0.0.0` em 2026-09-05, **revertido no mesmo dia**
+por decisão de Leandro, e a reversão envelheceu bem: escutar na `eno1` com a
+API significaria senha e áudio de reunião em **HTTP puro** ao alcance de quem
+chegasse à porta. Na época isso queria dizer a `10.4.0.0/16`, a instituição
+inteira; hoje, com IP público e a 443 aberta, queria dizer a internet.
+
+**Esse bind não é mais uma pendência — é um erro.** A pergunta que ele tentava
+responder (como alcançar a API de fora) foi respondida pelo proxy TLS: quem
+escuta na rede é o Caddy, na 443, e ele repassa em loopback. Pôr a API na rede
+hoje não destravaria nada e só tiraria o TLS do caminho. Se `ss -ltn` algum dia
+mostrar `0.0.0.0:18080`, é para parar tudo e desfazer.
+
+Onde houver bind na rede — hoje, só o do proxy — use `0.0.0.0` e **não** o IP
+específico. A justificativa original era o DHCP; ela mudou de forma em
+2026-09-21 sem mudar de conclusão.
 O endereço hoje é **estático** (`200.17.57.229`, posto no netplan pelo admin —
 não há lease em `/run/systemd/netif/leases/`), então o bind num IP literal
 passou a ser tecnicamente possível. Continua sendo errado: amarra o serviço a
@@ -128,8 +182,12 @@ assign requested address* em loop de restart — no boot, sem ninguém olhando. 
 demais interfaces (`docker0`, bridges, `wlp101s0`, `enp103s0`) estão DOWN,
 então na prática isso seria `eno1` + loopback. **Quem pode chegar à porta é
 responsabilidade do firewall**, que é a camada certa para isso; restringir pelo
-bind seria frágil e daria uma falsa sensação de controle — mas essa camada
-certa só vale depois que se souber que ela existe.
+bind seria frágil e daria uma falsa sensação de controle.
+
+Com a medição de 2026-09-21, sabe-se onde essa camada mora: **não é nesta
+máquina** (o `ufw` está desligado), é na **borda do IFG**, que filtra por porta
+e é operada pelo CTI. Na prática, portanto, quem chega à porta não é decidido
+por nós — é decidido pela allowlist de e-mail (desligada) e pelo rate limit.
 
 Há cópias datadas da unidade em
 `/data/projects/leandro/scitechear/scitechear-api.service.bak-*`.
@@ -162,7 +220,7 @@ mesmo `adb reverse` que o README já descreve:
 E o app aponta para `http://127.0.0.1:18080` via `--dart-define`
 (`SCITECH_API_BASE_URL`, `SCITECH_WS_BASE_URL` — ver Fase 7 do plano).
 
-### Aparelhos fora da máquina — **exige o admin**
+### Aparelhos fora da máquina — **resolvido em 2026-09-21**
 
 Cenário do piloto: o professor com um tablet e, depois, os alunos usando os
 próprios aparelhos. Com IP público os dois cenários deixaram de depender de
@@ -177,18 +235,16 @@ quisermos deixar de depender de um IP literal, é um **registro DNS** — e esse
 Os quatro itens abaixo são **pré-requisitos do bind na rede**, não
 consequências dele. A ordem importa: 1 e 2 são o que autoriza o 4.
 
-1. **Liberar a porta no firewall** — *exige quem administra o servidor*.
-   **Atualizado em 2026-09-21:** com IP público, "restringir à faixa do
-   laboratório" deixou de ser o pedido certo — não há mais faixa interna entre
-   o aparelho e a máquina. O pedido passa a ser a porta **18443/tcp** aberta, e
-   a pergunta de escopo (para quem?) passa a ser respondida pela allowlist de
-   e-mail e pelo rate limit, não pelo firewall.
-   **Atualizado em 2026-09-06:** o estado do firewall não é mais desconhecido —
-   o `ufw` está ativo com `DEFAULT_INPUT_POLICY="DROP"`, ou seja, nega por
-   padrão e a porta está fechada mesmo que um processo escute nela. As regras
-   em si continuam ilegíveis sem o admin (`0640 root:root`), então *confirmar*
-   a regra segue sendo com ele — mas o risco de "abrir sem saber" acabou.
-   Único item ainda bloqueante.
+1. ~~**Liberar a porta no firewall.**~~ **Feito em 2026-09-21 — e não era com
+   o admin da máquina.** A conta que este item fazia estava errada em dois
+   lugares. Primeiro, o `ufw` daqui **está desligado** (`ENABLED=no`): a
+   afirmação de 2026-09-06 lia `DEFAULT_INPUT_POLICY` de `/etc/default/ufw`,
+   que diz a política *hipotética*, não se o serviço roda. Segundo, quem
+   descarta é a **borda do IFG**, operada pelo CTI — e ela filtra por porta,
+   não em bloco. Com a **443** liberada lá, o pedido de abrir a `18443`
+   simplesmente deixou de existir: o proxy se mudou para a porta que já
+   passava. O que restou foi local e é do próprio Leandro, que está no grupo
+   `sudo`: uma linha de `setcap` para o Caddy abrir porta privilegiada.
 2. ~~**Decidir sobre TLS.**~~ **Decidido e montado em 2026-09-06** — ver
    [`TLS.md`](TLS.md). Um proxy Caddy (binário de usuário, sem root) termina o
    TLS com uma CA interna e repassa em loopback; a API nunca escuta na rede.
@@ -322,7 +378,17 @@ perguntas), ver `docs/E2E_FASE8.md`.
 Separado de propósito — é o que não dá para resolver sozinho:
 
 - `loginctl enable-linger` (já feito);
-- abrir qualquer porta no firewall, ou expor um serviço fora do loopback;
 - instalar pacote via `apt`, ou qualquer coisa que precise de root;
 - entrar em grupos (ex.: `docker`);
 - criar diretórios fora de `/data/projects/<usuario>/`.
+
+**Saiu desta lista em 2026-09-21: "abrir porta no firewall".** Nunca foi do
+admin desta máquina — o `ufw` está desligado aqui, e quem filtrava era a borda
+do IFG (CTI). E o que sobrou de privilégio é do próprio Leandro, que está no
+grupo `sudo`: o `setcap` que deixa o Caddy abrir a 443. O erro custou duas
+semanas de espera por uma autorização que não era necessária; a lição é medir
+antes de classificar algo como bloqueado em terceiro.
+
+**Segue valendo para a borda**, que é de outro dono: abrir uma porta que o CTI
+não libere continua fora do nosso alcance — e a 443 só está aberta porque
+alguém a liberou lá.
