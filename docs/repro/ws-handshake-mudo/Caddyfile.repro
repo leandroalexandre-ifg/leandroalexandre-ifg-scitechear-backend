@@ -1,0 +1,28 @@
+{
+	admin off
+
+	# Storage PRÓPRIO, fora da produção. A CA de produção vive em
+	# /data/projects/leandro/scitechear/caddy e NÃO pode ser tocada: a
+	# `root.key` é o ativo caro — se sumir, todo app já instalado precisa de
+	# build nova. Exporte REPRO_STORAGE para escolher outro diretório.
+	storage file_system {$REPRO_STORAGE:/tmp/caddy-repro-4401}
+
+	auto_https disable_redirects
+}
+
+# ATENÇÃO: o host do endereço do site NÃO restringe o listener. Sem o `bind`
+# explícito o Caddy sobe em *:18100 (dual-stack, todas as interfaces) mesmo
+# estando escrito "https://localhost" — e nesta máquina isso é a internet.
+
+# O caso que falha: TLS + permessage-deflate.
+https://localhost:18100 {
+	bind tcp4/127.0.0.1
+	tls internal
+	reverse_proxy 127.0.0.1:18099
+}
+
+# Controle: mesmo upstream, mesmo proxy, sem TLS.
+http://localhost:18101 {
+	bind tcp4/127.0.0.1
+	reverse_proxy 127.0.0.1:18099
+}
