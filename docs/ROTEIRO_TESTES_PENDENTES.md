@@ -23,12 +23,22 @@ No servidor:
 ```bash
 cd /data/projects/leandro/leandroalexandre-ifg-scitechear-backend
 systemctl --user is-active scitechear-api scitechear-worker ollama   # active x3
-nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader
+nvidia-smi --query-gpu=index,memory.used,memory.total --format=csv,noheader
+# uma linha só, e é esperado: a GPU0 caiu em 19/09/2026 (ver PENDENCIAS.md)
 .venv/bin/python -m scripts.smoke_contrato                           # 21 OK, 0 falhas
 ```
 
-Na máquina de dev: túnel, `adb reverse`, e `curl http://127.0.0.1:8000/health`
-respondendo **antes** de abrir o app.
+No aparelho: o app apontando para `https://200.17.57.229` (sem porta, sem
+túnel, sem `adb reverse`), com a raiz da CA interna na build. Confira a borda
+antes de abrir o app, de qualquer rede:
+
+```bash
+curl --cacert deploy/scitechear-root-ca.crt https://200.17.57.229/health
+```
+
+Se ainda estiver depurando contra a API crua pelo túnel SSH, aí sim vale o
+`ssh -L` + `adb reverse` — mas isso é caminho de desenvolvimento, não do
+piloto. Ver `docs/DEPLOY.md`.
 
 Deixe `journalctl --user -u scitechear-api -u scitechear-worker -f` aberto numa
 sessão SSH separada. É onde está o que a tela não mostra.

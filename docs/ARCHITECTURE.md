@@ -227,9 +227,10 @@ biométrico entre elas. Ver
 
 ## Topologia de deploy
 
-Como o sistema está implantado, e por que nada dele escuta na rede — o
-diagrama responde à pergunta que mais custa tempo a quem chega:
-"estou na rede do servidor, por que não alcanço a API?".
+Como o sistema está implantado, e onde exatamente está a fronteira com a
+rede. Desde 21/09/2026 há uma resposta nova para a pergunta que mais custa
+tempo a quem chega: quem escuta na rede é **só o proxy TLS**, na 443; a API
+nunca escutou e continua em `127.0.0.1:18080`.
 
 ![Topologia de deploy e alcance de rede](diagrams/05-deploy-topologia.svg)
 
@@ -336,6 +337,41 @@ app (não em runtime, para evitar ficar "esquecido ligado").
   [`docs/BACKEND_ARCHITECTURE.md`](./BACKEND_ARCHITECTURE.md#3-9-auth_servicepy-e-appapiauthpy--autenticação-real).
   Consumo pelo app (AuthScreen real, armazenamento seguro de token) é
   trabalho do outro repositório, tratado em sessão separada.
+- **Modelo de acesso: a rede deixou de ser a fronteira — decisão revisada
+  em 21/09/2026.** O backend está na **internet**, em
+  `https://200.17.57.229` (porta 443), alcançável de qualquer rede e **sem
+  exigir VPN**. Quem escuta é só o proxy TLS; a API segue em
+  `127.0.0.1:18080` e nunca escutou na rede.
+
+  *O que valia antes, e por quê — o racional não era ruim, era outro
+  problema.* Enquanto a máquina era `10.4.254.201/16` privada atrás de NAT,
+  o alcance de qualquer porta aberta ali era a instituição inteira, e o
+  único caminho de fora era um túnel SSH — que, de fora do câmpus, exigia a
+  VPN do IFG. Essa topologia fazia trabalho de segurança de verdade: em
+  05/09/2026 o bind da API na rede foi feito e **revertido no mesmo dia**,
+  porque expor a API como ela era significava senha de usuário e áudio de
+  reunião em HTTP puro para quem chegasse à porta. Com a rede fechada, o
+  custo de ainda não ter TLS ficava contido.
+
+  *Por que deixou de ser exigida.* O piloto precisa de alunos testando dos
+  próprios aparelhos, **de casa**, fora da rede da instituição. Uma
+  fronteira que depende de estar na rede do IFG não descreve esse cenário —
+  exigiria VPN em cada aparelho de aluno, o que inviabiliza o piloto. Em
+  21/09/2026 a máquina ganhou IP público e a borda do IFG (CTI) liberou a
+  **443**, e a decisão foi revisada.
+
+  *O que substituiu a rede como fronteira.* Não é mais a topologia, são três
+  camadas explícitas: **TLS obrigatório** (Caddy com CA interna — a condição
+  que faltava em 05/09 e que tornou a reversão daquele dia desnecessária
+  hoje); **autenticação JWT** em toda rota de `jobs`/`participants`; e
+  **allowlist de domínio institucional no registro** — e-mail fora de
+  `ifg.edu.br`, `academico.ifg.edu.br` ou `estudantes.ifg.edu.br` recebe
+  `403` e não cria conta. A allowlist esteve ativa, foi desligada em
+  08/09/2026 e **religada em 21/09/2026**, junto com esta revisão: com a
+  porta na internet, ela deixou de ser redundante com a rede e passou a ser
+  o que limita quem entra. Ela vale só para `register`; contas que já
+  existem continuam autenticando. Procedimento e verificação em
+  [`docs/DEPLOY.md`](./DEPLOY.md) e [`docs/TLS.md`](./TLS.md).
 - **Erro real nunca vira resultado fictício**, em nenhum dos dois lados
   (seção 10).
 - **Sem dependência de nuvem no caminho de execução do backend.**

@@ -73,10 +73,46 @@ IP mudar.
 (não há CA pública envolvida, nenhuma CA da IFG foi confirmada), mas a parte
 que o app carrega para de ser um alvo móvel.
 
-## O que já está pronto e verificado
+## A configuração final em produção
+
+O estado do que está no ar, conferido em 2026-09-21. A tabela da seção
+seguinte é o registro de como se chegou aqui.
+
+| | |
+|---|---|
+| Terminador TLS | **Caddy 2.11.4**, binário de usuário em `~/.local/bin/caddy` — sem `apt`, sem root |
+| Processo | unidade **systemd de usuário** `scitechear-proxy` (não unidade de sistema), dependente de `loginctl enable-linger` |
+| Escuta | `0.0.0.0:443` (`bind tcp4/` — v4 explícito, para o backend não passar a atender em v6 sem decisão se o CTI ligar IPv6) |
+| Porta privilegiada | `setcap cap_net_bind_service=+ep` no binário **mais** a remoção de `NoNewPrivileges=yes` da unidade; sozinho o setcap não faz nada |
+| Upstream | `127.0.0.1:18080` em HTTP puro, no loopback. **A API nunca escuta na rede** |
+| Autoridade | **CA interna do próprio Caddy**, storage em `/data/projects/leandro/scitechear/caddy`. Raiz `CN = Caddy Local Authority - 2026 ECC Root`, válida até **2036-07-15**, cópia pública versionada em `deploy/scitechear-root-ca.crt` |
+| Identidade do certificado | **SAN do tipo `IP Address:200.17.57.229`**, marcada `critical` |
+| Folha | válida 12h, renovada sozinha pelo Caddy |
+| Admin API do Caddy | **desligada** (`admin off`) — é endpoint sem autenticação, e a máquina é compartilhada. Consequência: `reload` não funciona, use `restart` |
+
+**A identidade é um `IP Address`, não um `DNS` nem um `CN`** — e isso não é
+detalhe de preenchimento:
+
+    openssl x509 -noout -subject -ext subjectAltName \
+      -in /data/projects/leandro/scitechear/caddy/certificates/local/200.17.57.229/200.17.57.229.crt
+    # subject=
+    # X509v3 Subject Alternative Name: critical
+    #     IP Address:200.17.57.229
+
+O `subject` sai **vazio**: não há CN nenhum. Clientes modernos ignoram o CN há
+anos e validam só o SAN, e um SAN do tipo `DNS:200.17.57.229` **não** casa com
+uma conexão feita a um endereço IP — quem valida compara contra o campo
+`iPAddress`, não contra a string. Por isso o cliente precisa falar com o IP
+literal, e `https://localhost:443` falha mesmo com a CA instalada. Ver
+"Bind" e `default_sni` na seção de Operação: a RFC 6066 proíbe SNI com
+endereço, e é o `default_sni` que salva o handshake.
+
+## Como se chegou aqui — o que foi verificado
 
 Tudo abaixo foi medido no NumbERS em 2026-09-06, com o proxy escutando em
-`127.0.0.1:18443` e a API de produção como upstream real.
+`127.0.0.1:18443` e a API de produção como upstream real. A porta e o endereço
+mudaram desde então (18443 → 443, privado → público); **o que a tabela afirma
+continua valendo**, porque nada disso depende de porta.
 
 | O quê | Resultado |
 |---|---|
@@ -331,9 +367,43 @@ serviço roda; se ficar parado além disso, emite outra ao subir. A raiz vale at
 **A chave da CA é o ativo caro.** Fica em
 `/data/projects/leandro/scitechear/caddy/pki/authorities/local/root.key`
 (`0600`, diretório `0700`), **fora do checkout** — pelo mesmo motivo de
-`storage/` e `hf-cache`: um `git clean` ou re-clone não pode levá-la embora. Se
-ela sumir, todo app já instalado deixa de confiar no servidor e precisa de nova
-build. É o item que mais merece backup nesta máquina.
+`storage/` e `hf-cache`: um `git clean` ou re-clone não pode levá-la embora. É
+o item que mais merece backup nesta máquina.
+
+> ### ⚠️ Apagar o diretório de dados do Caddy quebra todo app instalado
+>
+> **Este é o modo de falha mais caro da operação, e ele acontece em
+> silêncio.** Se
+> `/data/projects/leandro/scitechear/caddy` for apagado, movido ou recriado
+> vazio, o Caddy **não falha ao subir**: ele gera uma **CA raiz nova**,
+> sozinho, e volta a servir HTTPS normalmente. Do lado do servidor está tudo
+> verde — `systemctl --user status scitechear-proxy` diz `active`, o `curl`
+> local com a raiz nova funciona, o journal não registra nada de errado.
+>
+> **Do lado dos aparelhos, todo app já instalado para de funcionar.** Cada
+> build carrega a raiz **antiga** embutida (`deploy/scitechear-root-ca.crt`);
+> contra uma raiz nova, o handshake falha com erro de certificado. E não há
+> conserto no servidor: a raiz antiga não volta, porque a chave privada dela
+> se foi. **Só uma nova build do app, redistribuída para cada aparelho,
+> resolve** — no meio de um piloto, isso é o piloto parado.
+>
+> O sintoma engana: parece defeito de TLS, de rede ou do app, e não "alguém
+> apagou um diretório". **A verificação que distingue os dois casos** compara
+> a raiz que o servidor está usando com a que foi para a build:
+>
+>     openssl x509 -noout -fingerprint -sha256 \
+>       -in /data/projects/leandro/scitechear/caddy/pki/authorities/local/root.crt
+>     openssl x509 -noout -fingerprint -sha256 \
+>       -in deploy/scitechear-root-ca.crt
+>
+> Os dois **têm que bater**. Em 21/09/2026 batem, em
+> `E8:04:01:1F:E2:B4:D0:C9:34:6C:0B:7C:C7:91:B4:3B:3D:B8:77:4A:15:D5:2C:9D:47:4A:A3:A7:3D:4A:23:98`
+> (`CN = Caddy Local Authority - 2026 ECC Root`, válida até 2036-07-15). Se
+> divergirem, foi isto que aconteceu.
+>
+> **Antes de mexer em qualquer coisa sob esse diretório**, copie
+> `pki/authorities/local/` inteiro para fora da máquina. É a única coisa ali
+> que não se regenera.
 
 **Bind.** No `Caddyfile`, o endereço do site (`https://200.17.57.229:443`)
 define a **identidade do certificado** e a porta; quem decide em qual interface
@@ -377,15 +447,19 @@ bloco `log`.
 
 ## O que ficou sem verificar
 
-- **O fechamento `4401` não atravessa o proxy.** Com token inválido ou
-  expirado, o cliente fica pendurado no handshake do WebSocket em vez de
-  receber `close(4401)` — direto na API o 4401 chega. Isolado em 21/09/2026:
-  é o caminho **TLS**, não a 443 nem o `bind`; um Caddy em HTTP puro entrega o
-  4401. Não é regressão da exposição — está assim desde 06/09, e passou batido
-  porque a verificação de WS daquele dia usou token válido. Importa no piloto:
-  o JWT dura 30 min, então token expirado é rotina, e o app não consegue
-  distinguir "sessão expirada" de "rede caída". Ver `PENDENCIAS.md`, que traz
-  a tabela de isolamento e os quatro caminhos possíveis.
+- ~~**O fechamento `4401` não atravessa o proxy.**~~ **Resolvido em
+  21/09/2026, e o proxy nunca teve culpa.** Este item afirmava que o
+  `close(4401)` do WebSocket não sobrevivia ao caminho TLS. **Era falso**, e
+  por erro de método: cada célula da matriz de isolamento foi medida uma vez
+  só, num defeito intermitente. Medido de novo com n alto contra o mesmo
+  proxy, dois clientes independentes recebem o fechamento sem falhar (TLS cru
+  de stdlib 20/20; `websockets` **assíncrono** 15/15) — só o
+  `websockets.sync`, que o smoke usava, pendura. O Caddy loga `status=101`
+  e o `Caddyfile` não foi alterado por causa disto. O conserto foi em
+  `scripts/smoke_contrato.py`. A tabela completa e as hipóteses descartadas
+  estão em [`PENDENCIAS.md`](PENDENCIAS.md); o repro, em
+  `docs/repro/ws-handshake-mudo/`. **O Flutter nunca foi afetado** — fala
+  Dart, não essa biblioteca.
 - **Upload grande através do proxy.** O Caddy não impõe limite de corpo por
   padrão e não tem timeout de leitura por padrão, então `MAX_UPLOAD_MB=300`
   deve passar — mas isso é raciocínio sobre os defaults, não medição. Testar um

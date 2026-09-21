@@ -122,7 +122,9 @@ com isolamento de rede Wi-Fi entre os aparelhos.
 > (`200.17.57.229`), então "quem chegasse à porta" é a internet; quem termina
 > TLS e pode ir para a rede é o proxy Caddy, nunca a API.
 >
-> Como alcançá-la de fora (hoje, túnel SSH; o que muda para o piloto; e o que
-> depende de quem administra o servidor) é assunto de deploy, e
-> [`docs/DEPLOY.md`](docs/DEPLOY.md) é a fonte de verdade — este README não
-> repete portas nem procedimento para não divergir dele.
+> Desde 2026-09-21 o app alcança o backend **direto pela internet**, em
+> `https://200.17.57.229` (porta 443, sem túnel e **sem VPN**) — o que exige da
+> build do app só a raiz da CA interna, porque a CA não é pública. O túnel SSH
+> continua existindo como caminho de desenvolvimento, não do piloto. Isso é
+> assunto de deploy, e [`docs/DEPLOY.md`](docs/DEPLOY.md) é a fonte de verdade
+> — este README não repete portas nem procedimento para não divergir dele.

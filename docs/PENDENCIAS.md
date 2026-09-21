@@ -6,6 +6,46 @@ antes de considerar algo definitivamente resolvido, etc. Diferente de
 `docs/BASELINE.md` (retrato pontual da Fase 0): este arquivo é atualizado ao
 longo do projeto.
 
+## Aberta — GPU0 fora de operação desde 19/09/2026; o sistema roda sem redundância
+
+**Onde:** infraestrutura do servidor NumbERS. **Não é defeito deste projeto**,
+e não há conserto no software — está aqui porque limita a operação e porque o
+dono da solução é outro.
+
+**O que houve.** A GPU0 (PCI `0000:21:00`) sofreu **falha física** em
+19/09/2026: **Xid 79**, *GPU has fallen off the bus*. A causa foi confirmada
+como física, sem relação com o software. A placa continua listada no
+barramento (`lspci` mostra `21:00.0`), mas o driver não a inicializa.
+
+**Estado atual.** Tudo roda na GPU1 (PCI `0000:c1:00`) — o worker do pipeline,
+o Ollama com `qwen3:14b` (14 GB de VRAM) e os outros projetos da máquina
+compartilhada. **Uma placa, sem redundância.** O `nvidia-smi` abre com
+`Unable to determine the device handle for GPU0`, e `torch.cuda.device_count()`
+devolve `1`.
+
+**Por que importa mesmo sem impacto de desempenho.** O worker é serial por
+decisão (um job por vez, pipeline GPU-bound), então a placa parada não deixa
+nenhum job mais lento — ela remove a margem. Qualquer problema na GPU1 agora
+para o sistema inteiro em vez de degradá-lo, e não há para onde migrar carga.
+No piloto, o teto de capacidade continua sendo a **fila**, não a invasão.
+
+**Uma armadilha silenciosa que a falha criou.** As unidades de systemd fixam
+`CUDA_VISIBLE_DEVICES=0`, que é índice de enumeração do CUDA e não endereço
+PCI. Com a GPU0 fora, esse `0` passou a apontar para a placa sobrevivente — o
+pin funciona hoje por coincidência. **Quando a GPU0 for reparada, ele volta a
+apontar para ela sem avisar**, e ela era ~15% mais lenta. Revisar esse
+`Environment=` faz parte do reparo. Detalhe em [`DEPLOY.md`](DEPLOY.md)
+("Armadilhas conhecidas").
+
+**Dono:** administrador do servidor — **aguardando reparo físico**. Nada a
+fazer do nosso lado além de não presumir duas placas em conta de capacidade
+nem em diagrama.
+
+**Verificação (sem privilégio):** `nvidia-smi`, `lspci | grep -i nvidia`,
+`.venv/bin/python -c "import torch; print(torch.cuda.device_count())"`. O
+`kern.log` com o Xid é legível só pelo grupo `adm`, do qual o usuário do
+projeto não participa.
+
 ## Resolvida — O "4401 que não atravessava o proxy" era o cliente do smoke, não o Caddy nem a API
 
 **Onde:** `scripts/smoke_contrato.py` (corrigido em 21/09/2026). O

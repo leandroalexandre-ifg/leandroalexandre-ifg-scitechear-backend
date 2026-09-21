@@ -15,12 +15,50 @@ que explica quase todas elas.
 
 | | |
 |---|---|
-| Máquina | `numbersia` — Ubuntu 24.04, 2× RTX 5090 (32 GB cada) |
+| Máquina | `numbersia` — Ubuntu 24.04, 2× RTX 5090 (32 GB cada) instaladas, mas **só uma em operação** desde 19/09/2026 — ver "GPU0 fora de operação" abaixo |
 | Endereço | **`200.17.57.229/28` público e roteável** desde 2026-09-21 (gateway `200.17.57.225`), estático no netplan. Antes: `10.4.254.201/16` privado atrás de NAT |
 | Compartilhada com | outros pesquisadores (há um ComfyUI de terceiro na mesma GPU) |
 | Fila de GPU | **não existe** — sem Slurm, sem árbitro; a convivência é por disciplina |
+| GPU em uso | **uma só**: a da PCI `0000:c1:00`, dividida com o Ollama e com os outros projetos. Sem redundância |
 | Python | 3.12 do sistema (daí o `.python-version` fixado) |
 | Torch | 2.8.0+cu128 — o índice cu130 não tem torch 2.8, e o WhisperX pina `torch~=2.8.0`; o driver 590/CUDA 13.1 roda binários cu128 sem ajuste (sm_120 confirmado) |
+
+### GPU0 fora de operação desde 19/09/2026 — limitação operacional aberta
+
+A máquina tem duas RTX 5090 instaladas, e **uma delas parou**. Não é
+configuração, não é driver e não é algo que se conserte daqui.
+
+| | |
+|---|---|
+| Placa afetada | GPU0, PCI `0000:21:00` |
+| Quando | 19/09/2026 |
+| Sintoma no kernel | **Xid 79** — *GPU has fallen off the bus* |
+| Causa | **física**, confirmada; não tem relação com o software deste projeto |
+| Estado | aguardando **reparo físico pelo administrador do servidor** |
+| Enquanto isso | tudo roda na GPU1 (PCI `0000:c1:00`), **sem redundância** |
+
+O Xid 79 e a data vêm do diagnóstico do administrador — o `kern.log` daquele
+dia é legível só pelo grupo `adm`. O que se confere sem privilégio nenhum, e
+que basta para saber em que estado a máquina está agora:
+
+    nvidia-smi
+    # → Unable to determine the device handle for GPU0: 0000:21:00.0: Unknown Error
+    # e a tabela lista só a GPU de índice 1, em 00000000:C1:00.0
+
+    lspci | grep -i nvidia
+    # → 21:00.0 e c1:00.0 ainda aparecem: o hardware está no barramento PCI,
+    #   quem não consegue inicializá-lo é o driver
+
+    .venv/bin/python -c "import torch; print(torch.cuda.device_count())"
+    # → 1   (e um UserWarning: Can't initialize NVML)
+
+**O que isso custa ao piloto.** Não é desempenho — é margem. O pipeline é
+GPU-bound e o worker é serial por decisão (um job por vez), então uma GPU
+parada não torna um job mais lento; ela remove o lugar para onde correr. Hoje
+o worker, o Ollama (`qwen3:14b`, 14 GB de VRAM) e os outros projetos da
+máquina dividem **a mesma placa**, e uma falha nela para o sistema inteiro em
+vez de degradá-lo. Antes de rodar algo pesado, `nvidia-smi` — e agora ele
+mostra uma placa só.
 
 ### O que mudou em 2026-09-21: a máquina ganhou IP público
 
@@ -80,12 +118,16 @@ que 443 é **porta privilegiada** — ver [a seção do proxy](#o-proxy-tls-na-4
 para como ela é aberta sem o serviço virar root.
 
 O que isso publica, dito aqui e não em nota de rodapé: o backend está **na
-internet**, não na rede do IFG. Some-se a `AUTH_ALLOWED_EMAIL_DOMAINS`
-deliberadamente vazia (registro aberto a qualquer e-mail — decisão de Leandro,
-reafirmada em 2026-09-21 já ciente do IP público) e o que está publicado é um
-**cadastro aberto na internet**, servido por uma GPU compartilhada com outros
-pesquisadores. O amortecedor que resta é o rate limit de registro (10/h por
-IP), dimensionado para quando um IP ainda identificava alguém.
+internet**, não na rede do IFG.
+
+Por algumas horas de 2026-09-21 isso foi um **cadastro aberto na internet** —
+`AUTH_ALLOWED_EMAIL_DOMAINS` estava deliberadamente vazia, e o único
+amortecedor era o rate limit de registro (10/h por IP), dimensionado para
+quando um IP ainda identificava alguém. **Não é mais o caso:** ainda em
+2026-09-21, junto com a revisão do modelo de acesso, a allowlist institucional
+foi **religada** (ver a seção de allowlist adiante). Quem chega ao registro
+sem e-mail institucional recebe `403`. O rate limit continua onde estava, agora
+como segunda camada e não como única.
 
 ## Layout no disco
 
@@ -199,13 +241,22 @@ LLM.
 
 ## Como o app alcança o backend
 
-A API responde só em `127.0.0.1:18080`, então **nenhum aparelho na rede a
-alcança diretamente** — o IP público não mudou isso. O túnel SSH abaixo é o
-caminho, e não depende de ninguém.
+**Desde 2026-09-21: direto, pela internet, em `https://200.17.57.229`** (porta
+443, sem número de porta na URL, sem túnel e **sem VPN**). Quem termina TLS e
+escuta na rede é o proxy Caddy; a API continua em `127.0.0.1:18080` e nunca
+escutou na rede — o IP público não mudou isso, e não deve mudar.
 
-### Recomendado: túnel SSH
+O único requisito do lado do app é a **raiz da CA interna na build**
+(`deploy/scitechear-root-ca.crt`), porque a CA não é pública. O procedimento
+está em [`TLS.md`](TLS.md); os `--dart-define` são
+`SCITECH_API_BASE_URL=https://200.17.57.229` e
+`SCITECH_WS_BASE_URL=wss://200.17.57.229`.
 
-Nenhum privilégio novo, nada exposto, nada a pedir ao admin. Na máquina de
+### Alternativa: túnel SSH (desenvolvimento)
+
+Deixou de ser o caminho do piloto, mas continua útil para depurar contra a API
+crua, **sem passar pelo proxy** — foi assim que se isolou o falso defeito do
+`4401`. Nenhum privilégio novo, nada a pedir ao admin. Na máquina de
 desenvolvimento (com IP público, a VPN deixou de ser necessária para chegar ao
 `sshd`):
 
@@ -252,23 +303,20 @@ consequências dele. A ordem importa: 1 e 2 são o que autoriza o 4.
    sobre `wss` — falta só o item 1 e a virada de `bind`. A perna da Fase 7
    continua existindo (o app precisa carregar a raiz da CA), e o `TLS.md`
    documenta por que `network_security_config` sozinho não basta em Flutter.
-3. ~~**Fechar as portas de entrada abertas.**~~ **Parcial.** O teto de upload
-   está feito e explicitado no `.env`. A allowlist de e-mail **não**: ela
-   esteve ativa com `ifg.edu.br` (recusando domínio de fora com `403`), foi
-   **desligada em 2026-09-08** e a decisão foi **reafirmada em 2026-09-21**,
-   já com o IP público à vista — `AUTH_ALLOWED_EMAIL_DOMAINS` está vazia, ou
-   seja, **registro aberto a qualquer e-mail**. É escolha consciente de
-   Leandro, não omissão; mas quem for virar o `bind` precisa saber que é isso
-   que vai ao ar junto. Nenhum destes itens **cifra nada** — não substituem o
-   item 2.
+3. ~~**Fechar as portas de entrada abertas.**~~ **Feito — os dois itens.** O
+   teto de upload está feito e explicitado no `.env`. A allowlist de e-mail
+   teve um caminho mais longo: esteve ativa com `ifg.edu.br`, foi **desligada
+   em 2026-09-08**, a decisão foi reafirmada na manhã de **2026-09-21** já com
+   o IP público à vista — e **revertida no mesmo dia**, junto com a revisão do
+   modelo de acesso (ver [`ARCHITECTURE.md` §11](ARCHITECTURE.md)). O que
+   mudou entre a reafirmação e a reversão não foi a avaliação de risco: foi o
+   reconhecimento de que, sem a rede como fronteira, não sobrava nenhuma.
+   `AUTH_ALLOWED_EMAIL_DOMAINS` agora vale
+   `ifg.edu.br,academico.ifg.edu.br,estudantes.ifg.edu.br`. Nenhum destes
+   itens **cifra nada** — não substituem o item 2.
 
-   Se um dia religar: a comparação é **exata, não por sufixo**
-   (`auth_service.py:141`), então os alunos (`@estudantes.ifg.edu.br`) e
-   `@academico.ifg.edu.br` precisam estar listados junto com `ifg.edu.br`.
-   Para conferir sem efeito colateral, `POST /auth/register` com
-   `e2e-teste@example.com` — domínio não institucional **e** já cadastrado:
-   dá `403` com allowlist ligada e `409` com ela desligada, e não cria conta
-   em nenhum dos dois casos.
+   Detalhes de operação (por que os três domínios, por que só `register`, e a
+   sonda de verificação) na seção "Allowlist de e-mail no registro" adiante.
 4. **Bind na interface da rede.** Feito e revertido em 2026-09-05 (ver "Os três
    serviços"). Só reabrir depois de 1 e 2, com confirmação de Leandro. Com o
    proxy do item 2, quem passa a escutar na rede é **o proxy**, não a API — o
@@ -290,19 +338,65 @@ gravação, em pedaços de 1 MB: sem isso, quem envia é que decide quanta RAM e
 quanto disco o servidor gasta. Upload recusado não deixa arquivo parcial nem
 job órfão na fila — o job só é criado depois da gravação terminar.
 
-#### Allowlist de e-mail no registro
+#### Allowlist de e-mail no registro — **ativa desde 2026-09-21**
 
 `AUTH_ALLOWED_EMAIL_DOMAINS` (vazio = registro aberto, o default de
-desenvolvimento). Preenchida com os domínios institucionais
-(`ifg.edu.br,academico.ifg.edu.br`), só quem tem vínculo cria conta — sem
-precisar inventar um fluxo de convite. E-mail recusado conta como tentativa
-falha no rate limit, para não virar um varredor de domínios.
+desenvolvimento). Em produção está preenchida:
 
-### Expor à internet
+    AUTH_ALLOWED_EMAIL_DOMAINS=ifg.edu.br,academico.ifg.edu.br,estudantes.ifg.edu.br
 
-Fora do escopo do piloto, e bem mais caro que a rede interna: IP público ou
-DNS, TLS obrigatório, e revisão do rate limiting (que hoje protege `/auth`
-assumindo um universo pequeno de clientes). Não faça sem TLS.
+Só quem tem vínculo cria conta, sem precisar inventar um fluxo de convite. Com
+a porta na internet, é isto que limita quem entra — o papel que a rede fazia
+enquanto a máquina era privada. E-mail recusado conta como tentativa falha no
+rate limit, para não virar um varredor de domínios.
+
+**Os três domínios não são zelo — são necessidade.** A comparação é **exata,
+não por sufixo** (`auth_service.py:141`): com apenas `ifg.edu.br` na lista, um
+aluno em `@estudantes.ifg.edu.br` leva `403` e **o piloto trava no cadastro**.
+
+**Ela vale só para `register`.** O `login` não passa pela allowlist
+(`auth_service.py:123` a chama em `register`, e só ali). Contas criadas antes
+de 2026-09-21 continuam autenticando mesmo com domínio de fora — foi verificado
+ao religá-la, com a conta `e2e-teste@example.com` (`200`, token emitido).
+Ligar a allowlist **não tranca ninguém que já entrou**; ela decide quem entra
+de agora em diante.
+
+**Como conferir sem efeito colateral.** `POST /auth/register` com
+`e2e-teste@example.com` — domínio não institucional **e** já cadastrado:
+
+    curl -s -o /dev/null -w "%{http_code}\n" -X POST \
+      http://127.0.0.1:18080/auth/register \
+      -H 'Content-Type: application/json' \
+      -d '{"email":"e2e-teste@example.com","password":"x","name":"sonda"}'
+
+`403` = allowlist ligada; `409` = desligada. Não cria conta em nenhum dos dois
+casos. Custa uma das 10 vagas do balde daquele IP.
+
+**Depois de mexer nessa variável, reinicie a API** — só ela serve `/auth`; o
+worker não toca em `AUTH_*` e não precisa de restart por causa disto:
+
+    systemctl --user restart scitechear-api
+
+### Expor à internet — **feito em 2026-09-21**
+
+Esta seção dizia, até 2026-09-21: *"fora do escopo do piloto, e bem mais caro
+que a rede interna: IP público ou DNS, TLS obrigatório, e revisão do rate
+limiting. Não faça sem TLS."* A previsão de custo estava certa; a de escopo,
+não. O piloto exigia alunos testando de casa, e a rede interna não descreve
+esse cenário — ver a decisão revisada em
+[`ARCHITECTURE.md` §11](ARCHITECTURE.md).
+
+O que a lista pedia, e onde cada item parou:
+
+| Pedia | Estado |
+|---|---|
+| IP público ou DNS | **IP público** desde 2026-09-21 (`200.17.57.229`, estático). DNS segue opcional, e é com o CTI |
+| TLS obrigatório | **feito** — Caddy com CA interna; a API nunca escuta na rede. Ver [`TLS.md`](TLS.md) |
+| Revisão do rate limiting | **parcial** — os limites são os mesmos; o que mudou é que a allowlist institucional voltou a ser a primeira camada, e não o rate limit sozinho |
+
+**"Não faça sem TLS" continua valendo integralmente** — é a única linha desta
+seção que não mudou, e a razão de o bind na rede de 2026-09-05 ter sido
+revertido no mesmo dia.
 
 ## CORS
 
@@ -350,6 +444,26 @@ unidades** — o `ollama.service` também lê o mesmo arquivo (vale por
 linha de comando do shell que o executa e mata o comando antes da linha
 seguinte. Use `pgrep -af "app[.]worker"` e mate por PID.
 
+**`CUDA_VISIBLE_DEVICES=0` aponta para outra placa desde 19/09/2026.** As
+unidades `scitechear-api.service` e `scitechear-worker.service` fixam
+`Environment=CUDA_VISIBLE_DEVICES=0`. Esse `0` é um índice de enumeração do
+CUDA, **não** um endereço PCI: com a GPU0 fora do barramento, o CUDA não a
+enumera, e o índice `0` passou a ser a placa sobrevivente (`0000:c1:00`). Ou
+seja, **o pin continua funcionando por coincidência**, não por configuração —
+confira com `nvidia-smi` que o processo do worker está mesmo na `C1:00.0`.
+
+Duas consequências que vão morder depois:
+
+- **Quando a GPU0 for reparada, o pin volta a apontar para ela em silêncio.**
+  Sem erro, sem log, sem nada na tela — só um sistema mais lento. Pelas
+  medições anteriores à falha, a GPU0 era ~15% mais lenta que a GPU1. Depois
+  do reparo, **revise esse `Environment=` antes de confiar em qualquer
+  medição de desempenho.**
+- **As unidades não são versionadas.** Elas vivem em
+  `~/.config/systemd/user/`, fora do checkout (só o `scitechear-proxy.service`
+  está em `deploy/`). Este parágrafo é o único lugar onde esse pin está
+  registrado.
+
 **GPU compartilhada.** O `qwen3:14b` ocupa **14 GB de VRAM** com o contexto
 default de 32k — não os ~10 GB que uma estimativa antiga sugeria.
 `OLLAMA_MAX_LOADED_MODELS=1` e `OLLAMA_KEEP_ALIVE=5m` limitam a janela em que
@@ -377,9 +491,12 @@ perguntas), ver `docs/E2E_FASE8.md`.
 
 Separado de propósito — é o que não dá para resolver sozinho:
 
+- **reparo físico da GPU0** (PCI `0000:21:00`, Xid 79 em 19/09/2026) —
+  **pendente**, e o único item desta lista que hoje limita a operação;
 - `loginctl enable-linger` (já feito);
 - instalar pacote via `apt`, ou qualquer coisa que precise de root;
-- entrar em grupos (ex.: `docker`);
+- entrar em grupos (ex.: `docker`) — inclusive `adm`, que é o que falta para
+  ler `/var/log/kern.log` e diagnosticar a GPU sem depender do admin;
 - criar diretórios fora de `/data/projects/<usuario>/`.
 
 **Saiu desta lista em 2026-09-21: "abrir porta no firewall".** Nunca foi do

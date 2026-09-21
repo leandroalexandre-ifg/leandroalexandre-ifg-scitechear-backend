@@ -60,7 +60,7 @@
   <rect x="672" y="242" width="196" height="66" rx="9" fill="#EAF3DE" stroke="#3B6D11"/>
   <text x="770" y="262" font-weight="bold" fill="#173404">scitechear-worker</text>
   <text x="770" y="278" font-size="11" fill="#3B6D11">consome a fila · GPU</text>
-  <text x="770" y="294" font-size="11" fill="#3B6D11">RTX 5090 compartilhada</text>
+  <text x="770" y="294" font-size="11" fill="#3B6D11">1 RTX 5090 (GPU0 morta)</text>
 </g>
 
 <!-- storage -->
@@ -82,6 +82,6 @@
 <rect x="30" y="504" width="860" height="106" rx="10" fill="#FBE9E7" stroke="#B42318"/>
 <text x="50" y="530" font-size="13" font-weight="bold" fill="#7A160C">O que está publicado na internet — 21/09/2026</text>
 <text x="50" y="552" font-size="12" fill="#4A1B0C">O proxy escuta em 0.0.0.0:443 (porta privilegiada: setcap no binário do Caddy, sem root). A API segue em 127.0.0.1:18080 e</text>
-<text x="50" y="570" font-size="12" fill="#4A1B0C">nunca escutou na rede. O registro de contas está ABERTO a qualquer e-mail — decisão de Leandro, reafirmada sabendo disto.</text>
-<text x="50" y="592" font-size="12" font-weight="bold" fill="#7A160C">O que segura a porta não é firewall nenhum: é o rate limit de registro (10/h por IP). O teto real do piloto é a fila da GPU.</text>
+<text x="50" y="570" font-size="12" fill="#4A1B0C">nunca escutou na rede. O registro exige e-mail institucional (@ifg.edu.br, @academico, @estudantes): fora disso, 403.</text>
+<text x="50" y="592" font-size="12" font-weight="bold" fill="#7A160C">A fronteira não é mais a rede nem firewall: é TLS + JWT + allowlist de domínio. O teto real do piloto é a fila da GPU — hoje uma só.</text>
 </svg>

@@ -1,5 +1,27 @@
 # Teste conjunto com o backend no NumbERS — preparação
 
+> ## ⚠️ Registro histórico — não siga este procedimento
+>
+> **Este documento descreve um mundo que acabou em 21/09/2026.** Ele é
+> preservado como registro do teste de 07/09, que de fato passou assim.
+> Três coisas que ele manda fazer **não valem mais**:
+>
+> - **VPN do IFG e túnel SSH.** Desnecessários. O backend responde em
+>   `https://200.17.57.229` (porta 443) **de qualquer rede**: a máquina ganhou
+>   IP público e a borda do IFG liberou a porta. O `ufw` desta máquina, aliás,
+>   nunca esteve ativo — quem filtrava era a borda.
+> - **O endereço `10.4.254.201`.** É um endereço **morto**, não um endereço
+>   que mudou de valor: a máquina não o tem mais. Qualquer coisa apontada para
+>   lá falha com *connection timeout*, sintoma que não sugere a causa.
+> - **"com a allowlist institucional"** (§ abaixo). Naquela data ela estava
+>   **desligada** — foi desligada em 08/09 e só religada em 21/09. Hoje está
+>   ativa de novo, agora com os três domínios.
+>
+> **O que continua valendo** é o resto: a CA interna precisa estar na build do
+> app, e o SNI tem que ser o IP. Para o procedimento atual, ver
+> [`DEPLOY.md`](DEPLOY.md), [`TLS.md`](TLS.md) e
+> [`ROTEIRO_TESTES_PENDENTES.md`](ROTEIRO_TESTES_PENDENTES.md).
+
 **Data:** 07/09/2026
 **Substitui:** o passo 5 do roteiro do frontend (`adb reverse` + `127.0.0.1:8000`),
 que pressupunha o backend na máquina de desenvolvimento.

@@ -249,9 +249,16 @@ nenhum dos dois casos. Custa uma das 10 vagas do balde daquele IP.
 ### O teto que não é de segurança
 
 O worker é **um processo, serial** (`while True` em `app/worker.py`), preso em
-`CUDA_VISIBLE_DEVICES=0` — justamente a GPU ~15% mais lenta das duas, com a
-GPU1 ociosa. Uma reunião de 10 min leva ~3,6 min; uma turma enviando junto
-enfileira. Abrir o cadastro para a internet não muda o risco de invasão tanto
+`CUDA_VISIBLE_DEVICES=0` — quando isto foi escrito, justamente a GPU ~15% mais
+lenta das duas, com a GPU1 ociosa. Uma reunião de 10 min leva ~3,6 min; uma
+turma enviando junto enfileira.
+
+> **A conta mudou em 19/09/2026, e não para melhor.** Não há mais "GPU1
+> ociosa": a **GPU0 caiu do barramento** (Xid 79, falha física) e a máquina
+> opera com **uma placa só**, dividida com o Ollama e com os outros projetos.
+> O `CUDA_VISIBLE_DEVICES=0` hoje aponta para a placa sobrevivente, porque o
+> CUDA não enumera a morta — o pin acerta por coincidência. Ver `PENDENCIAS.md`
+> e `DEPLOY.md`. Abrir o cadastro para a internet não muda o risco de invasão tanto
 quanto muda o risco de **fila**: é o teto real de capacidade do piloto.
 
 ---
@@ -311,9 +318,15 @@ Depois do restart:
    scripts.smoke_contrato https://200.17.57.229` — o script não recebe CA por
    argumento; sem a variável ele falha em `CERTIFICATE_VERIFY_FAILED`, que
    parece problema de certificado e é só o bundle default do `httpx`.
-   Referência **através do proxy**: **20 OK, 1 falha**, e a falha é conhecida
-   (o `4401` do WS não atravessa o TLS — ver `PENDENCIAS.md`). Direto na API
-   (`http://127.0.0.1:18080`) a referência continua **21 OK, 0 falhas**.
+   Referência **através do proxy**: **20 OK, 1 falha**, e a falha parecia
+   conhecida (o `4401` do WS não atravessando o TLS).
+
+   > **Corrigido em 21/09/2026, depois que isto foi escrito.** Aquela causa
+   > era **falsa**: o `4401` sempre atravessou o proxy. Quem pendurava era o
+   > cliente `websockets.sync` usado pelo próprio smoke — dois clientes
+   > independentes recebem o fechamento pelo mesmo proxy sem falhar. Com o
+   > smoke corrigido para o cliente assíncrono, a referência através do proxy
+   > é **21 OK, 0 falhas**, igual à direta. Ver `PENDENCIAS.md`.
 8. **Upload grande através do proxy** — pendência aberta em `TLS.md`, nunca
    testada. Um WAV perto do teto de 300 MB.
 9. Do tablet **sem cabo**: login, upload, WebSocket até `done`, resultado.
