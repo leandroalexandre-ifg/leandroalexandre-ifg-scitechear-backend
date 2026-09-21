@@ -15,11 +15,44 @@ que explica quase todas elas.
 
 | | |
 |---|---|
-| Máquina | `numbersia` — Ubuntu 24.04, RTX 5090 (32 GB), acessível só pela VPN do IFG |
+| Máquina | `numbersia` — Ubuntu 24.04, 2× RTX 5090 (32 GB cada) |
+| Endereço | **`200.17.57.229/28` público e roteável** desde 2026-09-21 (gateway `200.17.57.225`), estático no netplan. Antes: `10.4.254.201/16` privado atrás de NAT |
 | Compartilhada com | outros pesquisadores (há um ComfyUI de terceiro na mesma GPU) |
 | Fila de GPU | **não existe** — sem Slurm, sem árbitro; a convivência é por disciplina |
 | Python | 3.12 do sistema (daí o `.python-version` fixado) |
 | Torch | 2.8.0+cu128 — o índice cu130 não tem torch 2.8, e o WhisperX pina `torch~=2.8.0`; o driver 590/CUDA 13.1 roda binários cu128 sem ajuste (sm_120 confirmado) |
+
+### O que mudou em 2026-09-21: a máquina ganhou IP público
+
+O admin trocou o endereçamento da `eno1`. Três consequências, e a terceira é a
+que mais dá trabalho:
+
+1. **O NAT acabou.** Antes a máquina era `10.4.254.201/16` privada, e o
+   `200.17.57.4` que se via de fora era NAT de *saída* compartilhado — mão
+   única, ninguém de fora iniciava conexão. Agora `curl ifconfig.me` devolve
+   `200.17.57.229`, o mesmo endereço da interface: o roteamento é direto, nos
+   dois sentidos.
+2. **O pedido de DNAT ao CTI deixou de existir.** Era a Etapa 2 inteira do
+   `PLANO_EXPOSICAO_REDE.md`, e foi atendida — de forma melhor do que o pedido.
+   O que resta do CTI é opcional: um nome DNS.
+3. **`10.4.254.201` morreu, e levou junto tudo que o citava.** SAN do
+   certificado, `default_sni`, endereço do site no `Caddyfile`, os
+   `--dart-define` do app e os exemplos de `curl` desta documentação. Não é um
+   endereço que "mudou de valor": é um endereço que a máquina não tem mais, e
+   qualquer coisa apontada para lá falha com *connection timeout*, não com erro
+   de TLS — sintoma que não sugere a causa.
+
+O que **não** mudou: o `ufw` segue ativo com `DEFAULT_INPUT_POLICY="DROP"`, e
+os quatro serviços seguem em loopback. **Ter IP público não expôs nada.** O
+endereço resolveu o problema de *roteamento*; o de *escuta* e o de *firewall*
+continuam abertos, e são eles que este documento descreve abaixo.
+
+Uma coisa ficou mais pesada, e merece ser dita aqui e não numa nota de rodapé:
+virar o `bind` para `0.0.0.0` agora alcança **a internet**, não mais a rede do
+IFG. Some isso a `AUTH_ALLOWED_EMAIL_DOMAINS` estar deliberadamente vazia
+(registro aberto a qualquer e-mail — decisão de Leandro, reafirmada em
+2026-09-21 já ciente do IP público) e o que se publica é um cadastro aberto na
+internet, servido por uma GPU compartilhada com outros pesquisadores.
 
 ## Layout no disco
 
@@ -71,9 +104,11 @@ HTTPS pelo túnel, sem esperar o admin. Sair do loopback continua sendo um passo
 Houve um bind em `0.0.0.0` em 2026-09-05, **revertido no mesmo dia** por
 decisão de Leandro. O motivo da reversão é o item 4 abaixo: enquanto o estado
 do firewall for desconhecido, escutar na `eno1` significa senha e áudio de
-reunião em **HTTP puro** ao alcance de qualquer máquina da `10.4.0.0/16` — a
-instituição inteira. O teto de upload e a allowlist de domínio reduzem a
-superfície, mas nenhum dos dois cifra nada.
+reunião em **HTTP puro** ao alcance de quem chegar à porta. Na época isso
+queria dizer a `10.4.0.0/16`, a instituição inteira; desde o IP público de
+2026-09-21 quer dizer a internet. O teto de upload reduz a superfície, mas
+não cifra nada — e a allowlist de domínio, que na época também ajudava, está
+desligada desde 2026-09-08.
 
 **Não reabra o bind sem as duas condições**, ambas confirmadas por Leandro:
 
@@ -83,10 +118,13 @@ superfície, mas nenhum dos dois cifra nada.
 
 Até lá o caminho é o túnel SSH abaixo, que não depende de ninguém.
 
-Quando reabrir, use `0.0.0.0` e **não** o IP específico: o endereço da `eno1`
-vem por DHCP (`10.4.254.201` via `10.4.0.1`), e fixar um IP que pode mudar
-faria o uvicorn falhar com *cannot assign requested address* e entrar em loop
-de restart — a API simplesmente não subiria, no pior momento possível. As
+Quando reabrir, use `0.0.0.0` e **não** o IP específico. A justificativa
+original era o DHCP; ela mudou de forma em 2026-09-21 sem mudar de conclusão.
+O endereço hoje é **estático** (`200.17.57.229`, posto no netplan pelo admin —
+não há lease em `/run/systemd/netif/leases/`), então o bind num IP literal
+passou a ser tecnicamente possível. Continua sendo errado: amarra o serviço a
+uma decisão do admin que pode mudar sem aviso, e a falha resultante é *cannot
+assign requested address* em loop de restart — no boot, sem ninguém olhando. As
 demais interfaces (`docker0`, bridges, `wlp101s0`, `enp103s0`) estão DOWN,
 então na prática isso seria `eno1` + loopback. **Quem pode chegar à porta é
 responsabilidade do firewall**, que é a camada certa para isso; restringir pelo
@@ -104,13 +142,14 @@ LLM.
 ## Como o app alcança o backend
 
 A API responde só em `127.0.0.1:18080`, então **nenhum aparelho na rede a
-alcança diretamente** — nem pela VPN. O túnel SSH abaixo é o caminho, e não
-depende de ninguém.
+alcança diretamente** — o IP público não mudou isso. O túnel SSH abaixo é o
+caminho, e não depende de ninguém.
 
-### Recomendado: túnel SSH sobre a VPN
+### Recomendado: túnel SSH
 
 Nenhum privilégio novo, nada exposto, nada a pedir ao admin. Na máquina de
-desenvolvimento, já conectada à VPN:
+desenvolvimento (com IP público, a VPN deixou de ser necessária para chegar ao
+`sshd`):
 
     ssh -N -L 18080:127.0.0.1:18080 leandro@numbersia
 
@@ -123,22 +162,27 @@ mesmo `adb reverse` que o README já descreve:
 E o app aponta para `http://127.0.0.1:18080` via `--dart-define`
 (`SCITECH_API_BASE_URL`, `SCITECH_WS_BASE_URL` — ver Fase 7 do plano).
 
-### Aparelhos na rede do IFG (VPN ou laboratório) — **exige o admin**
+### Aparelhos fora da máquina — **exige o admin**
 
-Cenário do piloto: o professor testando pela VPN com um tablet, e depois os
-alunos usando os próprios aparelhos direto do laboratório, sem VPN.
+Cenário do piloto: o professor com um tablet e, depois, os alunos usando os
+próprios aparelhos. Com IP público os dois cenários deixaram de depender de
+estar na rede do IFG — e é a mesma mudança para ambos.
 
-A máquina tem IP **`10.4.254.201/16`** na interface `eno1` — a rede do IFG,
-por DHCP (a lease renova; **para o piloto, peça reserva de DHCP ao admin**, ou
-o app aponta para um alvo que pode mudar). Vale para os dois cenários — o do
-professor e o dos alunos é a mesma mudança, o que é bom: dá para testar na
-topologia real antes.
+A máquina tem IP **`200.17.57.229/28`** na `eno1`, público e **estático**
+(netplan, sem lease DHCP). A reserva de DHCP que este documento pedia deixou
+de fazer sentido: não há lease para reservar. O que substitui esse pedido, se
+quisermos deixar de depender de um IP literal, é um **registro DNS** — e esse
+é com o CTI, não com o admin da máquina.
 
 Os quatro itens abaixo são **pré-requisitos do bind na rede**, não
 consequências dele. A ordem importa: 1 e 2 são o que autoriza o 4.
 
 1. **Liberar a porta no firewall** — *exige quem administra o servidor*.
-   Idealmente restrito à faixa do laboratório, não à `10.4.0.0/16` inteira.
+   **Atualizado em 2026-09-21:** com IP público, "restringir à faixa do
+   laboratório" deixou de ser o pedido certo — não há mais faixa interna entre
+   o aparelho e a máquina. O pedido passa a ser a porta **18443/tcp** aberta, e
+   a pergunta de escopo (para quem?) passa a ser respondida pela allowlist de
+   e-mail e pelo rate limit, não pelo firewall.
    **Atualizado em 2026-09-06:** o estado do firewall não é mais desconhecido —
    o `ufw` está ativo com `DEFAULT_INPUT_POLICY="DROP"`, ou seja, nega por
    padrão e a porta está fechada mesmo que um processo escute nela. As regras
@@ -152,19 +196,35 @@ consequências dele. A ordem importa: 1 e 2 são o que autoriza o 4.
    sobre `wss` — falta só o item 1 e a virada de `bind`. A perna da Fase 7
    continua existindo (o app precisa carregar a raiz da CA), e o `TLS.md`
    documenta por que `network_security_config` sozinho não basta em Flutter.
-3. ~~**Fechar as portas de entrada abertas.**~~ **Feito** (ver abaixo): teto de
-   upload e allowlist de e-mail no registro, esta última já ativa em produção
-   com `ifg.edu.br` e confirmada recusando domínio de fora com `403`. Reduzem a
-   superfície, mas **não cifram nada** — não substituem o item 2.
+3. ~~**Fechar as portas de entrada abertas.**~~ **Parcial.** O teto de upload
+   está feito e explicitado no `.env`. A allowlist de e-mail **não**: ela
+   esteve ativa com `ifg.edu.br` (recusando domínio de fora com `403`), foi
+   **desligada em 2026-09-08** e a decisão foi **reafirmada em 2026-09-21**,
+   já com o IP público à vista — `AUTH_ALLOWED_EMAIL_DOMAINS` está vazia, ou
+   seja, **registro aberto a qualquer e-mail**. É escolha consciente de
+   Leandro, não omissão; mas quem for virar o `bind` precisa saber que é isso
+   que vai ao ar junto. Nenhum destes itens **cifra nada** — não substituem o
+   item 2.
+
+   Se um dia religar: a comparação é **exata, não por sufixo**
+   (`auth_service.py:141`), então os alunos (`@estudantes.ifg.edu.br`) e
+   `@academico.ifg.edu.br` precisam estar listados junto com `ifg.edu.br`.
+   Para conferir sem efeito colateral, `POST /auth/register` com
+   `e2e-teste@example.com` — domínio não institucional **e** já cadastrado:
+   dá `403` com allowlist ligada e `409` com ela desligada, e não cria conta
+   em nenhum dos dois casos.
 4. **Bind na interface da rede.** Feito e revertido em 2026-09-05 (ver "Os três
    serviços"). Só reabrir depois de 1 e 2, com confirmação de Leandro. Com o
    proxy do item 2, quem passa a escutar na rede é **o proxy**, não a API — o
    bind da API em `127.0.0.1` deixa de ser provisório e vira definitivo.
 
-**`10.4.0.0/16` é a instituição inteira, não só o laboratório.** É a razão de
-os dois tetos abaixo existirem: com a API em loopback, quem chega à porta já
-está dentro da máquina, e nenhum dos dois faz falta — eles existem para o dia
-em que o bind reabrir.
+**O alcance de uma porta aberta aqui é a internet.** Era "a instituição
+inteira" enquanto a máquina era privada; desde 2026-09-21 é mais que isso. É a
+razão de os dois tetos abaixo existirem: com a API em loopback, quem chega à
+porta já está dentro da máquina, e nenhum dos dois faz falta — eles existem
+para o dia em que o bind reabrir. Desde 2026-09-21 os dois estão
+**explicitados no `.env`** em vez de valer por default implícito: o valor é o
+mesmo, o que mudou é que virou decisão registrada.
 
 #### Teto de upload
 

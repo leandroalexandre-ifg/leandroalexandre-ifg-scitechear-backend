@@ -61,6 +61,7 @@ FRASES_MORTAS = [
     ("job_executor", "não existe: virou app/worker.py + app/services/job_runner.py"),
     ("exibe error.message", "o app traduz o error.code; o message nunca chega à tela"),
     ("estado do job em memória", "os jobs vivem em SQLite (WAL), não em memória"),
+    ("10.4.254.201", "endereço morto: a eno1 virou 200.17.57.229 pública em 21/09/2026"),
 ]
 
 

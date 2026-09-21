@@ -1,194 +1,247 @@
 # Plano de Exposição de Rede — SciTech Ear · Backend
 
-Plano para (a) o tablet deixar de depender do cabo até o MacBook e (b) o
-backend chegar à internet com o app conectado. Escrito em 2026-09-07; **nada
-aqui foi executado** — é o roteiro, e cada etapa diz de quem depende.
+Plano para o app alcançar o backend sem o cabo até o MacBook. Escrito em
+2026-09-07 e **reescrito em 2026-09-21**, quando a máquina ganhou IP público e
+metade do plano deixou de fazer sentido.
 
 Complementa `DEPLOY.md` (estado atual da rede e dos serviços) e `TLS.md` (o
 proxy e o lado Flutter). Onde houver divergência, aqueles dois são a fonte de
 verdade sobre o que existe; este documento é sobre o que falta.
 
-## O problema, com precisão
+---
 
-Hoje o tablet só alcança o backend porque o MacBook faz a ponte: um túnel SSH
-(`ssh -N -L 8000:127.0.0.1:18080`) mais `adb reverse tcp:8000 tcp:8000` pelo
-USB. O app aponta para `127.0.0.1:8000` sem saber que do outro lado há um
-túnel — **quem carrega o tráfego é o cabo**.
+## O que mudou em 2026-09-21
 
-O detalhe que muda o plano: o vínculo é de **rede**, não de *bundle*. A build
-de desenvolvimento roda sozinha depois de instalada, então **dar ao tablet um
-endereço alcançável já corta o cabo** — não é preciso gerar build nova nem
-publicar em loja.
+A versão anterior deste plano tinha duas etapas: a **Etapa 1** punha o backend
+na rede interna do IFG, e a **Etapa 2**, bem mais cara, pedia ao CTI um DNAT ou
+IP público para chegar à internet.
 
-E isso separa as duas metas, que costumam ser tratadas como uma só:
+**A Etapa 2 foi atendida antes de ser pedida.** O admin trocou o endereçamento
+da `eno1`: a máquina saiu de `10.4.254.201/16` privada atrás de NAT e passou a
+`200.17.57.229/28` **pública e roteável**, estática no netplan. Verificado:
+`curl ifconfig.me` devolve `200.17.57.229`, o mesmo endereço da interface — não
+mais o `200.17.57.4` de NAT de saída compartilhado. O roteamento agora é direto
+nos dois sentidos.
 
-- **Tirar o cabo** exige apenas a rede interna do IFG.
-- **Chegar à internet** é outro problema, bem mais caro, e não é pré-requisito
-  do primeiro.
+Com isso as duas etapas colapsaram numa só, e o que sobrou é mais curto do que
+qualquer uma das duas era.
 
-## Três coisas que se confundem — e só a terceira é "internet"
+**O que caiu do plano:**
 
-Medido em 2026-09-07:
+| Item | Por quê |
+|---|---|
+| Pedido de DNAT ao CTI | Atendido, e de forma melhor: IP próprio em vez de porta mapeada |
+| Reserva de DHCP ao admin | Não há lease para reservar — o endereço é estático |
+| Descobrir a faixa do wi-fi do tablet | Não há mais faixa interna entre o aparelho e a máquina |
+| Regra de `ufw` restrita à faixa do laboratório | Mesma razão: o escopo agora é decidido por allowlist e rate limit, não por CIDR |
 
-| | O que faz | O que **não** faz |
-|---|---|---|
-| Registro DNS | Dá nome a um endereço; resolve o problema do IP que muda | Não expõe nada |
-| Porta liberada no `ufw` | Torna alcançável por quem já roteia até a máquina (a rede do IFG) | Não é internet |
-| IP público / DNAT | Coloca de fato na internet | Só o CTI pode criar |
+**O que apareceu:**
 
-A máquina tem `10.4.254.201/16` — endereço **privado** (RFC 1918), atrás de
-NAT. A saída funciona (`example.com` respondeu 200 em 0,13 s) e o endereço
-público visto de fora é `200.17.57.4`, **mas esse é o NAT de saída**,
-compartilhado: ele deixa o servidor *iniciar* conexões e não deixa ninguém de
-fora iniciar uma para cá. **O NAT do IFG é de mão única.**
+| Item | Por quê |
+|---|---|
+| Reemitir o certificado | O SAN era `IP:10.4.254.201`, endereço que a máquina não tem mais |
+| Revisar o registro aberto | Abrir a porta agora alcança a internet, não a rede do IFG |
+| Registro DNS (opcional) | Deixou de ser pré-requisito e virou melhoria: tira o IP literal do app |
 
-Por isso "liberar a porta" e "ter IP público" não são a mesma coisa, e pedir a
-primeira achando que se está pedindo a segunda leva a um piloto que funciona no
-laboratório e falha na demonstração externa.
+> **A armadilha do endereço morto.** `10.4.254.201` não "mudou de valor": é um
+> endereço que a máquina não tem. Qualquer cliente apontado para lá falha com
+> *connection timeout* — não com erro de TLS, não com 404. O sintoma não sugere
+> a causa, e o alvo aparecia em cinco lugares diferentes (SAN do certificado,
+> `default_sni`, endereço do site no `Caddyfile`, `--dart-define` do app,
+> exemplos de `curl` na documentação). Medido em 2026-09-21: o smoke de
+> contrato contra `https://10.4.254.201:18443` dá `httpx.ConnectTimeout`,
+> enquanto o mesmo smoke via `--connect-to` forçando loopback passa 21/21.
 
 ---
 
-# Etapa 1 — Rede interna do IFG (tira o cabo)
+## Onde o plano está agora
 
-O proxy Caddy já termina TLS e repassa para a API em loopback, verificado ponta
-a ponta (`TLS.md`). Ele está escutando em `127.0.0.1:18443`: falta a porta
-existir e o `bind` virar.
+Três dos cinco passos foram feitos em 2026-09-21; os dois que faltam são
+justamente os que expõem o serviço, e por isso ficaram para depois.
 
-## 1.1 Antes de falar com o admin: a faixa do tablet
+| # | Passo | Estado |
+|---|---|---|
+| 1 | Identidade do certificado → `200.17.57.229` | **feito** — `deploy/Caddyfile` |
+| 2 | Endurecer o `.env` antes de existir porta | **feito** — CORS e tetos explicitados |
+| 3 | Documentação e diagrama acompanhando o endereço novo | **feito** |
+| 4 | Regra de `ufw` para a 18443 | **bloqueado no admin** |
+| 5 | `bind 127.0.0.1` → `bind 0.0.0.0` | **aguarda 4 + confirmação de Leandro** |
 
-`DEPLOY.md` recomenda restringir a regra "à faixa do laboratório", mas o tablet
-estará no **wi-fi**, que provavelmente não é a faixa das máquinas cabeadas.
-Pedir a regra errada custa um segundo ciclo com o admin.
+### 1. Identidade do certificado — feito
 
-Conectar o tablet ao wi-fi que ele usará e anotar o IP (Configurações → Wi-Fi →
-rede conectada). É o dado que falta para o pedido sair completo.
+No `deploy/Caddyfile`, o endereço do site e o `default_sni` passaram de
+`10.4.254.201` para `200.17.57.229`. O `bind` **não** mudou: segue
+`127.0.0.1`.
 
-## 1.2 Pedido ao admin do NumbERS
+O que torna isso barato é a decisão de 2026-09-06 de usar uma **CA interna** em
+vez de um autoassinado avulso. O app confia na *raiz*, que não mudou (válida
+até 2036-07-15) — então a folha é reemitida sozinha com o SAN novo e
+**nenhuma build do app precisa ser refeita**. Se fosse um autoassinado avulso,
+toda instalação existente teria parado de confiar no servidor. Ver `TLS.md`.
 
-Dois itens, ambos exigindo root e portanto dele:
+### 2. Endurecimento do `.env` — feito
 
-1. **Liberar TCP 18443** no `ufw`, restrito à faixa descoberta em 1.1 — não à
-   `10.4.0.0/16` inteira, que é a instituição toda.
-2. **Reserva de DHCP** para o MAC da `eno1`, fixando `10.4.254.201`.
+Três valores rodavam no default implícito. Enquanto tudo estava em loopback
+isso era inofensivo; a partir do momento em que existe uma porta alcançável,
+cada um vira decisão que ninguém tomou. Explicitar não mudou comportamento
+nenhum — mudou de quem é a responsabilidade pelo valor.
 
-A reserva não é conforto: o certificado tem `IP:10.4.254.201` como **único
-SAN** e o `default_sni` do `Caddyfile` carrega o mesmo endereço. Uma troca de
-lease quebra o handshake *e* faz o app perder o servidor — dois pontos de falha
-de uma vez.
-
-## 1.3 Endurecer antes de a porta existir
-
-Três valores ainda rodam no **default implícito**, o que só é inofensivo
-enquanto tudo está em loopback. A partir do momento em que existe uma porta,
-viram decisão que ninguém tomou. Explicitar no `.env` **antes** da virada:
-
-| Variável | Hoje | Passa a ser | Porquê |
+| Variável | Era | Ficou | Porquê |
 |---|---|---|---|
-| `CORS_ALLOW_ORIGINS` | `*` (default) | vazio | Não há cliente web no projeto; o app Android é nativo, não manda `Origin` e não é afetado |
-| `MAX_UPLOAD_MB` | 300 (default) | `300` | Vira decisão registrada em vez de omissão |
-| `MAX_VOICE_SAMPLE_MB` | 25 (default) | `25` | idem |
+| `CORS_ALLOW_ORIGINS` | ausente (default `*`) | vazio | Não há cliente web; o app Android é nativo, não manda `Origin` e não é afetado |
+| `MAX_UPLOAD_MB` | ausente (default 300) | `300` | Decisão registrada em vez de omissão |
+| `MAX_VOICE_SAMPLE_MB` | ausente (default 25) | `25` | idem |
 
-`AUTH_ALLOWED_EMAIL_DOMAINS` **já está** em `ifg.edu.br` — item cumprido.
-
-> **Armadilha ao fazer isso.**
+> **A armadilha que isso dispara, e que foi fechada junto.**
 > `tests/test_cors.py::test_default_preserva_o_comportamento_de_desenvolvimento`
-> afirma um *default* chamando `Settings()`, que lê o `.env` do servidor — ou
-> seja, mede o que a produção configurou, não o default do campo. Ele passa
-> hoje **só porque `CORS_ALLOW_ORIGINS` está ausente do `.env`**. No momento em
-> que a variável for explicitada, o teste quebra sem que nada do comportamento
-> tenha mudado. A saída é `Settings(_env_file=None)`.
+> afirmava um *default* chamando `Settings()`, que lê o `.env` do servidor — ou
+> seja, media o que a produção configurou, não o default do campo. Passava só
+> porque `CORS_ALLOW_ORIGINS` estava **ausente** do arquivo. Ao explicitar a
+> variável o teste quebraria sem que comportamento nenhum tivesse mudado. A
+> saída é `Settings(_env_file=None)`, já aplicada, junto de um teste novo que
+> trava o valor que a produção de fato usa.
 
-Lembrar que `EnvironmentFile=` é lido no **start**: depois de mexer no `.env`,
-reiniciar `scitechear-api`, `scitechear-worker` e `ollama`.
+### 3. Documentação — feito
 
-## 1.4 Virar o bind
+`DEPLOY.md`, `TLS.md`, `README.md`, `ROTEIRO_TESTES_PENDENTES.md` e o diagrama
+`05-deploy-topologia.svg` acompanharam o endereço novo. A frase
+`10.4.254.201` entrou na lista `FRASES_MORTAS` de `tests/test_diagramas.py`:
+se algum diagrama voltar a citá-la, o teste falha. Os relatórios datados
+(`E2E_APP_2026-09-07.md`, `TESTE_CONJUNTO_NUMBERS.md`) **não** foram mexidos —
+são registro do que era verdade naquele dia, não descrição do presente.
 
-Uma linha em `deploy/Caddyfile`, no bloco `https://10.4.254.201:18443`:
+### 4. Regra de firewall — bloqueado no admin
+
+O `ufw` está ativo com `DEFAULT_INPUT_POLICY="DROP"` (lido em
+`/etc/default/ufw`; as regras em si são `0640 root:root` e continuam ilegíveis
+sem root). A porta está fechada mesmo com um processo escutando nela.
+
+Pedido, em uma linha:
+
+> Abrir no firewall a porta TCP **18443** do host `numbersia`
+> (`200.17.57.229`). É porta alta, não privilegiada; o serviço roda como
+> usuário comum, sem root; o tráfego é HTTPS.
+
+Nada além disso é preciso do admin. Não há reserva de DHCP a pedir (endereço
+estático) e não há faixa a restringir (não há mais rede interna no caminho).
+
+### 5. Virar o bind — aguarda o passo 4 e confirmação
+
+Uma linha em `deploy/Caddyfile`:
 
     bind 127.0.0.1   →   bind 0.0.0.0
 
-`0.0.0.0`, **nunca** o IP da `eno1`: o endereço vem por DHCP, e bind num IP que
-muda faz o serviço falhar com *cannot assign requested address* e entrar em
-loop de restart. Aplicar com `systemctl --user reload scitechear-proxy` —
-*reload*, não restart, para não derrubar conexão.
+`0.0.0.0`, **nunca** `200.17.57.229` literal. O argumento antigo era o DHCP;
+com endereço estático o bind num IP virou tecnicamente possível e continua
+errado: amarra o serviço a uma decisão do admin que pode mudar sem aviso, e a
+falha é *cannot assign requested address* em loop de restart, no boot, sem
+ninguém olhando.
+
+Aplicar com `systemctl --user restart scitechear-proxy`, **não `reload`**: o
+`reload` é incompatível com o `admin off` do `Caddyfile` e sempre falha (ver
+`TLS.md`, seção Operação). Como restart derruba conexão, escolha o momento —
+não com upload de reunião em curso.
 
 **`scitechear-api.service` não muda.** A API continua em `127.0.0.1:18080`;
 quem vai para a rede é só o proxy. A regra "a API nunca escuta na rede"
 permanece.
 
-## 1.5 Lado do app (repositório SciTech-frontend)
+---
 
-O procedimento completo está em `TLS.md`; o essencial:
+## A decisão que este passo publica
 
-1. Apontar via `--dart-define`: `SCITECH_API_BASE_URL=https://10.4.254.201:18443`
-   e `SCITECH_WS_BASE_URL=wss://10.4.254.201:18443`.
+Este plano existia para tirar o cabo. Vale dizer em voz alta o que o passo 5
+publica junto, porque não é óbvio olhando só para o `Caddyfile`:
+
+**`AUTH_ALLOWED_EMAIL_DOMAINS` está vazia — registro aberto a qualquer
+e-mail.** Foi desligada em 2026-09-08, quando a única entrada era o túnel SSH e
+isso era inofensivo, e a decisão foi **reafirmada por Leandro em 2026-09-21**,
+já com o IP público à vista. É escolha consciente, não omissão.
+
+O que muda com a porta aberta é só o alcance: qualquer pessoa **da internet**
+cria conta e enfileira áudio na GPU. O amortecedor que resta é o rate limit de
+registro (`AUTH_REGISTER_MAX_ATTEMPTS=10` por hora, por IP), e ele foi
+dimensionado para um universo pequeno de clientes institucionais — na internet
+um IP deixa de identificar alguém.
+
+Para religar, se a decisão mudar: a comparação é **exata, não por sufixo**
+(`auth_service.py:141`), então os três domínios precisam estar listados.
+
+    AUTH_ALLOWED_EMAIL_DOMAINS=ifg.edu.br,academico.ifg.edu.br,estudantes.ifg.edu.br
+
+Para conferir qual estado está no ar sem efeito colateral: `POST /auth/register`
+com `e2e-teste@example.com` — domínio não institucional **e** já cadastrado. Dá
+`403` com allowlist ligada e `409` com ela desligada, e não cria conta em
+nenhum dos dois casos. Custa uma das 10 vagas do balde daquele IP.
+
+### O teto que não é de segurança
+
+O worker é **um processo, serial** (`while True` em `app/worker.py`), preso em
+`CUDA_VISIBLE_DEVICES=0` — justamente a GPU ~15% mais lenta das duas, com a
+GPU1 ociosa. Uma reunião de 10 min leva ~3,6 min; uma turma enviando junto
+enfileira. Abrir o cadastro para a internet não muda o risco de invasão tanto
+quanto muda o risco de **fila**: é o teto real de capacidade do piloto.
+
+---
+
+## Lado do app (repositório SciTech-frontend)
+
+O procedimento completo está em `TLS.md`; o essencial, com o endereço novo:
+
+1. Apontar via `--dart-define`:
+   `SCITECH_API_BASE_URL=https://200.17.57.229:18443` e
+   `SCITECH_WS_BASE_URL=wss://200.17.57.229:18443`.
 2. **Carregar a raiz da CA no `SecurityContext`** — o passo que a maioria das
    tentativas erra. `network_security_config.xml` é aplicado pelo *framework*
    do Android, mas o `dart:io HttpClient` (e o `WebSocket` por trás dele) usa
    BoringSSL e não passa por ali. Usar **o mesmo `HttpClient` no WebSocket**
    (`IOWebSocketChannel.connect(uri, customClient: httpClient)`), senão o
    `wss://` falha sozinho enquanto o REST funciona — sintoma que confunde.
-3. Copiar `deploy/scitechear-root-ca.crt` para o app (assets + `res/raw`).
-4. Manter o `network_security_config.xml` mesmo assim: cobre WebView e impede o
-   app de aceitar HTTP puro por engano.
+3. Copiar `deploy/scitechear-root-ca.crt` para o app (assets + `res/raw`). **O
+   arquivo não mudou** com a troca de endereço: a raiz é a mesma. Se o app já
+   embute a versão de 2026-09-06, está correto.
+4. Atualizar o `<domain>` do `network_security_config.xml` para
+   `200.17.57.229`, e mantê-lo: cobre WebView e impede o app de aceitar HTTP
+   puro por engano.
 
 APK release é desejável para o piloto, mas **não** é pré-requisito para cortar
-o cabo.
-
-## 1.6 Verificação, em ordem
-
-Parar no primeiro que falhar:
-
-1. `ss -ltn` mostra `0.0.0.0:18443` e `127.0.0.1:18080`. Se aparecer
-   `0.0.0.0:18080`, parar tudo — a API não pode estar na rede.
-2. De outra máquina: `curl --cacert deploy/scitechear-root-ca.crt https://10.4.254.201:18443/health`
-3. `.venv/bin/python -m scripts.smoke_contrato https://10.4.254.201:18443` —
-   referência: 21 OK, 0 falhas.
-4. **Upload grande através do proxy** — pendência aberta em `TLS.md`, nunca
-   testada. Um WAV perto do teto de 300 MB.
-5. Do tablet **sem cabo**: login, upload, WebSocket até `done`, resultado.
-6. Sem vazamento: após uma conexão WS real, nem
-   `journalctl --user -u scitechear-proxy` nem `-u scitechear-api` podem conter
-   JWT. Os dois filtros de redação são independentes e ambos necessários.
+o cabo: a build de desenvolvimento roda sozinha depois de instalada, e o
+vínculo com o MacBook é de **rede**, não de bundle.
 
 ---
 
-# Etapa 2 — Internet
+## Verificação, em ordem
 
-Corre em paralelo, sem bloquear a Etapa 1.
+Parar no primeiro que falhar.
 
-## 2.1 Pedido ao CTI
+Antes de virar o bind (dá para rodar hoje):
 
-Para `10.4.254.201`:
+1. `ss -ltn` mostra `127.0.0.1:18443` e `127.0.0.1:18080` — nada em `0.0.0.0`
+   além do `sshd`.
+2. Certificado com o SAN certo:
+   `openssl x509 -in /data/projects/leandro/scitechear/caddy/certificates/local/200.17.57.229/200.17.57.229.crt -noout -ext subjectAltName`
+3. Health por TLS, forçando loopback (o IP público não escuta ainda — é esse o
+   ponto):
+   `curl --cacert deploy/scitechear-root-ca.crt --connect-to 200.17.57.229:18443:127.0.0.1:18443 https://200.17.57.229:18443/health`
+4. `curl -m 5 https://200.17.57.229:18443/health` **tem que falhar** por
+   conexão recusada. Se responder, o serviço está exposto sem que ninguém
+   tenha decidido isso.
 
-- **Registro DNS público** (ex.: `scitechear.ifg.edu.br`). Note que
-  `numbersia.ifg.edu.br` não resolve hoje, e o *search domain* da máquina é
-  `ifg.br`, não `ifg.edu.br`.
-- **DNAT de entrada** de uma porta pública para `10.4.254.201:18443`, ou IP
-  público dedicado.
+Depois de virar o bind:
 
-**Basta a 443**, e isso simplifica o pedido: o Caddy emite certificado ACME
-pelo desafio **TLS-ALPN-01, que roda na própria 443** — não é preciso abrir a
-80.
-
-## 2.2 Trocar a CA interna por certificado público
-
-Com nome DNS resolvendo, o site no `Caddyfile` passa a ser o nome público e
-`tls internal` sai em favor de ACME. Dois efeitos colaterais bons: o
-`default_sni` deixa de ser necessário (ele só existe porque cliente que fala
-com IP não manda SNI), e o app deixa de precisar da raiz embutida — manter
-`withTrustedRoots: true` faz a transição sem quebrar nada.
-
-## 2.3 O que a internet exige e a rede interna não
-
-- **Rate limiting de `/auth`**: dimensionado para um universo pequeno de
-  clientes institucionais. O registro conta por IP, e na internet um IP deixa
-  de identificar alguém.
-- **Token do WebSocket na query string**: os filtros de redação cobrem o Caddy
-  e a API, mas qualquer proxy ou CDN que entre na frente reabre o vazamento. Se
-  a topologia ganhar camadas, mover o token para subprotocolo deixa de ser
-  opcional.
-- **Revisão de segurança** do diff antes de expor.
+5. `ss -ltn` mostra `0.0.0.0:18443` e **`127.0.0.1:18080`**. Se aparecer
+   `0.0.0.0:18080`, parar tudo — a API não pode estar na rede.
+6. De outra máquina:
+   `curl --cacert deploy/scitechear-root-ca.crt https://200.17.57.229:18443/health`
+7. `.venv/bin/python -m scripts.smoke_contrato https://200.17.57.229:18443` —
+   referência: **21 OK, 0 falhas**.
+8. **Upload grande através do proxy** — pendência aberta em `TLS.md`, nunca
+   testada. Um WAV perto do teto de 300 MB.
+9. Do tablet **sem cabo**: login, upload, WebSocket até `done`, resultado.
+10. Sem vazamento: após uma conexão WS real, nem
+    `journalctl --user -u scitechear-proxy` nem `-u scitechear-api` podem
+    conter JWT. Os dois filtros de redação são independentes e ambos
+    necessários.
 
 ---
 
@@ -196,9 +249,29 @@ com IP não manda SNI), e o app deixa de precisar da raiz embutida — manter
 
 | Bloqueio | Quem resolve | O que trava |
 |---|---|---|
-| Regra de `ufw` na 18443 + reserva de DHCP | Admin do NumbERS | Etapa 1 inteira |
-| DNS público + DNAT | CTI do IFG | Etapa 2 inteira |
-| Mudanças no app Flutter | Leandro (outro repositório) | Passo 1.5 |
+| Regra de `ufw` na 18443 | **Admin do NumbERS** | o passo 5, e com ele o piloto |
+| Confirmar o registro aberto na internet | **Leandro** | nada — já confirmado em 2026-09-21 |
+| Registro DNS público | CTI do IFG | nada; é melhoria, não bloqueio |
+| `--dart-define` e `network_security_config` | Leandro (outro repositório) | o app conectar |
 
 Nada no lado do servidor exige root: as mudanças são no checkout e em unidades
 de usuário, no mesmo padrão do resto do projeto.
+
+## Melhoria que deixou de ser bloqueio: nome DNS
+
+Com IP público, um registro como `scitechear.ifg.edu.br` não é mais
+pré-requisito de nada — vira conforto, e um conforto real: tira o IP literal do
+`--dart-define`, do `network_security_config` e do `Caddyfile`, e abre a porta
+para certificado **público** via ACME, dispensando a raiz embutida no app.
+O `default_sni` também sairia sozinho, já que ele só existe porque cliente que
+fala com um IP não manda SNI (RFC 6066).
+
+Basta a 443 para o ACME: o Caddy resolve o desafio **TLS-ALPN-01** na própria
+443, sem precisar da 80.
+
+**Por que não fazer isso com o IP puro, já que ele é público.** A Let's Encrypt
+passou a emitir certificado para IP nu, mas só no perfil `shortlived`
+(validade de ~6 dias), e o Caddy **ainda não suporta esse perfil nativamente** —
+a alternativa hoje é contornar com `acme.sh` e alimentar o certificado ao Caddy.
+Não vale a complexidade para o piloto: a CA interna já resolve, e o caminho
+limpo é o nome DNS. Reavaliar quando o Caddy ganhar suporte.

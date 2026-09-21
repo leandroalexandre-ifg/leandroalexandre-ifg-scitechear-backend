@@ -117,10 +117,12 @@ com isolamento de rede Wi-Fi entre os aparelhos.
 > Isso vale para o backend rodando **na própria máquina de desenvolvimento**.
 > O backend **implantado no servidor** é outra história: lá a API escuta só em
 > `127.0.0.1:18080`, e a intenção é que continue assim — pôr a própria API na
-> rede do IFG deixaria senha e áudio de reunião em HTTP puro ao alcance da
-> `10.4.0.0/16`, que é a instituição inteira.
+> rede deixaria senha e áudio de reunião em HTTP puro ao alcance de quem
+> chegasse à porta. Desde 2026-09-21 a máquina tem IP **público**
+> (`200.17.57.229`), então "quem chegasse à porta" é a internet; quem termina
+> TLS e pode ir para a rede é o proxy Caddy, nunca a API.
 >
-> Como alcançá-la de fora (hoje, túnel SSH sobre a VPN; o que muda para o
-> piloto; e o que depende de quem administra o servidor) é assunto de deploy, e
+> Como alcançá-la de fora (hoje, túnel SSH; o que muda para o piloto; e o que
+> depende de quem administra o servidor) é assunto de deploy, e
 > [`docs/DEPLOY.md`](docs/DEPLOY.md) é a fonte de verdade — este README não
 > repete portas nem procedimento para não divergir dele.

@@ -24,7 +24,7 @@
   <text x="405" y="152" font-size="11" fill="#5F5E5A">ExitOnForwardFailure=yes</text>
 
   <rect x="600" y="92" width="290" height="72" rx="10" fill="#E6F1FB" stroke="#185FA5"/>
-  <text x="745" y="118" font-weight="bold" fill="#042C53">Servidor NumbERS — 10.4.254.201</text>
+  <text x="745" y="118" font-weight="bold" fill="#042C53">Servidor NumbERS — 200.17.57.229 (público)</text>
   <text x="745" y="136" font-size="11" fill="#0C447C">sshd 0.0.0.0:22</text>
   <text x="745" y="152" font-size="11" font-weight="bold" fill="#0C447C">a única porta aberta na rede</text>
 </g>
@@ -80,8 +80,8 @@
 
 <!-- alerta de alcance -->
 <rect x="30" y="504" width="860" height="106" rx="10" fill="#FBE9E7" stroke="#B42318"/>
-<text x="50" y="530" font-size="13" font-weight="bold" fill="#7A160C">Estar na rede do IFG não torna o backend alcançável</text>
-<text x="50" y="552" font-size="12" fill="#4A1B0C">A rede 10.4.0.0/16 é a instituição inteira, e o ufw nega por padrão (DEFAULT_INPUT_POLICY=DROP). A API e o proxy escutam só em</text>
-<text x="50" y="570" font-size="12" fill="#4A1B0C">127.0.0.1 — verificado em 07/09/2026: pelo IP da rede, tanto a :18080 quanto a :18443 recusam a conexão.</text>
-<text x="50" y="592" font-size="12" font-weight="bold" fill="#7A160C">Consequência prática: o túnel SSH é necessário na rede do IFG também. O que muda lá é só não precisar da VPN.</text>
+<text x="50" y="530" font-size="13" font-weight="bold" fill="#7A160C">Ter IP público não torna o backend alcançável</text>
+<text x="50" y="552" font-size="12" fill="#4A1B0C">Desde 21/09/2026 a eno1 tem IP público roteável — mas o ufw nega por padrão (DEFAULT_INPUT_POLICY=DROP) e a API e o proxy escutam só em</text>
+<text x="50" y="570" font-size="12" fill="#4A1B0C">127.0.0.1 — verificado em 21/09/2026: pelo IP público, tanto a :18080 quanto a :18443 recusam a conexão.</text>
+<text x="50" y="592" font-size="12" font-weight="bold" fill="#7A160C">Consequência prática: o túnel SSH segue necessário. Ter IP público removeu o obstáculo de roteamento, não o de escuta.</text>
 </svg>

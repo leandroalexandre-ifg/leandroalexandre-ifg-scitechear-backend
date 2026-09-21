@@ -15,11 +15,15 @@ admin; o piloto continua esperando os dois itens abaixo.
 ## O problema
 
 O piloto exige que o app alcance o backend pela rede — hoje o único caminho é
-túnel SSH sobre a VPN, que não serve para um tablet de professor nem para o
-laboratório. Mas expor a API como ela está significa senha de usuário e áudio
-de reunião em **HTTP puro** dentro da `10.4.0.0/16`, que é a instituição
-inteira, não o laboratório. Foi exatamente por isso que o bind na rede feito em
-2026-09-05 foi revertido no mesmo dia.
+o túnel SSH, que não serve para um tablet de professor nem para o laboratório.
+Mas expor a API como ela está significa senha de usuário e áudio de reunião em
+**HTTP puro** para quem chegar à porta. Foi exatamente por isso que o bind na
+rede feito em 2026-09-05 foi revertido no mesmo dia.
+
+> **Atualizado em 2026-09-21.** Quando este documento foi escrito, "quem chegar
+> à porta" era a `10.4.0.0/16` — a instituição inteira. A máquina passou a ter
+> IP **público** (`200.17.57.229`), e agora é a internet. O argumento do
+> documento não mudou; o que ele protege ficou maior.
 
 TLS é o que desfaz esse impasse: sem ele, nenhuma outra proteção adianta —
 teto de upload e allowlist de domínio reduzem superfície, mas não cifram nada.
@@ -46,12 +50,19 @@ automática, o que elimina a manutenção manual de certificado.
 
 **Por que uma CA interna, e não um certificado autoassinado avulso.** Esta é a
 escolha menos óbvia, e a que mais importa para a Fase 7. Um autoassinado avulso
-é emitido para um endereço específico; o endereço aqui vem por **DHCP** (a lease
-observada em 2026-09-06 durava ~73 minutos). Toda vez que o IP mudasse, seria
-preciso emitir outro certificado **e** redistribuir o app, porque o que o app
-confia é o próprio certificado. Com uma CA interna, o app confia na **raiz** —
-que vale até 2036 — e o certificado do servidor é reemitido sozinho, inclusive
-quando o IP mudar. O certificado ainda é "autoassinado" no sentido que importa
+é emitido para um endereço específico. Toda vez que o IP mudasse, seria preciso
+emitir outro certificado **e** redistribuir o app, porque o que o app confia é
+o próprio certificado. Com uma CA interna, o app confia na **raiz** — que vale
+até 2036 — e o certificado do servidor é reemitido sozinho, inclusive quando o
+IP mudar.
+
+> Esta decisão **se pagou em 2026-09-21**, e mais rápido do que o previsto. O
+> argumento original era a lease de DHCP (~73 min em 2026-09-06); o que de fato
+> aconteceu foi o admin trocar a máquina inteira de faixa, de `10.4.254.201`
+> privada para `200.17.57.229` pública. Mudança bem maior do que uma renovação
+> de lease — e ainda assim custou só um `restart` do proxy, sem reemitir
+> certificado na mão e **sem nova build do app**, porque a raiz não muda junto.
+> Se fosse um autoassinado avulso, toda instalação existente teria parado. O certificado ainda é "autoassinado" no sentido que importa
 (não há CA pública envolvida, nenhuma CA da IFG foi confirmada), mas a parte
 que o app carrega para de ser um alvo móvel.
 
@@ -64,7 +75,7 @@ Tudo abaixo foi medido no NumbERS em 2026-09-06, com o proxy escutando em
 |---|---|
 | Caddy 2.11.4 em `~/.local/bin/caddy` | instalado; SHA-512 conferido contra o `checksums.txt` do release |
 | CA interna gerada | raiz `Caddy Local Authority - 2026 ECC Root`, válida até **2036-07-15** |
-| Certificado do servidor | emitido para `IP:10.4.254.201`, folha de 12h renovada sozinha |
+| Certificado do servidor | folha de 12h renovada sozinha. SAN era `IP:10.4.254.201`; **desde 2026-09-21 é `IP:200.17.57.229`** — a raiz é a mesma, então o app não precisa de rebuild |
 | `GET /health` sobre TLS | `200`, HTTP/2, `ssl_verify_result=0` com a raiz como âncora |
 | Cliente **sem** a raiz | recusado (`unable to get local issuer certificate`) — é o comportamento desejado |
 | `POST /auth/login` + `GET /meetings` | funcionam através do proxy com token real |
@@ -124,13 +135,20 @@ E o uvicorn 0.39 confia em `127.0.0.1` por default e reescreve
 
 Um pedido só, e ele é o **único bloqueio** que sobrou:
 
-> Abrir no firewall a porta TCP **<PORTA>** do host `numbersia`
-> (`10.4.254.201`), de preferência restrita à faixa do laboratório em vez da
-> `10.4.0.0/16` inteira. É uma porta alta, não privilegiada — não precisa ser
-> 443, e o serviço roda como usuário comum, sem root. O tráfego é HTTPS.
-> Junto disso, uma **reserva de DHCP** para o host (ou, melhor ainda, um
-> registro DNS): o endereço muda a cada renovação de lease e o app precisa de
-> um alvo estável.
+> Abrir no firewall a porta TCP **18443** do host `numbersia`
+> (`200.17.57.229`). É uma porta alta, não privilegiada — não precisa ser 443,
+> e o serviço roda como usuário comum, sem root. O tráfego é HTTPS.
+
+**Atualizado em 2026-09-21.** O pedido encolheu e engordou ao mesmo tempo:
+
+- **Saiu a reserva de DHCP.** O endereço virou estático no netplan — não há
+  lease para reservar. O que substitui, se quisermos parar de depender de um IP
+  literal, é um **registro DNS**, e esse é com o CTI, não com o admin.
+- **Saiu "restrita à faixa do laboratório".** Com IP público não há mais faixa
+  interna entre o aparelho e a máquina; o escopo de quem pode usar o serviço
+  passa a ser decidido pela allowlist de e-mail e pelo rate limit, não pelo
+  firewall.
+- **Cresceu o que a porta alcança.** Antes a rede do IFG, agora a internet.
 
 Contexto que mudou desde o revert de 2026-09-05, e que vale registrar: o estado
 do firewall **não é mais desconhecido**. O `ufw` está ativo com
@@ -157,12 +175,13 @@ truststore do sistema.
 
     # 2. ajustar a porta, se o admin decidiu outra, e sair do loopback:
     #    no deploy/Caddyfile, trocar `bind 127.0.0.1` por `bind 0.0.0.0`
-    #    (0.0.0.0, NUNCA 10.4.254.201 — ver "DHCP" abaixo)
+    #    (0.0.0.0, NUNCA 200.17.57.229 — ver "Bind" abaixo)
 
-    # 3. subir (ou recarregar, se já estiver no ar — reload não derruba
+    # 3. subir (ou REINICIAR, se já estiver no ar — ver a nota sobre
+    #    `reload` logo abaixo: ele não funciona nesta configuração)
     #    conexão, o que importa se houver upload de reunião em curso)
     systemctl --user enable --now scitechear-proxy
-    systemctl --user reload scitechear-proxy   # depois de editar o Caddyfile
+    systemctl --user restart scitechear-proxy  # depois de editar o Caddyfile
     systemctl --user status scitechear-proxy
 
     # 4. conferir que quem escuta na rede e o proxy, e so ele
@@ -170,7 +189,7 @@ truststore do sistema.
     #   esperado: 127.0.0.1:18080 (API)  e  0.0.0.0:18443 (proxy)
 
     # 5. do lado de fora (outra maquina na VPN)
-    curl --cacert scitechear-root-ca.crt https://10.4.254.201:18443/health
+    curl --cacert scitechear-root-ca.crt https://200.17.57.229:18443/health
 
 Para voltar atrás: `systemctl --user disable --now scitechear-proxy` devolve o
 estado exato de hoje. A API não é tocada em nenhum dos passos.
@@ -221,7 +240,7 @@ aceitar HTTP puro por engano:
 ```xml
 <network-security-config>
     <domain-config cleartextTrafficPermitted="false">
-        <domain includeSubdomains="false">10.4.254.201</domain>
+        <domain includeSubdomains="false">200.17.57.229</domain>
         <trust-anchors>
             <certificates src="@raw/scitechear_root_ca"/>
             <certificates src="system"/>
@@ -237,8 +256,9 @@ em `res/raw` só aceitam minúsculas, dígitos e `_`; a referência
 `android:networkSecurityConfig="@xml/network_security_config"` no
 `<application>`.
 
-Se o `<domain>` for o IP, ele muda junto com o DHCP — mais um motivo para pedir
-reserva ou registro DNS ao admin.
+Se o `<domain>` for o IP, ele precisa ser trocado toda vez que o endereço
+mudar — como aconteceu em 2026-09-21. É o argumento a favor de um registro
+DNS: com nome, esta linha para de ser um alvo móvel.
 
 ## Operação
 
@@ -253,10 +273,39 @@ serviço roda; se ficar parado além disso, emite outra ao subir. A raiz vale at
 ela sumir, todo app já instalado deixa de confiar no servidor e precisa de nova
 build. É o item que mais merece backup nesta máquina.
 
-**DHCP.** No `Caddyfile`, o endereço do site (`https://10.4.254.201:18443`)
+**Bind.** No `Caddyfile`, o endereço do site (`https://200.17.57.229:18443`)
 define a **identidade do certificado**; quem decide onde escutar é o `bind`.
-Use `bind 0.0.0.0`, nunca o IP: a unidade da API já carrega esse mesmo aviso,
-porque bind num endereço que a lease pode trocar quebra o serviço na renovação.
+Use `bind 0.0.0.0`, nunca o IP. O argumento era o DHCP; desde 2026-09-21 o
+endereço é estático, e mesmo assim a conclusão é a mesma: bind num IP literal
+amarra o serviço a uma decisão do admin que pode mudar sem aviso, e a falha
+resultante é *cannot assign requested address* em loop de restart, no boot.
+
+**`reload` não funciona aqui — use `restart`.** Descoberto em 2026-09-21, ao
+tentar aplicar o endereço novo. A unidade define
+`ExecReload=caddy reload`, e o `caddy reload` aplica a configuração **falando
+com a admin API** em `127.0.0.1:2019`. Mas o `Caddyfile` tem `admin off` (posto
+em 2026-09-06, de propósito: aquele endpoint reconfigura o Caddy sem
+autenticação e a máquina é compartilhada). As duas coisas são mutuamente
+exclusivas, então `systemctl --user reload scitechear-proxy` **sempre** falhou:
+
+    Error: sending configuration to instance: performing request:
+    Post "http://localhost:2019/load": dial tcp 127.0.0.1:2019: connect: connection refused
+
+O serviço **continua no ar** com a configuração antiga quando isso acontece — o
+`reload` falha, não derruba. É por isso que passou despercebido: quem editava o
+`Caddyfile` e via "Reload failed" podia concluir que o arquivo estava errado,
+quando o arquivo estava certo e apenas não foi aplicado.
+
+Consequência prática que importa no piloto: **aplicar mudança de configuração
+derruba conexão**, porque só resta o `restart`. Não edite o `Caddyfile` com um
+upload de reunião em curso.
+
+> **Se algum dia isso incomodar**, o conserto de menor privilégio é trocar
+> `admin off` por uma admin API em **socket unix** (`admin unix//run/user/1003/caddy-admin.sock`),
+> protegida por permissão de arquivo em vez de porta TCP — `/run/user/1003` é
+> `0700` do próprio usuário. Isso devolve o `reload` sem abrir porta na
+> máquina compartilhada. **Não foi feito**: é mudança de postura de segurança,
+> e decisão de Leandro, não consequência da troca de endereço.
 
 **Logs.** `journalctl --user -u scitechear-proxy -f`. A query string do WS é
 redigida; o `Authorization` também. Vale reconferir isso se alguém mexer no

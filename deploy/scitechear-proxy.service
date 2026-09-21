@@ -24,6 +24,14 @@ WorkingDirectory=/data/projects/leandro/leandroalexandre-ifg-scitechear-backend
 ExecStart=/home/leandro/.local/bin/caddy run --config /data/projects/leandro/leandroalexandre-ifg-scitechear-backend/deploy/Caddyfile
 # Recarrega sem derrubar conexao - troca de porta ou de bind nao precisa de
 # restart, o que importa quando houver upload de reuniao em curso.
+# ATENCAO: este ExecReload NAO FUNCIONA com o Caddyfile atual, e nao e
+# descuido - e a consequencia aceita de `admin off`. O `caddy reload` aplica a
+# configuracao falando com a admin API em 127.0.0.1:2019, que o Caddyfile
+# desliga de proposito (endpoint sem autenticacao, maquina compartilhada).
+# `systemctl --user reload` portanto sempre falha, E O SERVICO SEGUE NO AR COM
+# A CONFIGURACAO ANTIGA. Use `systemctl --user restart` para aplicar mudanca.
+# Verificado em 2026-09-21; ver docs/TLS.md, secao Operacao.
+# A linha fica aqui para o dia em que a admin API voltar (em socket unix).
 ExecReload=/home/leandro/.local/bin/caddy reload --config /data/projects/leandro/leandroalexandre-ifg-scitechear-backend/deploy/Caddyfile --force
 Restart=always
 RestartSec=5
