@@ -46,6 +46,45 @@ nem em diagrama.
 `kern.log` com o Xid é legível só pelo grupo `adm`, do qual o usuário do
 projeto não participa.
 
+## Aberta — Revisar `CUDA_VISIBLE_DEVICES` quando a GPU0 for reparada
+
+**Gatilho:** o administrador do servidor devolver a GPU0 (PCI `0000:21:00`) ao
+barramento. **Não é uma tarefa para fazer agora** — é uma que precisa
+acontecer *no momento* do reparo, e que não pode depender de alguém lembrar.
+
+**O que fazer:** revisar o `Environment=CUDA_VISIBLE_DEVICES=0` em
+`~/.config/systemd/user/scitechear-api.service` e
+`~/.config/systemd/user/scitechear-worker.service`.
+
+**Por quê.** Esse `0` é um índice de **enumeração do CUDA**, não um endereço
+PCI. Com a GPU0 fora do barramento, o CUDA não a enumera, e o índice `0`
+passou a apontar para a **GPU1** (`0000:c1:00`), a placa sobrevivente — o pin
+acerta hoje **por coincidência de reenumeração**, não por configuração. Quando
+a GPU0 voltar, ela reassume o índice `0` e **o pin volta a apontar para ela**.
+
+**Por que isso é armadilha e não só um ajuste.** A mudança é **silenciosa**:
+não há erro, não há aviso, não há nada no journal. O sistema sobe normal,
+processa normal, e simplesmente fica mais lento — pelas medições anteriores à
+falha, a GPU0 era **~15% mais lenta** que a GPU1. O sintoma (degradação de
+desempenho sem causa aparente, logo após uma intervenção de hardware) não
+sugere a causa, e o lugar onde a causa mora não é versionado: as unidades
+vivem em `~/.config/systemd/user/`, fora do checkout — só o
+`scitechear-proxy.service` está em `deploy/`.
+
+**Como conferir, depois do reparo:**
+
+    # qual índice é qual placa, agora que são duas de novo
+    nvidia-smi --query-gpu=index,name,pci.bus_id --format=csv
+
+    # em qual placa o worker de fato está
+    nvidia-smi   # a seção "Processes": confira o bus-id da linha do app.worker
+
+Decida o índice pelo **bus-id**, não pelo número que estava lá antes. Depois
+de editar, `systemctl --user daemon-reload` e reiniciar as duas unidades.
+
+**Relacionado:** [a pendência da falha da GPU0](#aberta--gpu0-fora-de-operação-desde-19092026-o-sistema-roda-sem-redundância)
+e a seção "Armadilhas conhecidas" de [`DEPLOY.md`](DEPLOY.md).
+
 ## Resolvida — O "4401 que não atravessava o proxy" era o cliente do smoke, não o Caddy nem a API
 
 **Onde:** `scripts/smoke_contrato.py` (corrigido em 21/09/2026). O
