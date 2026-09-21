@@ -196,6 +196,26 @@ compartilhado. O `setcap` alcança um binário só, que só o leandro escreve.
 > próximo boot, sem ninguém olhando. Depois de qualquer atualização do Caddy:
 > `getcap ~/.local/bin/caddy` e, se vier vazio, repetir o `setcap`.
 
+**Efeito colateral que confunde na hora de diagnosticar:** processo lançado de
+binário com capability vira *não-dumpable*, e o `/proc/<pid>` passa a ser de
+`root`. Na prática, **`ss -tlnp` deixa de dizer quem escuta na 443** — a linha
+aparece sem a coluna `users:(("caddy",...))`, como se fosse socket de outro
+usuário. Não é invasão nem serviço estranho. Para confirmar que é o nosso:
+
+    pgrep -x caddy
+    grep -E 'Name|Uid|CapEff|NoNewPrivs' /proc/$(pgrep -x caddy)/status
+    # esperado: Uid 1003 (leandro, não root) e CapEff 0000000000000400,
+    # que é exatamente um bit: CAP_NET_BIND_SERVICE.
+
+**Sobre a família do socket.** O `bind` é `tcp4/0.0.0.0`, e o prefixo não é
+decorativo: com `bind 0.0.0.0` puro o Caddy normaliza o curinga e abre um
+socket **dual-stack** (`ss` mostra `*:443`, e o descritor está em
+`/proc/net/tcp6`). Hoje é inócuo — a máquina é IPv4-only — mas no dia em que o
+CTI ligar IPv6 aqui, o backend passaria a atender em IPv6 **sem que ninguém
+tivesse decidido**, e sem garantia de que a borda filtre a mesma porta nas duas
+pilhas. Com `tcp4/`, esse dia é uma decisão. Conferir com
+`ss -6tln | grep ':443'`, que tem que vir vazio.
+
 O `sudo` é do próprio Leandro (grupo `sudo`, uid 1003). Continua não sendo
 preciso: `apt`, serviço de sistema, entrar em grupo, nem tocar no truststore.
 
@@ -357,6 +377,15 @@ bloco `log`.
 
 ## O que ficou sem verificar
 
+- **O fechamento `4401` não atravessa o proxy.** Com token inválido ou
+  expirado, o cliente fica pendurado no handshake do WebSocket em vez de
+  receber `close(4401)` — direto na API o 4401 chega. Isolado em 21/09/2026:
+  é o caminho **TLS**, não a 443 nem o `bind`; um Caddy em HTTP puro entrega o
+  4401. Não é regressão da exposição — está assim desde 06/09, e passou batido
+  porque a verificação de WS daquele dia usou token válido. Importa no piloto:
+  o JWT dura 30 min, então token expirado é rotina, e o app não consegue
+  distinguir "sessão expirada" de "rede caída". Ver `PENDENCIAS.md`, que traz
+  a tabela de isolamento e os quatro caminhos possíveis.
 - **Upload grande através do proxy.** O Caddy não impõe limite de corpo por
   padrão e não tem timeout de leitura por padrão, então `MAX_UPLOAD_MB=300`
   deve passar — mas isso é raciocínio sobre os defaults, não medição. Testar um

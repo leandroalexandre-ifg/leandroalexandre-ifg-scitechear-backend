@@ -104,7 +104,18 @@ https://200.17.57.229:443 {
 	# decisao do admin que pode mudar sem nos avisar, e a falha resultante e
 	# `cannot assign requested address` em loop de restart, no boot, sem
 	# ninguem olhando.
-	bind 0.0.0.0
+	#
+	# O PREFIXO `tcp4/` NAO E DECORATIVO, e foi posto depois de medir. Com
+	# `bind 0.0.0.0` puro o Caddy normaliza o curinga e abre um socket
+	# DUAL-STACK: o `ss` mostra `*:443`, e o descritor esta em
+	# /proc/net/tcp6, nao em /proc/net/tcp. Hoje isso nao muda nada, porque a
+	# maquina e IPv4-only (so fe80:: na eno1, sem rota v6 default) - mas no
+	# dia em que o CTI ligar IPv6 aqui, e o PLANO_EXPOSICAO_REDE.md sugere
+	# pedir exatamente isso, o backend passaria a atender em IPv6 sem que
+	# ninguem tivesse decidido, e sem que a borda necessariamente filtre a
+	# mesma porta nas duas pilhas. `tcp4/` faz esse dia ser uma decisao em vez
+	# de um efeito colateral.
+	bind tcp4/0.0.0.0
 
 	# CA local do proprio Caddy: raiz de 10 anos, folha de 12h renovada
 	# sozinha enquanto o servico roda. E o que dispensa reemitir certificado

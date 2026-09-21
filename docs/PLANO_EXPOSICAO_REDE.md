@@ -307,8 +307,13 @@ Depois do restart:
 6. **De outra máquina, e numa rede que não seja a do IFG** — é o único teste
    que exercita a borda, e é o que estava bloqueado até hoje:
    `curl --cacert deploy/scitechear-root-ca.crt https://200.17.57.229/health`
-7. `.venv/bin/python -m scripts.smoke_contrato https://200.17.57.229` —
-   referência: **21 OK, 0 falhas**.
+7. `SSL_CERT_FILE=$PWD/deploy/scitechear-root-ca.crt .venv/bin/python -m
+   scripts.smoke_contrato https://200.17.57.229` — o script não recebe CA por
+   argumento; sem a variável ele falha em `CERTIFICATE_VERIFY_FAILED`, que
+   parece problema de certificado e é só o bundle default do `httpx`.
+   Referência **através do proxy**: **20 OK, 1 falha**, e a falha é conhecida
+   (o `4401` do WS não atravessa o TLS — ver `PENDENCIAS.md`). Direto na API
+   (`http://127.0.0.1:18080`) a referência continua **21 OK, 0 falhas**.
 8. **Upload grande através do proxy** — pendência aberta em `TLS.md`, nunca
    testada. Um WAV perto do teto de 300 MB.
 9. Do tablet **sem cabo**: login, upload, WebSocket até `done`, resultado.

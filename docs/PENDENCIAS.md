@@ -6,6 +6,71 @@ antes de considerar algo definitivamente resolvido, etc. Diferente de
 `docs/BASELINE.md` (retrato pontual da Fase 0): este arquivo é atualizado ao
 longo do projeto.
 
+## Aberta — O fechamento `4401` do WebSocket não atravessa o proxy TLS: o cliente fica pendurado no handshake
+
+**Onde:** `deploy/Caddyfile` (proxy Caddy 2.11.4) + `app/api/jobs.py`. Medido
+em 21/09/2026, ao rodar o smoke de contrato através do proxy pela primeira vez.
+
+**O quê:** com token inválido ou expirado em `/ws/{job_id}?token=...`:
+
+| Caminho | O que o cliente recebe |
+|---|---|
+| Direto na API (`http://127.0.0.1:18080`) | `close` com **4401** — correto |
+| Através do proxy TLS | **nada**: o handshake nunca responde, e a conexão morre em timeout (ou `1006`, conforme o tempo que o cliente espera) |
+
+A API faz a parte dela — o journal registra
+`WS /ws/... fechado com 4401: token de acesso ausente ou inválido.` em ambos os
+casos. O que não chega ao cliente é o `101` seguido do frame de close.
+
+**Isolamento, para ninguém refazer a conta.** Cada linha é um Caddy
+descartável, em loopback, fora da produção:
+
+| Configuração | Resultado |
+|---|---|
+| Caddy simples, HTTP puro, `reverse_proxy` | **4401 chega** |
+| Caddy com `tls internal` | **pendura** |
+| idem, `protocols h1` (sem h2) | **pendura** |
+| idem, `flush_interval -1` | **pendura** |
+
+Ou seja: **é o caminho TLS**, não a porta 443, não o `bind` na rede, não o
+HTTP/2 e não bufferização do `reverse_proxy`. **Não é regressão da exposição
+de 21/09** — está assim desde que o proxy subiu, em 06/09, e passou
+despercebido porque a verificação de WS daquele dia usou token *válido*, e o
+smoke de contrato de referência (21 OK) foi medido direto na API.
+
+**A condição que dispara:** o upstream fechar a conexão *imediatamente* depois
+do `101`. Com token válido o WS fica aberto e tudo funciona — inclusive o
+fechamento **4404** ao remover a reunião, que atravessa o proxy normalmente
+(medido: `[5]` do smoke passa). É o close instantâneo que se perde.
+
+**Por que importa no piloto, e não é detalhe de teste.** O JWT dura 30 min e o
+app reconecta o WebSocket para acompanhar o processamento. Token expirado é
+evento *rotineiro*, não caso de erro exótico — e, através do proxy, o app não
+recebe "sua sessão expirou, faça login de novo": recebe um handshake que nunca
+responde, indistinguível de rede caída. Existe um arquivo de teste inteiro
+(`tests/test_ws_codigos_de_fechamento_reais.py`) criado justamente para
+garantir que o 4401 chegasse a clientes reais; ele passa, porque testa a API
+direto — a camada que ele não cobre é o proxy.
+
+**Caminhos possíveis, nenhum tomado ainda** (é decisão de Leandro, e nenhum é
+de uma linha):
+
+1. **Recusar o handshake** com HTTP 401/403 em vez de aceitar-e-fechar. É a
+   forma que atravessa qualquer proxy — mas foi *deliberadamente evitada* no
+   projeto, porque cliente nenhum consegue distinguir o motivo de um handshake
+   recusado. Reabriria a discussão que gerou aquele arquivo de teste.
+2. **Segurar o close por alguns milissegundos** no lado da API, dando ao Caddy
+   a chance de emitir o `101`. Conserta o sintoma sem entender a causa, e
+   depende de temporização — o pior tipo de correção para manter.
+3. **Reportar ao Caddy** e conferir em versão nova. É o caminho limpo, e o
+   isolamento acima já é metade de um relato reproduzível.
+4. **Conviver, e tratar no app**: timeout curto no handshake do WS seguido de
+   uma chamada REST autenticada para descobrir se o problema é o token. Custa
+   uma ida ao servidor, e é do outro repositório.
+
+**Enquanto não houver decisão**, o smoke de contrato através do proxy dá
+**20 OK, 1 falha**, e a falha é esta. Direto na API continua **21 OK**.
+
 ## Resolvida — Perguntas explícitas: prefixo `[Nome]: ` vazando no campo `text`
 
 **Onde:** `question_service.extract_explicit_questions` (prompt
