@@ -6,6 +6,32 @@ antes de considerar algo definitivamente resolvido, etc. Diferente de
 `docs/BASELINE.md` (retrato pontual da Fase 0): este arquivo é atualizado ao
 longo do projeto.
 
+## Aberta — Experimento candidato: o formato da transcrição entregue ao LLM
+
+**Onde:** `TranscriptFormatter.render()` (`app/services/transcript_formatter.py`).
+
+**O quê.** O formatter entrega ao LLM linhas no formato
+`N -> seg_XXXX -> [Falante]: texto`. Os prompts que **precisam** disso são os
+que resolvem linha em segmento: as explícitas (`linha_transcricao`) e o v4 das
+implícitas (`linhas_evidencia`). O **v6 não usa número de linha para nada** —
+não pede evidência —, então para ele o prefixo `N -> seg_XXXX ->` é ruído. Os
+exemplos few-shot do próprio v6 mostram `Nome: texto`, sem prefixo.
+
+**Por que não foi mexido.** Alterar o render durante o comparativo v4 × v6
+introduziria uma segunda variável, e o formatter é compartilhado com as
+explícitas — o risco de regressão está fora do escopo do trabalho do prompt.
+Decidido explicitamente: **experimento separado, depois.**
+
+**Hipótese a testar.** Se o ruído do prefixo atrapalha a leitura da transcrição
+pelo modelo, um render sem prefixo (apenas para o caminho v6) melhoraria a
+sustentação das perguntas. É plausível, mas **não medido** — e está atrás do
+saneamento do sumarizador na fila, porque a contaminação conhecida hoje vem de
+lá, não daqui.
+
+**Status:** aberta, não bloqueia nada. Ideia registrada para não se perder.
+
+---
+
 ## Aberta — A sumarização é a fonte real da confabulação, não o prompt de implícitas
 
 **Onde:** `prompts/meeting_summary_v1.txt` / `question_service.summarize_meeting`.
