@@ -146,6 +146,18 @@ class Settings(BaseSettings):
         default="v4", alias="IMPLICIT_QUESTIONS_PROMPT_VERSION"
     )
 
+    # Filtra o sumário antes de entregá-lo ao gerador de perguntas implícitas:
+    # descarta as seções "Conhecimento implícito" e "Lacunas" (inferência do
+    # sumarizador, que o prompt seguinte não tem como distinguir de fato) e os
+    # elementos criados só para declarar ausência. Ligado por padrão porque é
+    # o comportamento correto — o comparativo v4 × v6 rastreou 4 das 5
+    # premissas sem lastro até esse material (docs/COMPARATIVO_IMPLICITAS_V4_V6.md).
+    # Desligar reproduz o insumo contaminado de antes, e existe para permitir
+    # medir com e sem filtro na mesma execução. Não muda nada em produção
+    # enquanto ENABLE_IMPLICIT_QUESTIONS=false: o sumário nem chega a ser
+    # gerado. Ver app/services/summary_filter.py.
+    enable_summary_filter: bool = Field(default=True, alias="ENABLE_SUMMARY_FILTER")
+
     @field_validator("implicit_questions_prompt_version")
     @classmethod
     def _validar_versao_prompt_implicitas(cls, valor: str) -> str:

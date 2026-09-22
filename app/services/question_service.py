@@ -32,7 +32,12 @@ semanticamente intactos. Únicas mudanças de comportamento:
   permitir o comparativo com dados reais; nada de produção muda enquanto ele
   não for revisado (ver docs/PENDENCIAS.md).
 - SUMARIZAÇÃO: artefato interno (prompts/meeting_summary_v1.txt); não é
-  contrato do Flutter, continua texto.
+  contrato do Flutter, continua texto. O prompt está intacto; o que mudou é
+  o CONSUMO: `extract_implicit_questions` passa o sumário por
+  app/services/summary_filter.py antes de usá-lo, descartando as seções de
+  inferência do sumarizador ("Conhecimento implícito", "Lacunas") e os
+  elementos de ausência — a origem rastreada de 4 das 5 premissas sem lastro
+  do comparativo v4 × v6. Reversível por ENABLE_SUMMARY_FILTER=false.
 - IMPLÍCITAS (etapa inteira): temporariamente desligada por padrão via
   ENABLE_IMPLICIT_QUESTIONS=false (gate em pipeline_facade, não aqui —
   extract_implicit_questions continua intacta para quando for reativada).
@@ -55,6 +60,7 @@ from pydantic import BaseModel, Field
 
 from app.config import get_settings
 from app.models.result import Question, QuestionType
+from app.services import summary_filter
 from app.services.transcript_formatter import TranscriptFormatter
 
 logger = logging.getLogger(__name__)
@@ -281,9 +287,19 @@ def extract_implicit_questions(formatter: TranscriptFormatter, summary: str) -> 
     IMPLICIT_QUESTIONS_PROMPT_VERSION (default "v4"): os dois prompts pedem
     formatos de saída incompatíveis (JSON com evidência vs. lista numerada de
     texto puro), então cada um tem seu próprio parsing. A versão é validada
-    em app/config.py — aqui um valor desconhecido não pode chegar."""
-    versao = get_settings().implicit_questions_prompt_version
-    if versao == "v6":
+    em app/config.py — aqui um valor desconhecido não pode chegar.
+
+    O sumário passa pelo filtro estrutural antes de qualquer despacho (ver
+    app/services/summary_filter.py). É aqui, e não em summarize_meeting, para
+    que `summarize_meeting` siga sendo o port puro do prompt e para que todo
+    consumidor do sumário — pipeline_facade, gerar_perguntas e o harness do
+    comparativo — receba o mesmo insumo saneado, com um único ponto de
+    inserção. Vale para v4 e v6: a contaminação é do insumo, não do prompt."""
+    settings = get_settings()
+    if settings.enable_summary_filter:
+        summary = summary_filter.filtrar_sumario(summary)
+
+    if settings.implicit_questions_prompt_version == "v6":
         return _extract_implicit_questions_v6(formatter, summary)
     return _extract_implicit_questions_v4(formatter, summary)
 

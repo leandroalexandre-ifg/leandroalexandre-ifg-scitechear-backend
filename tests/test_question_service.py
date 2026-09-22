@@ -10,6 +10,15 @@ from app.services import question_service
 from app.services.transcript_formatter import TranscriptFormatter
 
 
+# Sumário mínimo que atravessa o filtro estrutural intacto ("Contexto" é
+# seção de texto livre, preservada). Os testes de parsing de implícitas não
+# são sobre o conteúdo do sumário: precisam de um insumo VÁLIDO (desde o
+# filtro, um texto qualquer não é mais aceito — ver summary_filter) e de um
+# marcador rastreável dentro do prompt montado.
+MARCADOR_SUMARIO = "MARCADOR-DO-SUMARIO-NO-PROMPT"
+SUMARIO_MINIMO = f"Contexto\n\nObjetivo da reuni\u00e3o:  \n{MARCADOR_SUMARIO}.\n"
+
+
 def _formatter():
     segmentos = [
         Segment(
@@ -172,7 +181,7 @@ def test_summarize_e_implicitas_continuam_com_think_ligado_por_padrao(monkeypatc
     monkeypatch.setattr(question_service, "_chamar_ollama", fake_chamar_ollama)
 
     question_service.summarize_meeting(_formatter())
-    question_service.extract_implicit_questions(_formatter(), summary="resumo")
+    question_service.extract_implicit_questions(_formatter(), summary=SUMARIO_MINIMO)
 
     assert len(chamadas) == 2
     assert all(c["think"] is True for c in chamadas)
@@ -197,7 +206,7 @@ def test_extract_implicit_questions_speaker_e_time_ficam_none(monkeypatch):
     )
     monkeypatch.setattr(question_service, "_chamar_ollama", lambda prompt, **kwargs: resposta)
 
-    perguntas = question_service.extract_implicit_questions(_formatter(), summary="resumo qualquer")
+    perguntas = question_service.extract_implicit_questions(_formatter(), summary=SUMARIO_MINIMO)
 
     assert len(perguntas) == 2
     for pergunta in perguntas:
@@ -212,7 +221,7 @@ def test_extract_implicit_questions_schema_invalido_levanta_erro(monkeypatch):
     monkeypatch.setattr(question_service, "_chamar_ollama", lambda prompt, **kwargs: resposta)
 
     with pytest.raises(ValidationError):
-        question_service.extract_implicit_questions(_formatter(), summary="resumo")
+        question_service.extract_implicit_questions(_formatter(), summary=SUMARIO_MINIMO)
 
 
 def test_extract_implicit_questions_evidencia_valida_preenche_source_segment_ids(monkeypatch):
@@ -226,7 +235,7 @@ def test_extract_implicit_questions_evidencia_valida_preenche_source_segment_ids
     )
     monkeypatch.setattr(question_service, "_chamar_ollama", lambda prompt, **kwargs: resposta)
 
-    perguntas = question_service.extract_implicit_questions(_formatter(), summary="resumo")
+    perguntas = question_service.extract_implicit_questions(_formatter(), summary=SUMARIO_MINIMO)
 
     assert len(perguntas) == 1
     assert perguntas[0].source_segment_ids == ["seg_0001", "seg_0002"]
@@ -243,7 +252,7 @@ def test_extract_implicit_questions_sem_linhas_evidencia_e_descartada(monkeypatc
     )
     monkeypatch.setattr(question_service, "_chamar_ollama", lambda prompt, **kwargs: resposta)
 
-    perguntas = question_service.extract_implicit_questions(_formatter(), summary="resumo")
+    perguntas = question_service.extract_implicit_questions(_formatter(), summary=SUMARIO_MINIMO)
 
     assert perguntas == []
 
@@ -260,7 +269,7 @@ def test_extract_implicit_questions_maioria_das_linhas_invalida_descarta_pergunt
     )
     monkeypatch.setattr(question_service, "_chamar_ollama", lambda prompt, **kwargs: resposta)
 
-    perguntas = question_service.extract_implicit_questions(_formatter(), summary="resumo")
+    perguntas = question_service.extract_implicit_questions(_formatter(), summary=SUMARIO_MINIMO)
 
     assert perguntas == []
 
@@ -277,7 +286,7 @@ def test_extract_implicit_questions_maioria_das_linhas_valida_mantem_so_as_valid
     )
     monkeypatch.setattr(question_service, "_chamar_ollama", lambda prompt, **kwargs: resposta)
 
-    perguntas = question_service.extract_implicit_questions(_formatter(), summary="resumo")
+    perguntas = question_service.extract_implicit_questions(_formatter(), summary=SUMARIO_MINIMO)
 
     assert len(perguntas) == 1
     assert perguntas[0].source_segment_ids == ["seg_0001", "seg_0002"]
@@ -296,7 +305,7 @@ def test_extract_implicit_questions_regressao_descarta_maioria_alucinada(monkeyp
     resposta = json.dumps({"perguntas_implicitas": perguntas_geradas, "total_perguntas": len(perguntas_geradas)})
     monkeypatch.setattr(question_service, "_chamar_ollama", lambda prompt, **kwargs: resposta)
 
-    perguntas = question_service.extract_implicit_questions(_formatter(), summary="resumo")
+    perguntas = question_service.extract_implicit_questions(_formatter(), summary=SUMARIO_MINIMO)
 
     assert len(perguntas) == 2
     assert {p.text for p in perguntas} == {
@@ -325,7 +334,7 @@ def test_summarize_meeting_retorna_texto_bruto(monkeypatch):
 
 def test_gerar_perguntas_nao_chama_refinamento_por_padrao(monkeypatch):
     monkeypatch.setattr(question_service, "extract_explicit_questions", lambda f: ["explicita"])
-    monkeypatch.setattr(question_service, "summarize_meeting", lambda f: "resumo")
+    monkeypatch.setattr(question_service, "summarize_meeting", lambda f: SUMARIO_MINIMO)
     monkeypatch.setattr(question_service, "extract_implicit_questions", lambda f, s: ["implicita"])
 
     def _falha_se_chamado(*args, **kwargs):
@@ -343,7 +352,7 @@ def test_gerar_perguntas_chama_refinamento_quando_flag_ativa(monkeypatch):
     get_settings.cache_clear()
     try:
         monkeypatch.setattr(question_service, "extract_explicit_questions", lambda f: ["explicita"])
-        monkeypatch.setattr(question_service, "summarize_meeting", lambda f: "resumo")
+        monkeypatch.setattr(question_service, "summarize_meeting", lambda f: SUMARIO_MINIMO)
         monkeypatch.setattr(question_service, "extract_implicit_questions", lambda f, s: ["implicita_bruta"])
         monkeypatch.setattr(question_service, "refine_implicit_questions", lambda qs, f: ["implicita_refinada"])
 
@@ -463,7 +472,7 @@ def test_versao_default_das_implicitas_continua_v4(monkeypatch):
         # provando que o parser do v4 continua no caminho default.
         _resposta_fixa(monkeypatch, "1. Pergunta em lista numerada?")
         with pytest.raises(ValueError):
-            question_service.extract_implicit_questions(_formatter(), summary="resumo")
+            question_service.extract_implicit_questions(_formatter(), summary=SUMARIO_MINIMO)
     finally:
         get_settings.cache_clear()
 
@@ -485,7 +494,7 @@ def test_v6_parser_estrito_ignora_preambulo_e_posfacio(monkeypatch):
             "Espero que ajude.",
         )
 
-        perguntas = question_service.extract_implicit_questions(_formatter(), summary="resumo")
+        perguntas = question_service.extract_implicit_questions(_formatter(), summary=SUMARIO_MINIMO)
 
         assert [p.text for p in perguntas] == [
             "Como será validado o prazo de entrega sem critério definido?",
@@ -513,7 +522,7 @@ def test_v6_sentinela_nao_possui_da_zero_perguntas(monkeypatch, resposta):
     try:
         _resposta_fixa(monkeypatch, resposta)
 
-        assert question_service.extract_implicit_questions(_formatter(), summary="resumo") == []
+        assert question_service.extract_implicit_questions(_formatter(), summary=SUMARIO_MINIMO) == []
     finally:
         get_settings.cache_clear()
 
@@ -527,7 +536,7 @@ def test_v6_resposta_fora_do_formato_levanta_erro_em_vez_de_lista_vazia(monkeypa
         _resposta_fixa(monkeypatch, "Não identifiquei nada relevante na reunião.")
 
         with pytest.raises(ValueError, match="não contém lista numerada"):
-            question_service.extract_implicit_questions(_formatter(), summary="resumo")
+            question_service.extract_implicit_questions(_formatter(), summary=SUMARIO_MINIMO)
     finally:
         get_settings.cache_clear()
 
@@ -540,7 +549,7 @@ def test_v6_campos_opcionais_nulos_e_source_segment_ids_vazio(monkeypatch):
     try:
         _resposta_fixa(monkeypatch, "1. Qual critério de aceite fica pendente?")
 
-        pergunta = question_service.extract_implicit_questions(_formatter(), summary="resumo")[0]
+        pergunta = question_service.extract_implicit_questions(_formatter(), summary=SUMARIO_MINIMO)[0]
 
         assert pergunta.type.value == "implicit"
         assert pergunta.participant_id is None
@@ -563,7 +572,7 @@ def test_v6_acima_do_teto_de_15_loga_aviso_e_nao_trunca(monkeypatch, caplog):
         )
 
         with caplog.at_level(logging.WARNING, logger=question_service.logger.name):
-            perguntas = question_service.extract_implicit_questions(_formatter(), summary="resumo")
+            perguntas = question_service.extract_implicit_questions(_formatter(), summary=SUMARIO_MINIMO)
 
         assert len(perguntas) == 18
         assert [p.id for p in perguntas] == [f"I{i}" for i in range(1, 19)]
@@ -584,7 +593,7 @@ def test_v6_monta_transcricao_direto_apos_o_banner_e_sumario_no_fim(monkeypatch)
         _resposta_fixa(monkeypatch, "1. Pergunta qualquer?", capturar=prompts)
         formatter = _formatter()
 
-        question_service.extract_implicit_questions(formatter, summary="RESUMO DA REUNIAO")
+        question_service.extract_implicit_questions(formatter, summary=SUMARIO_MINIMO)
 
         prompt_final = prompts[0]
         texto_prompt = question_service._carregar_prompt(
@@ -596,7 +605,7 @@ def test_v6_monta_transcricao_direto_apos_o_banner_e_sumario_no_fim(monkeypatch)
         posicao_banner = prompt_final.index("REUNIÃO ABAIXO")
         posicao_transcricao = prompt_final.index(transcricao)
         posicao_cabecalho = prompt_final.index(question_service.IMPLICIT_SUMMARY_HEADER)
-        posicao_sumario = prompt_final.index("RESUMO DA REUNIAO")
+        posicao_sumario = prompt_final.index(MARCADOR_SUMARIO)
 
         assert posicao_banner < posicao_transcricao < posicao_cabecalho < posicao_sumario
         # Nada entre o fim do texto do prompt (que termina no banner) e o
@@ -619,3 +628,99 @@ def test_prompt_v6_foi_colado_sem_alteracao_e_sem_pedir_evidencia():
     assert "Não ultrapasse 15 perguntas" in conteudo
     assert "linhas_evidencia" not in conteudo
     assert "JSON" not in conteudo
+
+
+# ---------------------------------------------------------------------------
+# Ligação do filtro estrutural do sumário (app/services/summary_filter.py).
+# Aqui não se testa o filtro em si — isso é tests/test_summary_filter.py —,
+# e sim que ele está DE FATO no caminho que monta o prompt das implícitas.
+# ---------------------------------------------------------------------------
+
+_SUMARIO_COM_INFERENCIA = (
+    "Contexto\n\n"
+    "Objetivo da reunião:  \n"
+    "PRESERVA-ESTE-TRECHO.\n\n"
+    "Conteúdo explícito\n\n"
+    "Prazos\n\n"
+    "- id: PR1\n"
+    "  Resumo: Não há prazo explícito mencionado.\n\n"
+    "Conhecimento implícito\n\n"
+    "Dependências implícitas\n\n"
+    "- id: DI1\n"
+    "  Resumo: DESCARTA-ESTA-INFERENCIA.\n"
+)
+
+
+def test_extract_implicit_questions_filtra_o_sumario_antes_de_montar_o_prompt(monkeypatch):
+    """A inferência do sumarizador e os placeholders de ausência não podem
+    chegar ao gerador de perguntas — é a origem rastreada de 4 das 5 premissas
+    sem lastro do comparativo v4 × v6."""
+    monkeypatch.delenv("ENABLE_SUMMARY_FILTER", raising=False)
+    get_settings.cache_clear()
+    try:
+        prompts = []
+        _resposta_fixa(
+            monkeypatch,
+            json.dumps({"perguntas_implicitas": [], "total_perguntas": 0}),
+            capturar=prompts,
+        )
+
+        question_service.extract_implicit_questions(
+            _formatter(), summary=_SUMARIO_COM_INFERENCIA
+        )
+
+        assert "PRESERVA-ESTE-TRECHO" in prompts[0]
+        assert "DESCARTA-ESTA-INFERENCIA" not in prompts[0]
+        assert "Não há prazo explícito" not in prompts[0]
+    finally:
+        get_settings.cache_clear()
+
+
+def test_enable_summary_filter_false_entrega_o_sumario_cru(monkeypatch):
+    """O desligamento existe para medir com e sem filtro na mesma execução;
+    se ele parar de desligar, a comparação deixa de ser possível."""
+    monkeypatch.setenv("ENABLE_SUMMARY_FILTER", "false")
+    get_settings.cache_clear()
+    try:
+        prompts = []
+        _resposta_fixa(
+            monkeypatch,
+            json.dumps({"perguntas_implicitas": [], "total_perguntas": 0}),
+            capturar=prompts,
+        )
+
+        question_service.extract_implicit_questions(
+            _formatter(), summary=_SUMARIO_COM_INFERENCIA
+        )
+
+        assert "DESCARTA-ESTA-INFERENCIA" in prompts[0]
+    finally:
+        get_settings.cache_clear()
+
+
+def test_filtro_do_sumario_vale_tambem_para_o_v6(monkeypatch):
+    """A contaminação é do insumo, não do prompt: os dois caminhos recebem o
+    sumário saneado."""
+    _com_versao_implicitas(monkeypatch, "v6")
+    try:
+        prompts = []
+        _resposta_fixa(monkeypatch, "Não possui", capturar=prompts)
+
+        question_service.extract_implicit_questions(
+            _formatter(), summary=_SUMARIO_COM_INFERENCIA
+        )
+
+        assert "DESCARTA-ESTA-INFERENCIA" not in prompts[0]
+    finally:
+        get_settings.cache_clear()
+
+
+def test_filtro_ligado_por_padrao(monkeypatch):
+    """Se este teste quebrar, o insumo contaminado voltou a produção sem
+    ninguém decidir isso."""
+    monkeypatch.delenv("ENABLE_SUMMARY_FILTER", raising=False)
+    get_settings.cache_clear()
+    try:
+        assert get_settings().enable_summary_filter is True
+    finally:
+        get_settings.cache_clear()
