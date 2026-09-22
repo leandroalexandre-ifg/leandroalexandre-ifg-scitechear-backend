@@ -14,8 +14,14 @@ devolve campos SEPARADOS (cluster, participant_id, speaker, identified,
 confidence) em vez de concatenar o score no nome (`"Leandro (0.82)"`) — e o
 banco é indexado por participant_id, nunca por nome (regra do AGENTS.md).
 Falante não identificado permanece com o cluster original.
+
+`identificar_speaker` tem dois métodos de decisão: o threshold de cosseno
+fixo (padrão) e AS-Norm (S-norm adaptativo, atrás de ENABLE_VOICE_ASNORM,
+desligado — EXPERIMENTAL, ver docs/ASNORM_COHORT_USUARIO.md). Nos dois o
+retorno é o mesmo: (participant_id | None, score de cosseno bruto).
 """
 import logging
+import statistics
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 
@@ -188,20 +194,11 @@ def _remover_outliers(
     return (embeddings_ok, segmentos_ok) if embeddings_ok else (embeddings, segmentos)
 
 
-def identificar_speaker(embedding: torch.Tensor, banco: Dict[str, torch.Tensor]) -> Tuple[Optional[str], float]:
-    """Compara um embedding contra o banco (participant_id -> embedding
-    consolidado) via similaridade de cosseno. Só aceita um match se:
-      1. o score do melhor candidato ultrapassar o limiar de identificação, e
-      2. a diferença para o segundo colocado for >= margem mínima.
-    Caso contrário, retorna (None, melhor_score) — evita "chutar" a pessoa
-    errada. banco é indexado por participant_id, NUNCA por nome."""
-    if not banco:
-        return None, 0.0
-
-    settings = get_settings()
-    embedding = normalizar_embedding(embedding)
-
-    scores = {participant_id: comparar_embeddings(embedding, emb_ref) for participant_id, emb_ref in banco.items()}
+def _identificar_threshold_fixo(scores: Dict[str, float], settings) -> Tuple[Optional[str], float]:
+    """Só aceita um match se o melhor score ultrapassar o limiar de
+    identificação E a diferença para o segundo colocado for >= margem
+    mínima. Caso contrário, (None, melhor_score) — evita "chutar" a pessoa
+    errada."""
     ranking = sorted(scores.items(), key=lambda item: item[1], reverse=True)
 
     melhor_id, melhor_score = ranking[0]
@@ -233,11 +230,133 @@ def identificar_speaker(embedding: torch.Tensor, banco: Dict[str, torch.Tensor])
     return melhor_id, melhor_score
 
 
+def _top_k_stats(emb: torch.Tensor, cohort: List[torch.Tensor], top_k: int) -> Tuple[float, float]:
+    """Média e desvio (populacional) dos top_k scores de `emb` contra o
+    cohort — o "A" de AS-Norm: só os impostores mais parecidos entram."""
+    scores = sorted((comparar_embeddings(emb, c) for c in cohort), reverse=True)[:top_k]
+    media = statistics.mean(scores)
+    desvio = statistics.pstdev(scores) if len(scores) > 1 else 0.0
+    return media, max(desvio, 1e-6)
+
+
+def asnorm_score(
+    score: float,
+    emb_teste: torch.Tensor,
+    emb_cadastro: torch.Tensor,
+    cohort: List[torch.Tensor],
+    top_k: int,
+) -> float:
+    """S-norm adaptativo simétrico: média do z-score do lado do teste (áudio
+    da reunião contra o cohort) e do lado do cadastro (perfil do candidato
+    contra o mesmo cohort). O cohort NÃO pode conter o próprio candidato —
+    quem chama é responsável por excluí-lo (ver identificar_speaker)."""
+    media_t, desvio_t = _top_k_stats(emb_teste, cohort, top_k)
+    media_c, desvio_c = _top_k_stats(emb_cadastro, cohort, top_k)
+    return 0.5 * ((score - media_t) / desvio_t + (score - media_c) / desvio_c)
+
+
+def _identificar_asnorm(
+    embedding: torch.Tensor,
+    banco: Dict[str, torch.Tensor],
+    scores: Dict[str, float],
+    cohort: Dict[str, torch.Tensor],
+    settings,
+) -> Tuple[Optional[str], float]:
+    normalizados = {}
+    for participant_id, score in scores.items():
+        cohort_candidato = [emb for pid, emb in cohort.items() if pid != participant_id]
+        normalizados[participant_id] = asnorm_score(
+            score, embedding, banco[participant_id], cohort_candidato, settings.voice_asnorm_top_k
+        )
+
+    ranking = sorted(normalizados.items(), key=lambda item: item[1], reverse=True)
+    melhor_id, melhor_norm = ranking[0]
+    melhor_bruto = scores[melhor_id]
+    segundo_norm = ranking[1][1] if len(ranking) > 1 else float("-inf")
+    margem = melhor_norm - segundo_norm
+
+    if melhor_bruto < settings.voice_asnorm_min_raw_score:
+        logger.info(
+            "AS-Norm: rejeitado -> %s com score bruto %.3f abaixo do piso (%.2f).",
+            melhor_id,
+            melhor_bruto,
+            settings.voice_asnorm_min_raw_score,
+        )
+        return None, melhor_bruto
+
+    if melhor_norm < settings.voice_asnorm_threshold:
+        logger.info(
+            "AS-Norm: rejeitado -> %s com score normalizado %.3f abaixo do limiar (%.2f).",
+            melhor_id,
+            melhor_norm,
+            settings.voice_asnorm_threshold,
+        )
+        return None, melhor_bruto
+
+    if margem < settings.voice_asnorm_min_margin:
+        logger.info(
+            "AS-Norm: rejeitado -> %s (%.3f) muito próximo de %s (%.3f), margem=%.3f < %.2f.",
+            melhor_id,
+            melhor_norm,
+            ranking[1][0],
+            segundo_norm,
+            margem,
+            settings.voice_asnorm_min_margin,
+        )
+        return None, melhor_bruto
+
+    logger.info("AS-Norm: escolhido -> %s (normalizado=%.3f, bruto=%.3f)", melhor_id, melhor_norm, melhor_bruto)
+    return melhor_id, melhor_bruto
+
+
+def _tamanho_cohort(banco: Dict[str, torch.Tensor], cohort: Dict[str, torch.Tensor]) -> int:
+    """Menor cohort efetivo entre os candidatos (cada um exclui a si mesmo)."""
+    return min(len([pid for pid in cohort if pid != candidato]) for candidato in banco)
+
+
+def identificar_speaker(
+    embedding: torch.Tensor,
+    banco: Dict[str, torch.Tensor],
+    cohort: Optional[Dict[str, torch.Tensor]] = None,
+) -> Tuple[Optional[str], float]:
+    """Compara um embedding contra o banco (participant_id -> embedding
+    consolidado) via similaridade de cosseno. banco é indexado por
+    participant_id, NUNCA por nome, e contém só os CANDIDATOS (participantes
+    da reunião com perfil). Retorna (None, melhor_score_bruto) quando
+    rejeitado; o score devolvido é sempre o cosseno bruto, nos dois métodos.
+
+    `cohort` (participant_id -> embedding) é o banco inteiro de perfis do
+    usuário; só é usado com ENABLE_VOICE_ASNORM ligado e cohort efetivo de
+    pelo menos VOICE_ASNORM_MIN_COHORT perfis — senão a decisão é o threshold
+    fixo de sempre."""
+    if not banco:
+        return None, 0.0
+
+    settings = get_settings()
+    embedding = normalizar_embedding(embedding)
+
+    scores = {participant_id: comparar_embeddings(embedding, emb_ref) for participant_id, emb_ref in banco.items()}
+
+    if settings.enable_voice_asnorm and cohort is not None:
+        tamanho = _tamanho_cohort(banco, cohort)
+        # piso de 2 independente da configuração: com 0-1 ponto não há desvio
+        if tamanho >= max(settings.voice_asnorm_min_cohort, 2):
+            return _identificar_asnorm(embedding, banco, scores, cohort, settings)
+        logger.info(
+            "AS-Norm: cohort de %d perfis abaixo do mínimo (%d) — usando threshold fixo.",
+            tamanho,
+            settings.voice_asnorm_min_cohort,
+        )
+
+    return _identificar_threshold_fixo(scores, settings)
+
+
 def aplicar_biometria(
     caminho_audio: Union[str, Path],
     diarizacao: DiarizationResult,
     banco: Dict[str, torch.Tensor],
     nomes: Optional[Dict[str, str]] = None,
+    cohort: Optional[Dict[str, torch.Tensor]] = None,
     duracao_min: float = 1.5,
     max_segmentos: int = 5,
     usar_concatenacao: bool = True,
@@ -299,7 +418,7 @@ def aplicar_biometria(
             embeddings_norm = [normalizar_embedding(e) for e in embeddings]
             embedding_final = normalizar_embedding(torch.stack(embeddings_norm).mean(dim=0))
 
-        participant_id, score = identificar_speaker(embedding_final, banco)
+        participant_id, score = identificar_speaker(embedding_final, banco, cohort=cohort)
         identificacao_por_cluster[cluster] = (participant_id, score)
 
     resultado: List[Segment] = []

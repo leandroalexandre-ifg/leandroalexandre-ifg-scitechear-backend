@@ -126,6 +126,23 @@ class Settings(BaseSettings):
     voice_min_margin: float = Field(default=0.05, alias="VOICE_MIN_MARGIN")
     voice_outlier_threshold: float = Field(default=0.45, alias="VOICE_OUTLIER_THRESHOLD")
 
+    # AS-Norm (Adaptive Score Normalization, variante S-norm simétrica) —
+    # método alternativo de decisão em identificar_speaker, DESLIGADO por
+    # padrão e em todo ambiente. O cohort de impostores vem do banco inteiro
+    # de perfis do USUÁRIO dono da reunião (menos o próprio candidato), não
+    # dos participantes da reunião — a primeira tentativa (branch
+    # feat/voice-asnorm-decision) usava os outros participantes como cohort e
+    # falhou por isso (ver docs/PENDENCIAS.md e docs/ASNORM_COHORT_USUARIO.md).
+    # Com cohort menor que VOICE_ASNORM_MIN_COHORT a decisão volta inteira
+    # para o threshold fixo acima: normalizar contra 2-3 pontos é pior que não
+    # normalizar.
+    enable_voice_asnorm: bool = Field(default=False, alias="ENABLE_VOICE_ASNORM")
+    voice_asnorm_min_cohort: int = Field(default=8, alias="VOICE_ASNORM_MIN_COHORT")
+    voice_asnorm_top_k: int = Field(default=10, alias="VOICE_ASNORM_TOP_K")
+    voice_asnorm_threshold: float = Field(default=3.0, alias="VOICE_ASNORM_THRESHOLD")
+    voice_asnorm_min_margin: float = Field(default=1.0, alias="VOICE_ASNORM_MIN_MARGIN")
+    voice_asnorm_min_raw_score: float = Field(default=0.40, alias="VOICE_ASNORM_MIN_RAW_SCORE")
+
     ollama_base_url: str = Field(default="http://127.0.0.1:11434", alias="OLLAMA_BASE_URL")
     ollama_model: str = Field(default="qwen3:14b", alias="OLLAMA_MODEL")
 
