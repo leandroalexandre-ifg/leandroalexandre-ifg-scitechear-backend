@@ -1,4 +1,5 @@
 import json
+import logging
 
 import pytest
 from pydantic import ValidationError
@@ -422,3 +423,199 @@ def test_extract_explicit_questions_nao_corrige_o_texto_devolvido_pelo_llm(monke
     perguntas = question_service.extract_explicit_questions(_formatter())
 
     assert perguntas[0].text == "[SPEAKER_00]: Subiu?"
+
+
+# ---------------------------------------------------------------------------
+# extract_implicit_questions — prompt v6 (IMPLICIT_QUESTIONS_PROMPT_VERSION)
+#
+# O v6 é texto do usuário e pede um formato incompatível com o v4: lista
+# numerada de texto puro, sem JSON e sem `linhas_evidencia`. Estes testes
+# travam as quatro guardas acordadas para esse caminho — parser estrito,
+# sentinela "Não possui", campos opcionais nulos e teto de 15 sem truncar —
+# e, principalmente, que o DEFAULT continua sendo o v4.
+# ---------------------------------------------------------------------------
+
+
+def _com_versao_implicitas(monkeypatch, versao):
+    monkeypatch.setenv("IMPLICIT_QUESTIONS_PROMPT_VERSION", versao)
+    get_settings.cache_clear()
+
+
+def _resposta_fixa(monkeypatch, texto, capturar=None):
+    def _fake(prompt, **kwargs):
+        if capturar is not None:
+            capturar.append(prompt)
+        return texto
+
+    monkeypatch.setattr(question_service, "_chamar_ollama", _fake)
+
+
+def test_versao_default_das_implicitas_continua_v4(monkeypatch):
+    """Sem a variável definida, nada muda: o caminho JSON + evidência do v4
+    é o que roda. Se este teste quebrar, o default virou v6 por acidente e a
+    validação anti-confabulação saiu de produção sem ninguém decidir isso."""
+    monkeypatch.delenv("IMPLICIT_QUESTIONS_PROMPT_VERSION", raising=False)
+    get_settings.cache_clear()
+    try:
+        assert get_settings().implicit_questions_prompt_version == "v4"
+
+        # Uma resposta em lista numerada (formato do v6) precisa FALHAR aqui,
+        # provando que o parser do v4 continua no caminho default.
+        _resposta_fixa(monkeypatch, "1. Pergunta em lista numerada?")
+        with pytest.raises(ValueError):
+            question_service.extract_implicit_questions(_formatter(), summary="resumo")
+    finally:
+        get_settings.cache_clear()
+
+
+def test_v6_parser_estrito_ignora_preambulo_e_posfacio(monkeypatch):
+    """Guarda 1: só linhas `N. ` / `N) ` viram pergunta. Preâmbulo do modelo,
+    cerca de markdown, linha em branco e comentário final são descartados —
+    e o texto da pergunta vai literal, sem reescrita."""
+    _com_versao_implicitas(monkeypatch, "v6")
+    try:
+        _resposta_fixa(
+            monkeypatch,
+            "Aqui estão as perguntas implícitas identificadas:\n"
+            "```\n"
+            "1. Como será validado o prazo de entrega sem critério definido?\n"
+            "2) Que impacto a ausência de dados próprios terá no fine-tuning?\n"
+            "3.Sem espaço depois do ponto não é item da lista\n"
+            "```\n"
+            "Espero que ajude.",
+        )
+
+        perguntas = question_service.extract_implicit_questions(_formatter(), summary="resumo")
+
+        assert [p.text for p in perguntas] == [
+            "Como será validado o prazo de entrega sem critério definido?",
+            "Que impacto a ausência de dados próprios terá no fine-tuning?",
+        ]
+        assert [p.id for p in perguntas] == ["I1", "I2"]
+    finally:
+        get_settings.cache_clear()
+
+
+@pytest.mark.parametrize(
+    "resposta",
+    [
+        "Não possui",
+        "não possui",
+        "NÃO POSSUI.",
+        "  Nao possui  ",
+        "1. Não possui",
+    ],
+)
+def test_v6_sentinela_nao_possui_da_zero_perguntas(monkeypatch, resposta):
+    """Guarda 2: "Não possui" é a saída de lista vazia do próprio prompt —
+    inclusive quando o modelo a numera. Nunca pode virar uma pergunta."""
+    _com_versao_implicitas(monkeypatch, "v6")
+    try:
+        _resposta_fixa(monkeypatch, resposta)
+
+        assert question_service.extract_implicit_questions(_formatter(), summary="resumo") == []
+    finally:
+        get_settings.cache_clear()
+
+
+def test_v6_resposta_fora_do_formato_levanta_erro_em_vez_de_lista_vazia(monkeypatch):
+    """Sem lista numerada E sem o sentinela, o modelo não respondeu no formato
+    pedido. Isso é erro real do backend (regra inviolável nº 5) e não pode ser
+    confundido com "esta reunião não tem perguntas implícitas"."""
+    _com_versao_implicitas(monkeypatch, "v6")
+    try:
+        _resposta_fixa(monkeypatch, "Não identifiquei nada relevante na reunião.")
+
+        with pytest.raises(ValueError, match="não contém lista numerada"):
+            question_service.extract_implicit_questions(_formatter(), summary="resumo")
+    finally:
+        get_settings.cache_clear()
+
+
+def test_v6_campos_opcionais_nulos_e_source_segment_ids_vazio(monkeypatch):
+    """Guarda 3: o v6 não pede evidência, então não há o que resolver —
+    `source_segment_ids` fica honestamente vazio em vez de ancorado por
+    similaridade, e participant_id/speaker/time seguem null como sempre."""
+    _com_versao_implicitas(monkeypatch, "v6")
+    try:
+        _resposta_fixa(monkeypatch, "1. Qual critério de aceite fica pendente?")
+
+        pergunta = question_service.extract_implicit_questions(_formatter(), summary="resumo")[0]
+
+        assert pergunta.type.value == "implicit"
+        assert pergunta.participant_id is None
+        assert pergunta.speaker is None
+        assert pergunta.time is None
+        assert pergunta.source_segment_ids == []
+    finally:
+        get_settings.cache_clear()
+
+
+def test_v6_acima_do_teto_de_15_loga_aviso_e_nao_trunca(monkeypatch, caplog):
+    """Guarda 4: o teto de 15 do prompt é observado, não aplicado. Truncar
+    esconderia justamente o comportamento do modelo que o comparativo v4 × v6
+    precisa medir."""
+    _com_versao_implicitas(monkeypatch, "v6")
+    try:
+        _resposta_fixa(
+            monkeypatch,
+            "\n".join(f"{i}. Pergunta número {i}?" for i in range(1, 19)),
+        )
+
+        with caplog.at_level(logging.WARNING, logger=question_service.logger.name):
+            perguntas = question_service.extract_implicit_questions(_formatter(), summary="resumo")
+
+        assert len(perguntas) == 18
+        assert [p.id for p in perguntas] == [f"I{i}" for i in range(1, 19)]
+        assert any("acima do teto" in r.getMessage() for r in caplog.records)
+    finally:
+        get_settings.cache_clear()
+
+
+def test_v6_monta_transcricao_direto_apos_o_banner_e_sumario_no_fim(monkeypatch):
+    """D2-b: o texto do prompt v6 termina no banner ###REUNIÃO ABAIXO###, então
+    é a TRANSCRIÇÃO que tem de vir logo depois — no v4 a ordem é a inversa
+    (sumário primeiro). O sumário entra por último, sob um cabeçalho de cola
+    que vive no código, não no arquivo de prompt (que é texto do usuário e não
+    pode ser editado)."""
+    _com_versao_implicitas(monkeypatch, "v6")
+    try:
+        prompts = []
+        _resposta_fixa(monkeypatch, "1. Pergunta qualquer?", capturar=prompts)
+        formatter = _formatter()
+
+        question_service.extract_implicit_questions(formatter, summary="RESUMO DA REUNIAO")
+
+        prompt_final = prompts[0]
+        texto_prompt = question_service._carregar_prompt(
+            question_service.IMPLICIT_QUESTIONS_PROMPT_V6
+        )
+        transcricao = formatter.render()
+
+        assert prompt_final.startswith(texto_prompt)
+        posicao_banner = prompt_final.index("REUNIÃO ABAIXO")
+        posicao_transcricao = prompt_final.index(transcricao)
+        posicao_cabecalho = prompt_final.index(question_service.IMPLICIT_SUMMARY_HEADER)
+        posicao_sumario = prompt_final.index("RESUMO DA REUNIAO")
+
+        assert posicao_banner < posicao_transcricao < posicao_cabecalho < posicao_sumario
+        # Nada entre o fim do texto do prompt (que termina no banner) e o
+        # começo da transcrição além de espaço em branco.
+        assert prompt_final[len(texto_prompt) : posicao_transcricao].strip() == ""
+    finally:
+        get_settings.cache_clear()
+
+
+def test_prompt_v6_foi_colado_sem_alteracao_e_sem_pedir_evidencia():
+    """O arquivo do v6 é texto do usuário. Trava o que não pode mudar: o
+    banner final (de que depende a montagem), o sentinela de lista vazia, o
+    teto de 15 — e a ausência de qualquer pedido de evidência estruturada,
+    que é a razão de o caminho v6 não ter validação automática."""
+    conteudo = question_service._carregar_prompt(question_service.IMPLICIT_QUESTIONS_PROMPT_V6)
+
+    assert conteudo.rstrip().endswith("####################################################")
+    assert "REUNIÃO ABAIXO" in conteudo
+    assert "Não possui" in conteudo
+    assert "Não ultrapasse 15 perguntas" in conteudo
+    assert "linhas_evidencia" not in conteudo
+    assert "JSON" not in conteudo

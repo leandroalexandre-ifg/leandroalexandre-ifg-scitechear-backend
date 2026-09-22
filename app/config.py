@@ -13,6 +13,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # como pacote em site-packages.
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
+# Versões de prompt de perguntas implícitas que o backend sabe parsear. Cada
+# uma tem um formato de saída e um caminho de parsing próprios em
+# app/services/question_service.py — por isso a lista vive aqui e é validada,
+# em vez de aceitar qualquer string.
+IMPLICIT_QUESTIONS_PROMPT_VERSIONS = ("v4", "v6")
+
 
 class Settings(BaseSettings):
     # env_file ancorado em _PROJECT_ROOT, não ao cwd do processo — mesma
@@ -124,6 +130,32 @@ class Settings(BaseSettings):
     # implícitas, não tem outro consumidor.
     enable_implicit_questions: bool = Field(default=False, alias="ENABLE_IMPLICIT_QUESTIONS")
     enable_implicit_refinement: bool = Field(default=False, alias="ENABLE_IMPLICIT_REFINEMENT")
+
+    # Qual prompt de perguntas implícitas o question_service usa. "v4"
+    # (default, inalterado) é o prompt com saída JSON + `linhas_evidencia`,
+    # validada programaticamente. "v6" é o prompt reescrito pelo usuário, com
+    # saída em lista numerada de texto puro e SEM campo de evidência — logo,
+    # sem a validação automática anti-confabulação (o parser correspondente
+    # devolve `source_segment_ids` vazio). Existe para comparar as duas
+    # versões com dados reais antes de qualquer troca de default; não mexa
+    # nisso em produção enquanto o comparativo não estiver revisado
+    # (ver docs/PENDENCIAS.md). Valor desconhecido é erro explícito, não
+    # fallback silencioso para o v4: escolher o prompt errado muda o
+    # resultado da reunião inteira.
+    implicit_questions_prompt_version: str = Field(
+        default="v4", alias="IMPLICIT_QUESTIONS_PROMPT_VERSION"
+    )
+
+    @field_validator("implicit_questions_prompt_version")
+    @classmethod
+    def _validar_versao_prompt_implicitas(cls, valor: str) -> str:
+        normalizado = valor.strip().lower()
+        if normalizado not in IMPLICIT_QUESTIONS_PROMPT_VERSIONS:
+            aceitos = ", ".join(sorted(IMPLICIT_QUESTIONS_PROMPT_VERSIONS))
+            raise ValueError(
+                f"IMPLICIT_QUESTIONS_PROMPT_VERSION={valor!r} desconhecido (aceitos: {aceitos})"
+            )
+        return normalizado
     # NÃO é lido por nenhum caminho do backend, e é intencional: quem tem
     # modo demo é o app (--dart-define=SCITECH_DEMO_MODE), que decide sozinho
     # se mostra dados fictícios. Fica declarado porque DEMO_MODE=false é

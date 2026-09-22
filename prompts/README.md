@@ -11,8 +11,13 @@ devem ser mínimas e versionadas (ver especificação).
 | `implicit_questions_v2.txt` | PromptGerador.txt | **Superado por v3** — preservado só para rastreabilidade (saída em texto numerado, não JSON). |
 | `implicit_questions_v3.txt` | implicit_questions_v2.txt (Fase 5) | **Superado por v4** — preservado só para rastreabilidade. Saída JSON sem campo de evidência; causou confabulação de perguntas implícitas sem lastro na transcrição (ver `docs/PENDENCIAS.md`). |
 | `implicit_questions_v4.txt` | implicit_questions_v3.txt | **Ativo.** Mesmos critérios semânticos do v3 (linguagem formal, não redundância, foco em tomada de decisão). Duas mudanças: (1) exige campo `linhas_evidencia` por pergunta, rastreando a inferência até linhas reais da transcrição — validado programaticamente em `question_service.py`, que descarta perguntas sem evidência majoritariamente real; (2) reformula o teto de 15 perguntas como limite absoluto, não meta — lista vazia é saída válida. Usado por `app/services/question_service.py`. |
+| `implicit_questions_v6.txt` | texto enviado pelo usuário (2026-09-22), colado sem nenhuma alteração | **Em avaliação, não é o default.** Selecionado por `IMPLICIT_QUESTIONS_PROMPT_VERSION=v6`. Reescreve os critérios de restrição/não-redundância (consolidar por questão central, "em caso de dúvida, não gere", sentinela `Não possui` para lista vazia) e **abandona dois mecanismos do v4**: a saída JSON e o campo `linhas_evidencia`. Pede lista numerada de texto puro, então o caminho v6 em `question_service.py` tem parser próprio e **não tem** a validação programática de evidência — `source_segment_ids` fica vazio e a checagem de confabulação é humana. Existe para o comparativo v4 × v6 com transcrições reais; o default segue `v4` até esse comparativo ser revisado. |
 | `implicit_refiner_v1.txt` | PromptRefinadorPerguntas.txt | Refinamento (desativado por default: `ENABLE_IMPLICIT_REFINEMENT=false`). Reescreve/consolida perguntas já extraídas; não audita evidência e hoje descarta `source_segment_ids` ao reconstruir as perguntas — limitação conhecida, sem impacto enquanto a flag estiver desligada (ver `docs/PENDENCIAS.md`). |
 
 Perguntas implícitas usam a v4 (saída JSON + evidência) desde a calibração
-de confabulação (2026-08-11). A v2 e a v3 ficam no repositório apenas como
-referência histórica — não são mais chamadas pelo serviço.
+de confabulação (2026-08-11), e é ela que continua sendo o default. A v2 e a
+v3 ficam no repositório apenas como referência histórica — não são mais
+chamadas pelo serviço. A v6 é chamada apenas quando
+`IMPLICIT_QUESTIONS_PROMPT_VERSION=v6`; não existe uma v5 de implícitas (o v5
+é das explícitas), e o número foi mantido a pedido para não renomear o
+arquivo enviado.

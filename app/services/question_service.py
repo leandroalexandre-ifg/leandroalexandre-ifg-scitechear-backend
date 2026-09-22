@@ -23,6 +23,14 @@ semanticamente intactos. Únicas mudanças de comportamento:
   speaker/participant_id/time NUNCA são inventados: ficam null
   (type=implicit); só `source_segment_ids` é preenchido, a partir das
   linhas de evidência válidas.
+- IMPLÍCITAS (v6, em avaliação): prompts/implicit_questions_v6.txt, texto do
+  usuário sem uma letra alterada, selecionado por
+  IMPLICIT_QUESTIONS_PROMPT_VERSION=v6 (default continua v4). Pede lista
+  numerada de texto puro e NÃO pede evidência — então o caminho v6 tem parser
+  próprio e não tem a validação programática acima: `source_segment_ids` fica
+  vazio, e a checagem de confabulação é humana. Coexiste com o v4 para
+  permitir o comparativo com dados reais; nada de produção muda enquanto ele
+  não for revisado (ver docs/PENDENCIAS.md).
 - SUMARIZAÇÃO: artefato interno (prompts/meeting_summary_v1.txt); não é
   contrato do Flutter, continua texto.
 - IMPLÍCITAS (etapa inteira): temporariamente desligada por padrão via
@@ -38,6 +46,7 @@ semanticamente intactos. Únicas mudanças de comportamento:
 import json
 import logging
 import re
+import unicodedata
 from pathlib import Path
 from typing import List, Optional
 
@@ -54,7 +63,39 @@ PROMPTS_DIR = Path(__file__).resolve().parents[2] / "prompts"
 EXPLICIT_QUESTIONS_PROMPT = "explicit_questions_v5.json"
 MEETING_SUMMARY_PROMPT = "meeting_summary_v1.txt"
 IMPLICIT_QUESTIONS_PROMPT = "implicit_questions_v4.txt"
+IMPLICIT_QUESTIONS_PROMPT_V6 = "implicit_questions_v6.txt"
 IMPLICIT_REFINER_PROMPT = "implicit_refiner_v1.txt"
+
+# Qual arquivo cada valor de IMPLICIT_QUESTIONS_PROMPT_VERSION carrega. O
+# conjunto de versões aceitas é validado em app/config.py — aqui só o mapa.
+IMPLICIT_QUESTIONS_PROMPTS = {
+    "v4": IMPLICIT_QUESTIONS_PROMPT,
+    "v6": IMPLICIT_QUESTIONS_PROMPT_V6,
+}
+
+# Cabeçalho de cola do v6 (D2-b). O texto do prompt v6 termina no banner
+# ###REUNIÃO ABAIXO###, então a TRANSCRIÇÃO tem de vir imediatamente depois
+# dele — diferente do v4, onde o sumário vinha primeiro. O sumário entra
+# depois, sob este rótulo, para que o modelo não confunda o resumo com a
+# reunião. A cola vive aqui, no código, e não dentro do arquivo de prompt:
+# o texto do prompt é do usuário e não foi alterado.
+IMPLICIT_SUMMARY_HEADER = "##SUMARIZAÇÃO DA REUNIÃO"
+
+# Teto declarado no próprio texto do prompt ("Não ultrapasse 15 perguntas").
+# Não truncamos quando o modelo passa disso — só logamos, porque o objetivo
+# do comparativo é ver o comportamento real do modelo, não mascará-lo.
+IMPLICIT_QUESTIONS_SOFT_CAP = 15
+
+# Sentinela de lista vazia do v6 ("Se nenhuma pergunta atender aos critérios,
+# retorne "Não possui""), já normalizado (minúsculas, sem acento, sem
+# pontuação) — ver _normalizar_sentinela.
+IMPLICIT_NO_QUESTIONS_SENTINEL = "nao possui"
+
+# Item de lista numerada do v6. Estrito de propósito: exige o número, o
+# separador e ESPAÇO antes do texto, para ignorar preâmbulo/posfácio que o
+# modelo emita ("Aqui estão as perguntas:", linhas em branco, cercas de
+# markdown) sem que nada disso vire pergunta.
+_ITEM_NUMERADO = re.compile(r"^\s*\d+[.)]\s+(?P<texto>\S.*)$")
 
 
 class ExplicitQuestionRaw(BaseModel):
@@ -236,6 +277,18 @@ def _resolver_evidencia_implicita(
 
 
 def extract_implicit_questions(formatter: TranscriptFormatter, summary: str) -> List[Question]:
+    """Perguntas implícitas. Despacha para o caminho do prompt configurado em
+    IMPLICIT_QUESTIONS_PROMPT_VERSION (default "v4"): os dois prompts pedem
+    formatos de saída incompatíveis (JSON com evidência vs. lista numerada de
+    texto puro), então cada um tem seu próprio parsing. A versão é validada
+    em app/config.py — aqui um valor desconhecido não pode chegar."""
+    versao = get_settings().implicit_questions_prompt_version
+    if versao == "v6":
+        return _extract_implicit_questions_v6(formatter, summary)
+    return _extract_implicit_questions_v4(formatter, summary)
+
+
+def _extract_implicit_questions_v4(formatter: TranscriptFormatter, summary: str) -> List[Question]:
     """Perguntas implícitas (prompts/implicit_questions_v4.txt — sumário +
     transcrição, saída JSON). speaker/participant_id/time NUNCA são
     inventados: ficam null. `linhas_evidencia` é validada contra a
@@ -265,6 +318,97 @@ def extract_implicit_questions(formatter: TranscriptFormatter, summary: str) -> 
             )
         )
     return perguntas
+
+
+def _normalizar_sentinela(texto: str) -> str:
+    """Normaliza para comparar com o sentinela "Não possui" do v6: sem
+    acento, minúsculas, sem pontuação, espaços colapsados. Assim `NÃO
+    POSSUI.`, `não possui` e `Nao Possui` são reconhecidos como a mesma
+    coisa — e não viram uma "pergunta"."""
+    decomposto = unicodedata.normalize("NFKD", texto)
+    sem_acento = "".join(c for c in decomposto if not unicodedata.combining(c))
+    sem_pontuacao = re.sub(r"[^0-9a-z]+", " ", sem_acento.lower())
+    return sem_pontuacao.strip()
+
+
+def _e_sem_perguntas(texto: str) -> bool:
+    return _normalizar_sentinela(texto) == IMPLICIT_NO_QUESTIONS_SENTINEL
+
+
+def _parse_lista_numerada_estrita(texto: str) -> List[str]:
+    r"""Parser do formato de saída do v6 (lista numerada de texto puro).
+
+    Separado de _parse_lista_numerada (usado pelo refinador) de propósito: o
+    do refinador aceita qualquer linha não-vazia, então preâmbulo do modelo e
+    o próprio sentinela "Não possui" virariam perguntas. Aqui só linhas que
+    casam `^\s*\d+[.)]\s+` entram, e nada é reescrito — o texto da pergunta
+    vai literal para o resultado, como nas explícitas."""
+    perguntas: List[str] = []
+    for linha in texto.splitlines():
+        match = _ITEM_NUMERADO.match(linha)
+        if match is None:
+            continue
+        perguntas.append(match.group("texto").strip())
+    return perguntas
+
+
+def _extract_implicit_questions_v6(formatter: TranscriptFormatter, summary: str) -> List[Question]:
+    """Perguntas implícitas pelo prompt v6 (prompts/implicit_questions_v6.txt).
+
+    Três diferenças de comportamento em relação ao v4, todas consequência do
+    formato que o prompt pede — nenhuma delas é escolha de conveniência:
+
+    1. Montagem (D2-b): o prompt termina no banner ###REUNIÃO ABAIXO###, então
+       a transcrição vem imediatamente depois dele e o sumário vem por último,
+       sob IMPLICIT_SUMMARY_HEADER. No v4 a ordem é a inversa.
+    2. Sem evidência rastreável: o v6 não pede `linhas_evidencia`, logo a
+       validação programática anti-confabulação do v4 não tem insumo e NÃO
+       EXISTE aqui. `source_segment_ids` fica vazio — campo honestamente vazio
+       em vez de âncora inventada por similaridade. A checagem passa a ser
+       humana (ver docs/PENDENCIAS.md); é por isso que o default continua v4.
+    3. Teto de 15: o prompt o declara, mas aqui ele só é observado e logado,
+       nunca aplicado por truncamento — mascarar o excesso esconderia
+       exatamente o comportamento que o comparativo quer medir.
+
+    participant_id/speaker/time continuam null, como em todas as implícitas."""
+    prompt = _carregar_prompt(IMPLICIT_QUESTIONS_PROMPTS["v6"])
+    prompt_final = f"{prompt}\n\n{formatter.render()}\n\n{IMPLICIT_SUMMARY_HEADER}\n\n{summary}"
+
+    resposta_bruta = _chamar_ollama(prompt_final, contexto="extract_implicit_questions")
+    itens = _parse_lista_numerada_estrita(resposta_bruta)
+
+    # "Não possui" é saída VÁLIDA de lista vazia, venha ela solta ou como
+    # item numerado único. Lista vazia sem o sentinela é outra coisa: o
+    # modelo não respondeu no formato pedido, e isso é erro real do backend —
+    # não pode virar "esta reunião não tem perguntas implícitas".
+    sem_perguntas = _e_sem_perguntas(resposta_bruta) or any(_e_sem_perguntas(i) for i in itens)
+    textos = [item for item in itens if not _e_sem_perguntas(item)]
+    if not textos and not sem_perguntas:
+        raise ValueError(
+            "Resposta do LLM para perguntas implícitas (v6) não contém lista "
+            "numerada nem o sentinela \"Não possui\"."
+        )
+
+    if len(textos) > IMPLICIT_QUESTIONS_SOFT_CAP:
+        logger.warning(
+            "Perguntas implícitas (v6): modelo gerou %d perguntas, acima do teto de %d "
+            "declarado no prompt. Mantidas todas (sem truncar) — ver docs/PENDENCIAS.md.",
+            len(textos),
+            IMPLICIT_QUESTIONS_SOFT_CAP,
+        )
+
+    return [
+        Question(
+            id=f"I{i + 1}",
+            type=QuestionType.IMPLICIT,
+            text=texto,
+            participant_id=None,
+            speaker=None,
+            time=None,
+            source_segment_ids=[],
+        )
+        for i, texto in enumerate(textos)
+    ]
 
 
 def _parse_lista_numerada(texto: str) -> List[str]:

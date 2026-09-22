@@ -6,6 +6,55 @@ antes de considerar algo definitivamente resolvido, etc. Diferente de
 `docs/BASELINE.md` (retrato pontual da Fase 0): este arquivo é atualizado ao
 longo do projeto.
 
+## Aberta — Prompt v6 de perguntas implícitas: implementado, ainda não avaliado
+
+**Onde:** `prompts/implicit_questions_v6.txt`,
+`question_service._extract_implicit_questions_v6`,
+`IMPLICIT_QUESTIONS_PROMPT_VERSION` (`app/config.py`). Branch
+`feat/perguntas-implicitas-v6`.
+
+**O quê.** Existe agora um segundo prompt de perguntas implícitas, enviado pelo
+usuário e colado **sem nenhuma alteração** de texto. Ele coexiste com o v4: a
+variável `IMPLICIT_QUESTIONS_PROMPT_VERSION` escolhe qual roda, e o **default
+continua `v4`**. Nenhum default de produção mudou —
+`ENABLE_IMPLICIT_QUESTIONS` segue `false`.
+
+**O que o v6 muda, e é o ponto todo.** Ele pede **lista numerada de texto
+puro**, não JSON, e **não pede `linhas_evidencia`**. Com isso:
+
+- O parser do v4 não serve (verificado: `_extrair_json` levanta `ValueError`
+  com lista numerada), então o caminho v6 tem parser próprio e estrito — só
+  linhas `N. ` / `N) `, com `"Não possui"` reconhecido como lista vazia válida.
+- **A validação programática anti-confabulação do v4 deixa de existir nesse
+  caminho**, porque o sinal que ela consome (evidência rastreável até linhas
+  reais da transcrição) não é mais pedido ao modelo. `source_segment_ids` vem
+  **vazio** — campo honestamente vazio, não âncora inventada por
+  similaridade. Foi decisão explícita: ancorar por similaridade fabricaria
+  rastreabilidade que ninguém conferiu.
+- O teto de 15 do prompt é **observado e logado, nunca truncado** — truncar
+  esconderia o comportamento real do modelo, que é justamente o que precisa
+  ser medido.
+- Uma resposta sem lista numerada **e** sem o sentinela `"Não possui"` é erro
+  real (`ValueError`), não "reunião sem perguntas implícitas" — regra
+  inviolável nº 5.
+
+**Montagem do prompt (difere do v4 de propósito).** O texto do v6 termina no
+banner `###REUNIÃO ABAIXO###`, então a **transcrição** vem imediatamente depois
+dele e o **sumário** vem por último, sob o cabeçalho `##SUMARIZAÇÃO DA
+REUNIÃO`. No v4 a ordem é a inversa (sumário primeiro). O cabeçalho de cola
+vive no código, não no arquivo de prompt.
+
+**O que falta.** O comparativo v4 × v6 com transcrições reais, incluindo
+leitura manual de cada pergunta gerada contra a transcrição (a checagem humana
+que substitui a validação automática perdida). Até esse comparativo ser
+revisado, `v6` é só uma opção de configuração — não há base para trocar o
+default.
+
+**Status:** aberta. Não bloqueia nada: com o default `v4`, o comportamento do
+sistema é idêntico ao de antes desta branch.
+
+---
+
 ## Aberta — GPU0 fora de operação desde 19/09/2026; o sistema roda sem redundância
 
 **Onde:** infraestrutura do servidor NumbERS. **Não é defeito deste projeto**,

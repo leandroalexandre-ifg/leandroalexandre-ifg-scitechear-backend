@@ -1,6 +1,14 @@
 from pathlib import Path
 
-from app.config import Settings, _PROJECT_ROOT, get_settings
+import pytest
+from pydantic import ValidationError
+
+from app.config import (
+    IMPLICIT_QUESTIONS_PROMPT_VERSIONS,
+    Settings,
+    _PROJECT_ROOT,
+    get_settings,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -67,3 +75,38 @@ def test_env_file_e_absoluto_ancorado_em_project_root():
 def test_env_file_nao_muda_com_o_cwd_do_processo(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     assert Settings.model_config["env_file"] == str(_PROJECT_ROOT / ".env")
+
+
+# ---------------------------------------------------------------------------
+# IMPLICIT_QUESTIONS_PROMPT_VERSION — qual prompt de perguntas implícitas
+# roda. Escolher o prompt errado muda o resultado da reunião inteira (o v6
+# não tem validação de evidência), então um valor desconhecido tem de ser
+# erro explícito na inicialização, nunca fallback silencioso.
+# ---------------------------------------------------------------------------
+
+
+def test_versao_do_prompt_de_implicitas_default_e_v4(monkeypatch):
+    monkeypatch.delenv("IMPLICIT_QUESTIONS_PROMPT_VERSION", raising=False)
+    assert Settings().implicit_questions_prompt_version == "v4"
+
+
+@pytest.mark.parametrize("valor,esperado", [("v6", "v6"), ("V6", "v6"), (" v4 ", "v4")])
+def test_versao_do_prompt_de_implicitas_normaliza_caixa_e_espaco(valor, esperado):
+    assert Settings(IMPLICIT_QUESTIONS_PROMPT_VERSION=valor).implicit_questions_prompt_version == esperado
+
+
+@pytest.mark.parametrize("valor", ["v5", "v7", "", "json", "latest"])
+def test_versao_do_prompt_de_implicitas_desconhecida_falha_explicitamente(valor):
+    with pytest.raises(ValidationError, match="IMPLICIT_QUESTIONS_PROMPT_VERSION"):
+        Settings(IMPLICIT_QUESTIONS_PROMPT_VERSION=valor)
+
+
+def test_versoes_aceitas_tem_um_arquivo_de_prompt_cada():
+    """A lista em config.py e o mapa em question_service.py não podem
+    divergir: uma versão aceita sem arquivo/parser correspondente falharia
+    só na hora de processar uma reunião real."""
+    from app.services.question_service import IMPLICIT_QUESTIONS_PROMPTS, PROMPTS_DIR
+
+    assert set(IMPLICIT_QUESTIONS_PROMPTS) == set(IMPLICIT_QUESTIONS_PROMPT_VERSIONS)
+    for arquivo in IMPLICIT_QUESTIONS_PROMPTS.values():
+        assert (PROMPTS_DIR / arquivo).is_file()
