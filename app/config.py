@@ -19,6 +19,13 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 # em vez de aceitar qualquer string.
 IMPLICIT_QUESTIONS_PROMPT_VERSIONS = ("v4", "v6")
 
+# Versões do prompt de sumarização. Diferente das implícitas, aqui o formato
+# de saída é o MESMO nas duas — o v2 é o v1 com duas restrições a mais sobre
+# o campo "Resumo" (ver prompts/README.md), então não há caminho de parsing
+# distinto. A lista existe pelo mesmo motivo: escolher o prompt errado muda o
+# insumo da reunião inteira, e isso não pode virar fallback silencioso.
+MEETING_SUMMARY_PROMPT_VERSIONS = ("v1", "v2")
+
 
 class Settings(BaseSettings):
     # env_file ancorado em _PROJECT_ROOT, não ao cwd do processo — mesma
@@ -157,6 +164,37 @@ class Settings(BaseSettings):
     # enquanto ENABLE_IMPLICIT_QUESTIONS=false: o sumário nem chega a ser
     # gerado. Ver app/services/summary_filter.py.
     enable_summary_filter: bool = Field(default=True, alias="ENABLE_SUMMARY_FILTER")
+
+    # Qual prompt de sumarização roda. "v1" (default, inalterado) é o texto
+    # original. "v2" é o v1 com duas restrições a mais, e só elas: o campo
+    # "Resumo" ganha descrição (era o único campo do schema sem nenhuma) e uma
+    # regra 20 proíbe deduzir, converter ou completar dado factual — em
+    # especial converter referência temporal relativa em data absoluta, que é
+    # exatamente como o "30 de outubro" nasceu de "o dia 30 deste mês".
+    #
+    # O lastro exigido é a TRANSCRIÇÃO INTEIRA, não o trecho do próprio
+    # elemento: ancorar no trecho reprovaria resolução anafórica legítima
+    # (11 resumos de 50098d37 resolvem "ele" para "Rufas", nome que aparece
+    # 12 vezes na transcrição). "outubro" aparece zero vezes — é esse o
+    # discriminador.
+    #
+    # Default segue v1 porque o v2 muda a saída do LLM e ainda não foi
+    # medido; a remedição dos 4 jobs liga por variável. Ver
+    # docs/COMPARATIVO_IMPLICITAS_V4_V6.md e prompts/README.md.
+    meeting_summary_prompt_version: str = Field(
+        default="v1", alias="MEETING_SUMMARY_PROMPT_VERSION"
+    )
+
+    @field_validator("meeting_summary_prompt_version")
+    @classmethod
+    def _validar_versao_prompt_sumarizacao(cls, valor: str) -> str:
+        normalizado = valor.strip().lower()
+        if normalizado not in MEETING_SUMMARY_PROMPT_VERSIONS:
+            aceitos = ", ".join(sorted(MEETING_SUMMARY_PROMPT_VERSIONS))
+            raise ValueError(
+                f"MEETING_SUMMARY_PROMPT_VERSION={valor!r} desconhecido (aceitos: {aceitos})"
+            )
+        return normalizado
 
     @field_validator("implicit_questions_prompt_version")
     @classmethod

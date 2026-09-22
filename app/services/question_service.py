@@ -68,9 +68,18 @@ logger = logging.getLogger(__name__)
 PROMPTS_DIR = Path(__file__).resolve().parents[2] / "prompts"
 EXPLICIT_QUESTIONS_PROMPT = "explicit_questions_v5.json"
 MEETING_SUMMARY_PROMPT = "meeting_summary_v1.txt"
+MEETING_SUMMARY_PROMPT_V2 = "meeting_summary_v2.txt"
 IMPLICIT_QUESTIONS_PROMPT = "implicit_questions_v4.txt"
 IMPLICIT_QUESTIONS_PROMPT_V6 = "implicit_questions_v6.txt"
 IMPLICIT_REFINER_PROMPT = "implicit_refiner_v1.txt"
+
+# Qual arquivo cada valor de MEETING_SUMMARY_PROMPT_VERSION carrega. Os dois
+# produzem o MESMO formato de saída — o v2 só restringe o campo "Resumo" —,
+# então não há caminho de parsing separado, ao contrário das implícitas.
+MEETING_SUMMARY_PROMPTS = {
+    "v1": MEETING_SUMMARY_PROMPT,
+    "v2": MEETING_SUMMARY_PROMPT_V2,
+}
 
 # Qual arquivo cada valor de IMPLICIT_QUESTIONS_PROMPT_VERSION carrega. O
 # conjunto de versões aceitas é validado em app/config.py — aqui só o mapa.
@@ -242,8 +251,15 @@ def extract_explicit_questions(formatter: TranscriptFormatter) -> List[Question]
 
 def summarize_meeting(formatter: TranscriptFormatter) -> str:
     """Sumarização: artefato interno (não é contrato do Flutter). Preserva
-    PromptSumarizacaoV1 semanticamente; saída continua texto."""
-    prompt = _carregar_prompt(MEETING_SUMMARY_PROMPT)
+    PromptSumarizacaoV1 semanticamente; saída continua texto.
+
+    A versão do prompt vem de MEETING_SUMMARY_PROMPT_VERSION (default "v1",
+    inalterado). O v2 é o v1 mais duas restrições sobre o campo "Resumo" e
+    nada além — mesmo schema, mesmo formato de saída, mesmos critérios de
+    extração —, então não há parsing condicional aqui. A versão é validada em
+    app/config.py; um valor desconhecido não chega."""
+    versao = get_settings().meeting_summary_prompt_version
+    prompt = _carregar_prompt(MEETING_SUMMARY_PROMPTS[versao])
     prompt_final = f"{prompt}\n\n{formatter.render()}"
     return _chamar_ollama(prompt_final, contexto="summarize_meeting")
 

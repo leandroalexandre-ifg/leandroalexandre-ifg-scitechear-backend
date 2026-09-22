@@ -373,7 +373,9 @@ def test_gerar_perguntas_chama_refinamento_quando_flag_ativa(monkeypatch):
     [
         question_service.EXPLICIT_QUESTIONS_PROMPT,
         question_service.MEETING_SUMMARY_PROMPT,
+        question_service.MEETING_SUMMARY_PROMPT_V2,
         question_service.IMPLICIT_QUESTIONS_PROMPT,
+        question_service.IMPLICIT_QUESTIONS_PROMPT_V6,
         question_service.IMPLICIT_REFINER_PROMPT,
     ],
 )
@@ -722,5 +724,94 @@ def test_filtro_ligado_por_padrao(monkeypatch):
     get_settings.cache_clear()
     try:
         assert get_settings().enable_summary_filter is True
+    finally:
+        get_settings.cache_clear()
+
+
+# ---------------------------------------------------------------------------
+# Versão do prompt de sumarização (MEETING_SUMMARY_PROMPT_VERSION).
+# Mesmo padrão do v6 das implícitas: coexistência por variável, default
+# inalterado, valor desconhecido = erro na inicialização.
+# ---------------------------------------------------------------------------
+
+
+def _com_versao_sumario(monkeypatch, versao):
+    monkeypatch.setenv("MEETING_SUMMARY_PROMPT_VERSION", versao)
+    get_settings.cache_clear()
+
+
+def test_versao_default_da_sumarizacao_continua_v1(monkeypatch):
+    """Se este teste quebrar, o v2 virou default sem medição — e o v2 muda a
+    saída do LLM, não só o consumo dela."""
+    monkeypatch.delenv("MEETING_SUMMARY_PROMPT_VERSION", raising=False)
+    get_settings.cache_clear()
+    try:
+        assert get_settings().meeting_summary_prompt_version == "v1"
+    finally:
+        get_settings.cache_clear()
+
+
+@pytest.mark.parametrize(
+    "versao,arquivo_esperado",
+    [("v1", "meeting_summary_v1.txt"), ("v2", "meeting_summary_v2.txt")],
+)
+def test_summarize_meeting_carrega_o_prompt_da_versao(monkeypatch, versao, arquivo_esperado):
+    _com_versao_sumario(monkeypatch, versao)
+    try:
+        prompts = []
+        _resposta_fixa(monkeypatch, "Contexto\n\nObjetivo da reunião:  \nX.\n", capturar=prompts)
+
+        question_service.summarize_meeting(_formatter())
+
+        esperado = question_service._carregar_prompt(arquivo_esperado)
+        assert prompts[0].startswith(esperado)
+    finally:
+        get_settings.cache_clear()
+
+
+def test_v2_e_o_v1_mais_duas_restricoes_e_nada_alem():
+    """Regra 9 do AGENTS.md: prompts preservados semanticamente, mudança
+    mínima e versionada. Se o v2 divergir do v1 em mais do que a descrição do
+    campo Resumo e a regra 20, a mudança deixou de ser mínima."""
+    import difflib
+
+    v1 = question_service._carregar_prompt("meeting_summary_v1.txt").split("\n")
+    v2 = question_service._carregar_prompt("meeting_summary_v2.txt").split("\n")
+
+    alteradas = [
+        linha
+        for linha in difflib.unified_diff(v1, v2, n=0, lineterm="")
+        if linha.startswith(("+", "-")) and not linha.startswith(("+++", "---"))
+    ]
+    removidas = [l for l in alteradas if l.startswith("-")]
+    adicionadas = [l for l in alteradas if l.startswith("+")]
+
+    assert len(removidas) == 1 and removidas[0] == "-Resumo"
+    assert len(adicionadas) == 2
+    assert adicionadas[0].startswith("+Resumo: Síntese objetiva")
+    assert adicionadas[1].startswith("+20. Nenhum dado factual")
+
+
+def test_v2_mantem_schema_categorias_e_ids_do_v1():
+    """As duas edições só restringem. Nenhuma categoria, prefixo de ID ou
+    regra de validação existente pode ter sumido."""
+    v1 = question_service._carregar_prompt("meeting_summary_v1.txt")
+    v2 = question_service._carregar_prompt("meeting_summary_v2.txt")
+
+    for marcador in ("Conhecimento implícito", "Lacunas", "Dependências implícitas"):
+        assert marcador in v1 and marcador in v2
+    for prefixo in ("Problemas → P", "Decisões → D", "Pontos vagos → PV"):
+        assert prefixo in v1 and prefixo in v2
+    for regra in range(1, 20):
+        assert f"\n{regra}. " in v2, f"regra de validação {regra} sumiu do v2"
+
+
+def test_versao_de_sumarizacao_desconhecida_falha_na_inicializacao(monkeypatch):
+    """Escolher o prompt errado muda o insumo da reunião inteira: erro
+    explícito, nunca fallback silencioso."""
+    _com_versao_sumario(monkeypatch, "v9")
+    try:
+        with pytest.raises(ValidationError, match="MEETING_SUMMARY_PROMPT_VERSION"):
+            get_settings()
     finally:
         get_settings.cache_clear()
