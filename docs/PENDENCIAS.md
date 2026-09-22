@@ -6,6 +6,61 @@ antes de considerar algo definitivamente resolvido, etc. Diferente de
 `docs/BASELINE.md` (retrato pontual da Fase 0): este arquivo é atualizado ao
 longo do projeto.
 
+## Aberta — A sumarização é a fonte real da confabulação, não o prompt de implícitas
+
+**Onde:** `prompts/meeting_summary_v1.txt` / `question_service.summarize_meeting`.
+
+**Descoberto em:** comparativo v4 × v6 de 22/09/2026
+([`COMPARATIVO_IMPLICITAS_V4_V6.md`](COMPARATIVO_IMPLICITAS_V4_V6.md)), ao ler
+manualmente cada pergunta gerada contra a transcrição original.
+
+**O quê.** Toda premissa sem lastro que apareceu nas perguntas implícitas —
+nas **duas** versões de prompt — **já estava afirmada no sumário**. O prompt de
+implícitas apenas a leu com fidelidade. Rastreado linha por linha nos sumários
+salvos em [`repro/implicitas-v4-v6/`](repro/implicitas-v4-v6/):
+
+- **Inventa fato.** `2e335c5c_sumario.txt:52` afirma "prazo final
+  **(30 de outubro)**" — a transcrição diz "o dia 30 **deste mês**" e a palavra
+  "outubro" não aparece nela. O mesmo sumário cita a frase correta nas linhas
+  73–74: ele **se contradiz internamente**.
+- **Afirma dependências que ele mesmo rotula de implícitas.**
+  `50098d37_sumario.txt:146`, sob o cabeçalho literal **"Dependências
+  implícitas"**: "A interface gráfica depende da geração de datasets
+  sintéticos" — dependência que não existe na transcrição (são frentes
+  paralelas).
+- **Enumera ausências.** `50098d37_sumario.txt:58` ("Não há prazo explícito
+  mencionado") e `00c2ff18_sumario.txt:135` ("Não há menção à data exata"). Uma
+  ausência listada como item vira matéria-prima de pergunta.
+- **Se contradiz sobre fato central.** `00c2ff18_sumario.txt:101` diz que a
+  atualização do cronograma *depende* da validação da coordenação; as linhas
+  109 e 127 do mesmo arquivo dizem que a coordenação *já validou*.
+
+**Por que isso reclassifica o problema.** A pendência de confabulação das
+implícitas está registrada neste arquivo como se fosse do prompt de implícitas.
+Ela é, em parte, mas a parte que sobrou depois do v4 **não é corrigível ali**:
+nenhuma versão do prompt de implícitas e nenhum parser podem recuperar um fato
+que chega errado do insumo anterior. O v6 chega a **mandar** não fazer isso
+("Não transforme automaticamente as categorias ou elementos da sumarização em
+perguntas") e o modelo não obedece, porque o sumário afirma como fato.
+
+**O que isso também mostra.** A validação de evidência do v4 valida
+**ancoragem**, não **sustentação**: na ata de alinhamento sem nenhuma questão
+aberta, todas as 15 perguntas inventadas pelo v4 passaram pela validação porque
+citaram linhas que existem de fato. Ancorar numa linha real não torna a
+pergunta sustentada por ela.
+
+**Encaminhamento (não feito).** Sanear o sumarizador antes de decidir entre v4
+e v6 — no mínimo: não enumerar ausências como itens, não inferir dependências,
+e manter fidelidade literal a datas/números citados. Depois, repetir o
+comparativo com o sumário limpo, que é o único jeito de medir quanto da
+confabulação residual do v6 é dele mesmo.
+
+**Status:** aberta. Não muda nada em produção hoje —
+`ENABLE_IMPLICIT_QUESTIONS=false`, e a sumarização só existe como insumo das
+implícitas (é pulada junto). Passa a ser **bloqueio para reativar a etapa**.
+
+---
+
 ## Aberta — Prompt v6 de perguntas implícitas: implementado, ainda não avaliado
 
 **Onde:** `prompts/implicit_questions_v6.txt`,
@@ -44,14 +99,27 @@ dele e o **sumário** vem por último, sob o cabeçalho `##SUMARIZAÇÃO DA
 REUNIÃO`. No v4 a ordem é a inversa (sumário primeiro). O cabeçalho de cola
 vive no código, não no arquivo de prompt.
 
-**O que falta.** O comparativo v4 × v6 com transcrições reais, incluindo
-leitura manual de cada pergunta gerada contra a transcrição (a checagem humana
-que substitui a validação automática perdida). Até esse comparativo ser
-revisado, `v6` é só uma opção de configuração — não há base para trocar o
-default.
+**Comparativo com dados reais: feito** (22/09/2026, 4 transcrições reais,
+`qwen3:14b`). Ver [`COMPARATIVO_IMPLICITAS_V4_V6.md`](COMPARATIVO_IMPLICITAS_V4_V6.md)
+e os artefatos em [`repro/implicitas-v4-v6/`](repro/implicitas-v4-v6/).
+Resumo: **45 perguntas no v4 contra 11 no v6**; o v4 bateu exatamente o teto
+de 15 em três dos quatro jobs (inclusive numa ata sem uma única questão
+aberta), o v6 nunca passou de 5. Os dois controles de confabulação passaram
+nas duas versões, e o sentinela `Não possui` funcionou com o modelo real.
 
-**Status:** aberta. Não bloqueia nada: com o default `v4`, o comportamento do
-sistema é idêntico ao de antes desta branch.
+Na leitura manual das 11 do v6: 4 genuinamente sustentadas, 1 com o núcleo
+sustentado mas detalhe factual alucinado, 2 redundantes entre si, 3 sem
+sustentação, 1 limítrofe.
+
+**Decisão: o default continua `v4`.** O v6 é melhor em tudo que se mediu, mas
+(a) 45% da saída dele ainda é redundante ou sem lastro, e (b) trocar agora
+substituiria uma etapa com rede programática por uma sem nenhuma enquanto a
+fonte real da confabulação segue intacta — ver a pendência do sumarizador
+abaixo, que é o bloqueio de verdade.
+
+**Status:** aberta, aguardando o saneamento do sumarizador para repetir o
+comparativo com insumo limpo. Não bloqueia nada: com o default `v4`, o
+comportamento do sistema é idêntico ao de antes desta branch.
 
 ---
 

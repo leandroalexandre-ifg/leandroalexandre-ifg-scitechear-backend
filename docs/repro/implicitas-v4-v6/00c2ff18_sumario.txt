@@ -1,0 +1,150 @@
+Contexto
+
+Objetivo da reunião:  
+Atualizar o andamento das tarefas e alinhar o cronograma do projeto.
+
+Tipo da reunião:  
+Acompanhamento.
+
+Participantes e papéis:  
+- Ana Ribeiro: Atualiza o andamento das tarefas e revisa o texto.  
+- Carla Moreira: Revisa a metodologia e atualiza o cronograma do projeto.
+
+Tópicos principais:  
+- Integração com o servidor de processamento.  
+- Revisão da metodologia e envio de comentários.  
+- Atualização do cronograma do projeto.
+
+Estrutura da discussão
+
+Mudanças de tópico:  
+- Da integração com o servidor para a revisão da metodologia.  
+- Da revisão da metodologia para a atualização do cronograma.
+
+Ordem temporal:  
+1. Integração com o servidor (seg_0002).  
+2. Revisão da metodologia (seg_0004).  
+3. Revisão do texto (seg_0005).  
+4. Atualização do cronograma (seg_0008).
+
+Dependências:  
+- A revisão do texto depende da recepção dos comentários (seg_0005).  
+- A atualização do cronograma depende das novas datas acordadas (seg_0008).
+
+Conteúdo explícito
+
+Tarefas
+
+- id: T1  
+  Resumo: Revisão do texto com sugestões da metodologia.  
+  Trecho da reunião utilizado na análise: "Pretendo devolver a versão revisada até o final desta semana."  
+  Participantes envolvidos: [Ana Ribeiro]  
+  Confiança: 1.0  
+
+Responsáveis
+
+- id: RSP1  
+  Resumo: Ana Ribeiro é responsável pela revisão do texto.  
+  Trecho da reunião utilizado na análise: "Recebi os comentários e já comecei a incorporar as sugestões no texto."  
+  Participantes envolvidos: [Ana Ribeiro]  
+  Confiança: 1.0  
+
+Prazos
+
+- id: PR1  
+  Resumo: A revisão do texto deve ser concluída até o final da semana.  
+  Trecho da reunião utilizado na análise: "Pretendo devolver a versão revisada até o final desta semana."  
+  Participantes envolvidos: [Ana Ribeiro]  
+  Confiança: 1.0  
+
+Fatos
+
+- id: F1  
+  Resumo: A integração com o servidor de processamento foi concluída na terça-feira.  
+  Trecho da reunião utilizado na análise: "A integração com o servidor de processamento foi concluída na terça-feira."  
+  Participantes envolvidos: [Ana Ribeiro]  
+  Confiança: 1.0  
+
+Decisões
+
+- id: D1  
+  Resumo: A versão revisada do texto será devolvida até o final da semana.  
+  Trecho da reunião utilizado na análise: "Pretendo devolver a versão revisada até o final desta semana."  
+  Participantes envolvidos: [Ana Ribeiro]  
+  Confiança: 1.0  
+
+Conteúdo argumentativo
+
+Nenhum elemento identificado.
+
+Conhecimento implícito
+
+Consequências implícitas
+
+- id: CI1  
+  Resumo: A atualização do cronograma depende da conclusão da revisão do texto.  
+  Trecho da reunião utilizado na análise: "Combinado."  
+  Participantes envolvidos: [Ana Ribeiro, Carla Moreira]  
+  Confiança: 0.8  
+
+Relações de causa e efeito
+
+- id: CE1  
+  Resumo: A conclusão da integração com o servidor permite a revisão da metodologia.  
+  Trecho da reunião utilizado na análise: "Notado."  
+  Participantes envolvidos: [Carla Moreira]  
+  Confiança: 0.5  
+
+Dependências não ditas
+
+- id: DI1  
+  Resumo: A atualização do cronograma depende da validação das novas datas pela coordenação.  
+  Trecho da reunião utilizado na análise: "novas datas acordadas na reunião anterior com a coordenação."  
+  Participantes envolvidos: [Carla Moreira]  
+  Confiança: 0.8  
+
+Informações pressupostas
+
+- id: PP1  
+  Resumo: A coordenação já validou as novas datas do cronograma.  
+  Trecho da reunião utilizado na análise: "novas datas acordadas na reunião anterior com a coordenação."  
+  Participantes envolvidos: [Carla Moreira]  
+  Confiança: 0.5  
+
+Objetivos implícitos
+
+- id: OI1  
+  Resumo: Garantir que o projeto esteja alinhado com as novas datas e entregas.  
+  Trecho da reunião utilizado na análise: "Combinado."  
+  Participantes envolvidos: [Ana Ribeiro, Carla Moreira]  
+  Confiança: 0.8  
+
+Lacunas
+
+O que precisa de confirmação
+
+- id: CF1  
+  Resumo: As novas datas do cronograma foram validadas pela coordenação.  
+  Trecho da reunião utilizado na análise: "novas datas acordadas na reunião anterior com a coordenação."  
+  Participantes envolvidos: [Carla Moreira]  
+  Confiança: 0.8  
+
+O que ficou sem resposta
+
+- id: SR1  
+  Resumo: Não há menção à data exata da reunião anterior com a coordenação.  
+  Trecho da reunião utilizado na análise: "novas datas acordadas na reunião anterior com a coordenação."  
+  Participantes envolvidos: [Carla Moreira]  
+  Confiança: 0.5  
+
+Informações contraditórias
+
+Nenhum elemento identificado.
+
+Pontos vagos
+
+- id: PV1  
+  Resumo: A expressão "até o final desta semana" não especifica a data exata.  
+  Trecho da reunião utilizado na análise: "até o final desta semana."  
+  Participantes envolvidos: [Ana Ribeiro]  
+  Confiança: 0.5

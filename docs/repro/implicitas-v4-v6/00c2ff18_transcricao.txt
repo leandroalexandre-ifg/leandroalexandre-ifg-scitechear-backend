@@ -1,0 +1,10 @@
+1 -> seg_0001 -> [Ana Ribeiro]: Vou apenas registrar o andamento das tarefas desta semana para constar na ata.
+2 -> seg_0002 -> [Ana Ribeiro]: A integração com o servidor de processamento foi concluída na terça-feira.
+3 -> seg_0003 -> [Carla Moreira]: Notado.
+4 -> seg_0004 -> [Carla Moreira]: Da minha parte, eu revisei a redação do capítulo de metodologia e enviei os comentários por correio eletrônico ontem à noite.
+5 -> seg_0005 -> [Ana Ribeiro]: Recebi os comentários e já comecei a incorporar as sugestões no texto.
+6 -> seg_0006 -> [Ana Ribeiro]: Pretendo devolver a versão revisada até o final desta semana.
+7 -> seg_0007 -> [Ana Ribeiro]: Combinado.
+8 -> seg_0008 -> [Carla Moreira]: Eu também atualizei o cronograma do projeto com as novas datas acordadas na reunião anterior com a coordenação.
+9 -> seg_0009 -> [Carla Moreira]: Perfeito.
+10 -> seg_0010 -> [Ana Ribeiro]: Com isso, encerramos o alinhamento de hoje e seguimos com o planejado.
