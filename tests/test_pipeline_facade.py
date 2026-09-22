@@ -511,3 +511,60 @@ def test_job_removido_durante_o_processamento_nao_deixa_lixo_em_disco(tmp_path, 
     assert facade._jobs.get("job-1") is None
     assert facade._results.load("job-1") is None
     assert not storage.job_dir("job-1").exists()
+
+
+# ---------------------------------------------------------------------------
+# Cohort do AS-Norm: banco inteiro do usuário, não os participantes do job
+# ---------------------------------------------------------------------------
+
+
+def _capturar_cohort(monkeypatch):
+    capturado = {}
+
+    def fake_aplicar_biometria(audio_path, diarizacao, banco, nomes=None, cohort=None, **kw):
+        capturado["banco"] = banco
+        capturado["cohort"] = cohort
+        return _segments_fake()
+
+    _mock_estagios_felizes(monkeypatch)
+    monkeypatch.setattr(voice_service, "aplicar_biometria", fake_aplicar_biometria)
+    return capturado
+
+
+def _cadastrar(facade, user_id, participant_id, vetor):
+    facade._voices.save_profile(user_id, participant_id, torch.tensor(vetor), model_version="m", sample_count=1)
+
+
+def test_cohort_e_o_banco_inteiro_do_usuario_com_asnorm_ligado(tmp_path, monkeypatch):
+    from app.config import get_settings
+
+    monkeypatch.setenv("ENABLE_VOICE_ASNORM", "true")
+    get_settings.cache_clear()
+    facade, storage = _nova_facade(tmp_path)
+    _preparar_job(facade, storage, participants=[Participant(id="p1", name="Leandro")])
+    for pid in ["p1", "p2", "p3"]:
+        _cadastrar(facade, "u1", pid, [1.0, 0.0])
+    _cadastrar(facade, "outro-usuario", "p9", [0.0, 1.0])
+    capturado = _capturar_cohort(monkeypatch)
+
+    facade.executar("job-1")
+
+    assert set(capturado["banco"]) == {"p1"}
+    assert set(capturado["cohort"]) == {"p1", "p2", "p3"}
+    get_settings.cache_clear()
+
+
+def test_cohort_nao_e_carregado_com_asnorm_desligado(tmp_path, monkeypatch):
+    from app.config import get_settings
+
+    monkeypatch.setenv("ENABLE_VOICE_ASNORM", "false")
+    get_settings.cache_clear()
+    facade, storage = _nova_facade(tmp_path)
+    _preparar_job(facade, storage)
+    _cadastrar(facade, "u1", "p1", [1.0, 0.0])
+    capturado = _capturar_cohort(monkeypatch)
+
+    facade.executar("job-1")
+
+    assert capturado["cohort"] is None
+    get_settings.cache_clear()

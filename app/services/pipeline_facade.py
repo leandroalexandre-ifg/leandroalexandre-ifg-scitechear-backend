@@ -82,7 +82,8 @@ class MeetingPipelineFacade:
         try:
             self._jobs.update_status(job_id, JobStatusValue.IDENTIFYING)
             banco, nomes = self._carregar_banco_e_nomes(job.user_id, job.participants)
-            segments = voice_service.aplicar_biometria(audio_path, diarizacao, banco, nomes=nomes)
+            cohort = self._carregar_cohort(job.user_id) if get_settings().enable_voice_asnorm else None
+            segments = voice_service.aplicar_biometria(audio_path, diarizacao, banco, nomes=nomes, cohort=cohort)
         except Exception as exc:  # noqa: BLE001
             self._marcar_erro(job_id, "IDENTIFICATION_ERROR", str(exc))
             return
@@ -145,6 +146,19 @@ class MeetingPipelineFacade:
                 banco[participant.id] = embedding
             nomes[participant.id] = participant.name
         return banco, nomes
+
+    def _carregar_cohort(self, user_id: str) -> Dict[str, torch.Tensor]:
+        """Cohort do AS-Norm: TODOS os perfis de voz do usuário, não só os
+        participantes desta reunião — com os participantes como cohort, cada
+        candidato era normalizado contra 2-3 pontos correlacionados ao mesmo
+        áudio (ver docs/ASNORM_COHORT_USUARIO.md). Só carregado com
+        ENABLE_VOICE_ASNORM ligado."""
+        cohort: Dict[str, torch.Tensor] = {}
+        for perfil in self._voices.list_profiles(user_id):
+            embedding = self._voices.load_embedding(user_id, perfil.participant_id)
+            if embedding is not None:
+                cohort[perfil.participant_id] = embedding
+        return cohort
 
     def _extrair_perguntas(self, formatter: TranscriptFormatter, resumo: str) -> List[Question]:
         settings = get_settings()
