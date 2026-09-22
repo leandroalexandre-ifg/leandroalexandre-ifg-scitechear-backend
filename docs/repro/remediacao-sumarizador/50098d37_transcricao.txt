@@ -1,0 +1,117 @@
+1 -> seg_0001 -> [Emanuelle]: Boa noite.
+2 -> seg_0002 -> [Emanuelle]: Eu sou a Emanuele e...
+3 -> seg_0003 -> [Emanuelle]: Eu sou a Sofia.
+4 -> seg_0004 -> [Emanuelle]: Nós vamos apresentar sobre...
+5 -> seg_0005 -> [Emanuelle]: A gente sintetizou um documento que o Leandro mandou pra gente.
+6 -> seg_0006 -> [Emanuelle]: E esse documento, ele basicamente fala sobre o rufas e a produção sustentável nas fazendas leiteiras.
+7 -> seg_0007 -> [Emanuelle]: Porque as fazendas leiteiras, elas produzem muito os gases do efeito estufa e elas também podem, às vezes, até prejudicar o solo por causa...
+8 -> seg_0008 -> [Emanuelle]: de alguns compostos derivados da produção de leite.
+9 -> seg_0009 -> [Emanuelle]: Pode passar.
+10 -> seg_0010 -> [Emanuelle]: Pode passar.
+11 -> seg_0011 -> [Emanuelle]: O setor de produção de leite está em busca de reduzir a pegada ecológica, porque, igual eu falei, as vacas produzem muito metano, CH4.
+12 -> seg_0012 -> [Emanuelle]: O Rufas simula a fazenda em tempo real e ele possui dados concretos.
+13 -> seg_0013 -> [Emanuelle]: Quem é que está fazendo o adicionário da Zepra para você?
+14 -> seg_0014 -> [Emanuelle]: Isso.
+15 -> seg_0015 -> [Emanuelle]: Então, o Rufas tem dados concretos dentro dele e com esses dados concretos na simulação das fazendas, o produtor tem uma visão geral sobre o que está sendo produzido na fazenda, sobre as emissões de poluição e ele pode tomar medidas para poder reduzir isso com base nos dados da simulação do Rufas.
+16 -> seg_0016 -> [Emanuelle]: Sobre as fazendas de gado leiteiro, elas são dinâmicas e complexas, porque existem diversas raças de vacas, existem diversos modelos de fazenda em diversos lugares, o clima altera, o tipo de solo altera, porque altera o tipo de grama que tem, enfim, é uma coisa muito complexa, não é um modelo, um padrão para cada fazenda.
+17 -> seg_0017 -> [Emanuelle]: E pesquisas aplicadas com informações detalhadas sobre cada um dos fatores da fazenda, que é o que o Rufas faz, a proposta do Rufas,
+18 -> seg_0018 -> [Emanuelle]: eles auxiliam na tomada de decisões para poder ajudar na sustentabilidade da produção de leite.
+19 -> seg_0019 -> [Emanuelle]: A agropecuária se desenvolveu tecnologicamente bastante nas últimas décadas.
+20 -> seg_0020 -> [Emanuelle]: No Brasil mesmo, a gente teve a Revolução Verde nas décadas de 60, que evoluiu bastante o campo.
+21 -> seg_0021 -> [Emanuelle]: O Goiás, por exemplo, não era um lugar onde a agricultura era muito desenvolvida, porque o solo daqui é muito ácido.
+22 -> seg_0022 -> [Emanuelle]: E com uma tecnologia avançada, tecnologia poder corrigir o solo e tal, e com o maquinário novo, a produção agrícola em Goiás e a produção leiteira, ela avançou muito.
+23 -> seg_0023 -> [Emanuelle]: E cada dia tem mais inovações, novas máquinas, novas tecnologias, mas só que...
+24 -> seg_0024 -> [Emanuelle]: Essas tecnologias, elas não chegam muito no interior, elas não são muito interiorizadas.
+25 -> seg_0025 -> [Emanuelle]: Tem muitas fazendas que elas têm um modo muito rudimentar de produção.
+26 -> seg_0026 -> [Emanuelle]: Igual, por exemplo, o meu avô, eu posso dar o exemplo do meu avô, que ele é um agricultor familiar e ele não é muito adepto a novas tecnologias, ele é bastante cabeça dura em relação a coisas novas, sendo que essas coisas novas estão aqui para ajudar.
+27 -> seg_0027 -> [Emanuelle]: A maioria dos estudos nessa área, eles focam apenas num componente, eles são estudos aplicados numa área, sendo que a fazenda de produção de leite, ela tem diversos fatores e esses fatores estão interligados entre si.
+28 -> seg_0028 -> [Emanuelle]: Ou seja, estudar só uma coisa não é a solução, porque você tem que estudar os fatores no geral e não um só.
+29 -> seg_0029 -> [SPEAKER_01]: Consegui, pode seguir.
+30 -> seg_0030 -> [SPEAKER_01]: Pode seguir.
+31 -> seg_0031 -> [Emanuelle]: Tem um problema.
+32 -> seg_0032 -> [Emanuelle]: Existem vários estudos que visam reduzir a emissão de metano, mas só que os seus efeitos são pouco conhecidos nas novilhas, que são as vacas mais novas, e nas emissões e os subprodutos.
+33 -> seg_0033 -> [Emanuelle]: Por exemplo, a decomposição do externo.
+34 -> seg_0034 -> [Emanuelle]: Não é muito estudado e não é muito bem medido isso.
+35 -> seg_0035 -> [Emanuelle]: E é importante simular essa variável, é importante conhecer ela para poder a gente ter uma noção de como medir ela
+36 -> seg_0036 -> [Emanuelle]: para poder ajudar o produtor a tomar melhores decisões ainda, decisões mais precisas para poder diminuir a emissão de gases de efeito estufa.
+37 -> seg_0037 -> [Emanuelle]: Antes de apresentar o Rufas, ele não é específico para poder gerar os resultados da avaliação do ciclo de vida, porque ele é mais para simular, mas só que ele auxilia aplicações que demonstram esses resultados melhor.
+38 -> seg_0038 -> [Emanuelle]: E por que o Rufas?
+39 -> seg_0039 -> [Emanuelle]: O Rufas simula fazendas de forma integral e contém dados de diversas áreas da ciência, assim criando a possibilidade de explorar interações dos fatores de uma fazenda, que é o que eu falei antes.
+40 -> seg_0040 -> [Emanuelle]: A fazenda, ela existe com os diversos fatores, esses fatores são interligados entre si e eles coexistem, enfim.
+41 -> seg_0041 -> [Emanuelle]: É capaz de simular os ICI.
+42 -> seg_0042 -> [Emanuelle]: Ele consegue gerenciar os impactos econômicos e no meio ambiente porque ele demonstra uma riqueza muito grande em detalhes através das simulações e por ser open source, ele é uma ótima possibilidade para poder se trabalhar.
+43 -> seg_0043 -> [Emanuelle]: O modelo oferece saídas essenciais para a compreensão da produção e os impactos no meio ambiente.
+44 -> seg_0044 -> [Emanuelle]: Por exemplo, ele oferece dados sobre o leite, sobre a carne, sobre a produção agrícola, sobre a emissão de gás da vez de estufa, emissão de amônia, impactos na qualidade da água e mudanças de carbão no solo.
+45 -> seg_0045 -> [Emanuelle]: Isso tudo ajuda tanto o produtor a ter uma ideia sobre a sua produção, tanto para poder ele ter uma noção sobre os impactos que a fazenda dele tem sobre a natureza.
+46 -> seg_0046 -> [Emanuelle]: Pode passar.
+47 -> seg_0047 -> [SPEAKER_01]: Pode passar.
+48 -> seg_0048 -> [SPEAKER_02]: Então, o que é o Rufas?
+49 -> seg_0049 -> [SPEAKER_02]: O Rufas significa Ruminant Farm System, que ele é uma plataforma de modelagem que é voltada para o sistema de produção de ruminantes.
+50 -> seg_0050 -> [SPEAKER_02]: E ele tem quatro módulos.
+51 -> seg_0051 -> [SPEAKER_02]: Que são os módulos animais, de dejetes, solo, cultura e ração.
+52 -> seg_0052 -> [SPEAKER_02]: Esses módulos, durante a simulação e também nas fazendas, eles vão trabalhar em conjunto.
+53 -> seg_0053 -> [SPEAKER_02]: Então, se você mudar em um desses módulos aí, eles vão acabar consequentemente afetando um ao outro.
+54 -> seg_0054 -> [SPEAKER_02]: E eles também possuem as interações, que eles vão interagir entre si, trocando informações durante a simulação.
+55 -> seg_0055 -> [SPEAKER_02]: Essa troca de informações também vai... Como posso falar?
+56 -> seg_0056 -> [SPEAKER_02]: Ele vai ajudar a analisar como que vai acontecer as informações.
+57 -> seg_0057 -> [SPEAKER_02]: E também como as decisões de manejo, as diferenças das decisões de manejo, pode afetar a fazenda como um todo.
+58 -> seg_0058 -> [SPEAKER_02]: Entre esses quatro módulos como um todo.
+59 -> seg_0059 -> [SPEAKER_02]: Ele também vai... Direcionar?
+60 -> seg_0060 -> [SPEAKER_01]: É.
+61 -> seg_0061 -> [SPEAKER_01]: Orientar?
+62 -> seg_0062 -> [SPEAKER_02]: Orientar também.
+63 -> seg_0063 -> [SPEAKER_02]: Ele também vai ser possível analisar os resultados relacionados à produção.
+64 -> seg_0064 -> [SPEAKER_02]: Como a produção de leite, carne e culturas.
+65 -> seg_0065 -> [SPEAKER_02]: Carne e culturas e também...
+66 -> seg_0066 -> [SPEAKER_02]: E também os indicadores ambientais, como os gases do efeito estufa, amônia, qualidade de água e carbono do solo.
+67 -> seg_0067 -> [SPEAKER_02]: Ele também vai ser possível fazer as simulações, né?
+68 -> seg_0068 -> [SPEAKER_02]: Que em vez de você alterar alguma coisa diretamente na fase ainda depois, sem esperar pelos seus resultados, você pode fazer a simulação e obter os seus resultados e poder comparar os dados e as mudanças que foram feitas, se foi bom ou se não.
+69 -> seg_0069 -> [SPEAKER_02]: Aí pode passar.
+70 -> seg_0070 -> [SPEAKER_02]: Ele também é um projeto de código aberto, o que vai permitir para os pesquisadores, eles também contribuem para o aprimoramento do modelo.
+71 -> seg_0071 -> [SPEAKER_02]: E é isso.
+72 -> seg_0072 -> [SPEAKER_02]: Fechou?
+73 -> seg_0073 -> [SPEAKER_02]: Tá bom.
+74 -> seg_0074 -> [SPEAKER_02]: Meninas, perguntas?
+75 -> seg_0075 -> [SPEAKER_02]: Contribuições?
+76 -> seg_0076 -> [SPEAKER_02]: Qual a minha espinagem com o Delvan?
+77 -> seg_0077 -> [SPEAKER_02]: Prendendo?
+78 -> seg_0078 -> [SPEAKER_02]: Não, foi dentro da apresentação que vocês fizeram.
+79 -> seg_0079 -> [SPEAKER_01]: Qual a ferramenta?
+80 -> seg_0080 -> [Emanuelle]: Eu fiz na mão, mas só que certamente.
+81 -> seg_0081 -> [Emanuelle]: Algumas eu fiz com o notebook.
+82 -> seg_0082 -> [Emanuelle]: Algumas eu fiz com o notebook.
+83 -> seg_0083 -> [Emanuelle]: O que vocês tiveram de dúvida?
+84 -> seg_0084 -> [SPEAKER_01]: O que que isso citou de dúvida?
+85 -> seg_0085 -> [SPEAKER_01]: Vocês não tiveram a rodar, né?
+86 -> seg_0086 -> [Emanuelle]: O modelo.
+87 -> seg_0087 -> [Emanuelle]: Não.
+88 -> seg_0088 -> [Emanuelle]: Eu fiquei em dúvida.
+89 -> seg_0089 -> [Emanuelle]: Não em dúvida, mas só que eu queria saber se vocês vão chamar pessoas de outras áreas.
+90 -> seg_0090 -> [Emanuelle]: Por exemplo, geógrafos, químicos, pra poder trabalhar nesse projeto.
+91 -> seg_0091 -> [Emanuelle]: Ou se vocês vão...
+92 -> seg_0092 -> [Emanuelle]: trabalhar na ferramenta primeiro para depois essas outras pessoas trabalharem de outras áreas?
+93 -> seg_0093 -> [SPEAKER_01]: Nesse momento agora, não.
+94 -> seg_0094 -> [SPEAKER_01]: A gente vai focar em alguns experimentos da ferramenta, com o uso da ferramenta.
+95 -> seg_0095 -> [SPEAKER_01]: A gente vai gerar datasets, os meninos vão falar para a gente hoje sobre o que são os datasets, datasets sintéticos, que são dados gerados de forma computacional,
+96 -> seg_0096 -> [SPEAKER_01]: do Rufus e também nós vamos construir uma interface gráfica para poder associar o Rufus.
+97 -> seg_0097 -> [SPEAKER_01]: A gente já fez algumas versões e a ideia é a gente ter uma interface de produtor rural e ele possa utilizar
+98 -> seg_0098 -> [SPEAKER_01]: ela é apenas via terminal.
+99 -> seg_0099 -> [SPEAKER_01]: Então, se você quiser usar, é via terminal.
+100 -> seg_0100 -> [SPEAKER_01]: Aí a gente já fez uma primeira interface gráfica, fiz uma e o professor Murilo evoluiu para uma outra com mais entradas.
+101 -> seg_0101 -> [SPEAKER_01]: E aí a ideia é a gente ter essa interface gráfica que o produtor oral possa passar os dados, ou fazer as simulações e aí gerar resultados para que ele possa avaliar e tomar decisões em relação àquilo que ele pode fazer na fazenda dele.
+102 -> seg_0102 -> [SPEAKER_00]: Então a ideia nesse momento é aprimorar o ferramental.
+103 -> seg_0103 -> [SPEAKER_00]: um sistema bem grande e nele tem uma explicação bem grande de como eles desenvolvem
+104 -> seg_0104 -> [SPEAKER_01]: O doutor moral, manipular um CSV é totalmente inviável, né?
+105 -> seg_0105 -> [SPEAKER_01]: Então, por isso, da ideia de a gente levar para alto nível e colocar uma interface lá que ele possa lá editar.
+106 -> seg_0106 -> [SPEAKER_01]: Mas, se você fez essa busca e encontrou, ótimo, traz para a gente poder conversar sobre.
+107 -> seg_0107 -> [SPEAKER_00]: A base lá do Farmer que eles têm, eles têm basicamente um PDF bem explicativo dos dados que o produtor precisa informar para eles e todos os dados que o produtor precisa informar, por exemplo, se você não vai informar esse dado, você precisa informar esse dado e tem um PDF bem explicativo do lado do que o produtor precisa passar para eles para ele poder
+108 -> seg_0108 -> [SPEAKER_00]: Porque ele nem tá naquela parte dos artigos lá do Rufus.org.
+109 -> seg_0109 -> [SPEAKER_00]: Ele já tem uma página toda específica, é um site muito maior.
+110 -> seg_0110 -> [SPEAKER_00]: É um site maior.
+111 -> seg_0111 -> [SPEAKER_00]: Mas você sabe se ele usa rufas?
+112 -> seg_0112 -> [SPEAKER_00]: Ele usa rufas.
+113 -> seg_0113 -> [SPEAKER_00]: Ele tem uma arte aqui.
+114 -> seg_0114 -> [SPEAKER_00]: Na parte dos artigos do Rufus, que é um artigo dele, é a parte 3 deles já, que eles implementaram rufas.
+115 -> seg_0115 -> [SPEAKER_00]: É uma parte bem grande que eu achei lá.
+116 -> seg_0116 -> [Desconhecido]: É bem interessante.
+117 -> seg_0117 -> [Desconhecido]: Não, não, Eduardo, eu quero.

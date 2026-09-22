@@ -1,0 +1,125 @@
+Contexto
+
+Objetivo da reunião:  
+Conversa casual sobre o dia e atividades de Daniel.
+
+Tipo da reunião:  
+Conversa casual.
+
+Participantes e papéis:  
+- Daniel: Participante que compartilha informações sobre seu dia.  
+- SPEAKER_01: Participante que inicia a conversa e faz perguntas.
+
+Tópicos principais:  
+- Discussão sobre o dia de Daniel.  
+- Atividades realizadas por Daniel.  
+- Experiência escolar de Daniel.
+
+Estrutura da discussão
+
+Mudanças de tópico:  
+Nenhum elemento identificado.
+
+Relações entre tópicos:  
+Nenhum elemento identificado.
+
+Ordem temporal:  
+Nenhum elemento identificado.
+
+Dependências:  
+Nenhum elemento identificado.
+
+Conteúdo explícito
+
+Problemas:  
+Nenhum elemento identificado.
+
+Pendências:  
+Nenhum elemento identificado.
+
+Tarefas:  
+Nenhum elemento identificado.
+
+Responsáveis:  
+Nenhum elemento identificado.
+
+Prazos:  
+Nenhum elemento identificado.
+
+Fatos apresentados:  
+Nenhum elemento identificado.
+
+Decisões:  
+Nenhum elemento identificado.
+
+Conteúdo argumentativo
+
+Justificativas:  
+Nenhum elemento identificado.
+
+Argumentos favoráveis:  
+Nenhum elemento identificado.
+
+Argumentos contrários:  
+Nenhum elemento identificado.
+
+Evidências utilizadas:  
+Nenhum elemento identificado.
+
+Hipóteses:  
+Nenhum elemento identificado.
+
+Suposições:  
+Nenhum elemento identificado.
+
+Objeções:  
+Nenhum elemento identificado.
+
+Consensos:  
+Nenhum elemento identificado.
+
+Divergências:  
+Nenhum elemento identificado.
+
+Conhecimento implícito
+
+Consequências implícitas:  
+Nenhum elemento identificado.
+
+Relações de causa e efeito:  
+Nenhum elemento identificado.
+
+Dependências não ditas:  
+Nenhum elemento identificado.
+
+Informações pressupostas:  
+Nenhum elemento identificado.
+
+Riscos implícitos:  
+Nenhum elemento identificado.
+
+Motivações:  
+Nenhum elemento identificado.
+
+Premissas implícitas:  
+Nenhum elemento identificado.
+
+Restrições:  
+Nenhum elemento identificado.
+
+Objetivos implícitos:  
+Nenhum elemento identificado.
+
+Lacunas
+
+O que ficou sem resposta:  
+Nenhum elemento identificado.
+
+O que precisa de confirmação:  
+Nenhum elemento identificado.
+
+Informações contraditórias:  
+Nenhum elemento identificado.
+
+Pontos vagos:  
+Nenhum elemento identificado.

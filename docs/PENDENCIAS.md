@@ -32,7 +32,7 @@ lá, não daqui.
 
 ---
 
-## Aberta — A sumarização é a fonte real da confabulação, não o prompt de implícitas
+## Resolvida — A sumarização era a fonte real da confabulação, não o prompt de implícitas
 
 **Onde:** `prompts/meeting_summary_v1.txt` / `question_service.summarize_meeting`.
 
@@ -81,9 +81,62 @@ e manter fidelidade literal a datas/números citados. Depois, repetir o
 comparativo com o sumário limpo, que é o único jeito de medir quanto da
 confabulação residual do v6 é dele mesmo.
 
-**Status:** aberta. Não muda nada em produção hoje —
-`ENABLE_IMPLICIT_QUESTIONS=false`, e a sumarização só existe como insumo das
-implícitas (é pulada junto). Passa a ser **bloqueio para reativar a etapa**.
+**Desfecho (22/09/2026).** Corrigido em duas frentes, medido em
+[`COMPARATIVO_REMEDIACAO.md`](COMPARATIVO_REMEDIACAO.md) com os mesmos quatro
+jobs, contra o baseline sem nenhuma correção:
+
+- **Filtro estrutural** (`app/services/summary_filter.py`, ligado por padrão):
+  descarta as seções "Conhecimento implícito" e "Lacunas" e os elementos de
+  ausência. Não toca em prompt algum — muda o **consumo** do sumário. Ataca a
+  inferência sancionada e os placeholders de ausência.
+- **`prompts/meeting_summary_v2.txt`** (opt-in, default segue `v1`): duas
+  edições e nada mais — o campo `Resumo` ganha descrição (era o único campo do
+  schema sem nenhuma) e a regra de validação 20 proíbe deduzir, converter ou
+  completar dado factual. Ataca o fato inventado, que nenhum filtro alcança.
+
+**Resultado.** Os cinco defeitos listados acima desapareceram. "outubro" passou
+de 1 ocorrência para **0** nos quatro sumários, e a correção atravessou até o
+texto da pergunta ("o prazo de 30 do mês"). A ata de alinhamento — o controle
+que devia dar zero — passou de 2 perguntas implícitas para **0**. Dos oito
+defeitos duros do v6, **o insumo respondia por cinco**; os três restantes são
+do prompt v6 e não são alcançáveis daqui.
+
+Os sumários **não empobreceram**, que era o risco declarado: 61 → 68 elementos
+no total, dois dos quatro cresceram.
+
+**Status:** resolvida como diagnóstico e como correção. Deixa de ser bloqueio
+para reativar a etapa de implícitas. Duas coisas seguem em aberto e têm item
+próprio neste arquivo: o **default do `meeting_summary_v2`** e a **taxa própria
+do v6**. Nada em produção mudou — `ENABLE_IMPLICIT_QUESTIONS` segue `false`.
+
+---
+
+## Aberta — Default do `meeting_summary_v2`: decidir com volume real do piloto
+
+**Onde:** `MEETING_SUMMARY_PROMPT_VERSION` (`app/config.py`) /
+`prompts/meeting_summary_v2.txt`.
+
+**Decidido em:** 22/09/2026, ao fechar a remediação do sumarizador.
+
+**O quê.** O v2 fez o que foi desenhado para fazer e não custou o que se temia
+(ver [`COMPARATIVO_REMEDIACAO.md`](COMPARATIVO_REMEDIACAO.md)): acabou com o
+fato inventado, atravessou até o texto da pergunta, e os sumários ficaram
+maiores, não menores. Ainda assim **o default segue `v1`**.
+
+**Por que não foi promovido agora.** Quatro jobs não bastam para promover um
+prompt que muda a saída do LLM em **toda** reunião. O corpus é pequeno, três
+das quatro transcrições são curtas, e um dos efeitos observados ainda não tem
+causa provada: a conversa trivial saiu de 0 para 7 elementos no sumário — todos
+fatos fiéis, mas é uma mudança de comportamento que merece mais amostra antes
+de virar padrão.
+
+**Encaminhamento.** Revisitar quando houver volume real de reuniões do piloto,
+não só este corpus. O que decide: se os sumários v2 mantêm fidelidade factual
+em transcrições longas e variadas, e se o aumento de elementos em conversa
+trivial se confirma e importa.
+
+**Status:** aberta, não bloqueia nada. Trocar é uma linha de `.env`, e o v1
+continua intacto no repositório.
 
 ---
 
@@ -490,7 +543,7 @@ real com muitas trocas rápidas de turno.
 
 ---
 
-## Aberta — Perguntas implícitas: redundância e um detalhe factual alucinado
+## Parcialmente resolvida — Perguntas implícitas: redundância e um detalhe factual alucinado
 
 **Onde:** `question_service.extract_implicit_questions` /
 `summarize_meeting`, com `ENABLE_IMPLICIT_QUESTIONS=true`.
@@ -521,9 +574,30 @@ Os dois problemas:
 **Custo:** 56,4s contra 15,1s no mesmo áudio (3,7×), quase todo concentrado em
 `summarizing` (28,2s).
 
-**Status:** aberta. Reforça a decisão de manter `ENABLE_IMPLICIT_QUESTIONS=false`
-em produção (flag introduzida em `be8dc49`). Não bloqueia a V1, que não depende
-de implícitas.
+**Atualização (22/09/2026) — os dois problemas tiveram destinos diferentes.**
+
+1. **O detalhe factual inventado está resolvido, e a causa não era esta.** O
+   "30 de outubro" nunca nasceu no prompt de implícitas: ele já vinha afirmado
+   no sumário, e o prompt apenas o leu com fidelidade. O item acima ("A
+   sumarização era a fonte real da confabulação") tem o rastreamento; a
+   correção é `prompts/meeting_summary_v2.txt`. Medido em
+   [`COMPARATIVO_REMEDIACAO.md`](COMPARATIVO_REMEDIACAO.md): "outubro" passou
+   de 1 ocorrência para 0 nos quatro sumários, e a pergunta gerada passou a
+   dizer "o prazo de 30 do mês". **Observação que importa para quem ler esta
+   pendência no futuro:** o diagnóstico original localizava o defeito no
+   enunciado da pergunta ("o lastro existe e o enfeite está no enunciado"). O
+   enfeite estava, mas não foi posto ali — foi herdado.
+
+2. **A redundância continua, e é do prompt.** No v4 (default) ela é pesada e
+   independe do insumo: mesmo com sumário saneado, o v4 devolveu 15 perguntas
+   no mesmo R5 — o teto tratado como meta. No v6 caiu para 3, com uma única
+   redundância restante no corpus inteiro. Não há mais insumo para limpar:
+   reduzir isso exige decidir entre v4 e v6, que é o item próprio abaixo.
+
+**Status:** parcialmente resolvida. O detalhe factual, sim; a redundância, não
+— e ela é do prompt, não do insumo. Segue reforçando a decisão de manter
+`ENABLE_IMPLICIT_QUESTIONS=false` em produção (flag introduzida em `be8dc49`).
+Não bloqueia a V1, que não depende de implícitas.
 
 ## Resolvida — Perguntas implícitas confabulando roteiro genérico sem lastro na transcrição
 

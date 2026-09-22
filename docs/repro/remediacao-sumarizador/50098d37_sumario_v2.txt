@@ -1,0 +1,215 @@
+Contexto
+
+Objetivo da reunião: Apresentar o Rufas, uma ferramenta de simulação para produção sustentável em fazendas leiteiras, e discutir sua aplicação e desenvolvimento.
+
+Tipo da reunião: Apresentação.
+
+Participantes e papéis:  
+- Emanuelle: Apresenta o Rufas e discute sua aplicação.  
+- SPEAKER_01: Participa da discussão e menciona a necessidade de uma interface gráfica.  
+- SPEAKER_02: Explica os módulos do Rufas e sua funcionalidade.  
+- SPEAKER_00: Comenta sobre a base de dados do Farmer e a implementação do Rufas.  
+- Desconhecido: Comenta sobre a relevância do Rufas.  
+
+Tópicos principais:  
+- Introdução ao Rufas e sua aplicação na sustentabilidade da produção leiteira.  
+- Descrição dos módulos do Rufas (animais, dejetes, solo, cultura e ração).  
+- Necessidade de envolver outros especialistas (geógrafos, químicos) no projeto.  
+- Desenvolvimento de uma interface gráfica para o Rufas.  
+- Geração de datasets sintéticos para testes.  
+
+Conteúdo explícito
+
+Problemas  
+- id: P1  
+  Resumo: Falta de estudos sobre emissões de metano em novilhas e subprodutos.  
+  Trecho da reunião utilizado na análise: "Existem vários estudos que visam reduzir a emissão de metano, mas só que os seus efeitos são pouco conhecidos nas novilhas...".  
+  Participantes envolvidos: [Emanuelle]  
+  Confiança: 1.0  
+
+Pendências  
+- id: PE1  
+  Resumo: Necessidade de estudos adicionais sobre emissões de metano em novilhas e subprodutos.  
+  Trecho da reunião utilizado na análise: "É importante simular essa variável...".  
+  Participantes envolvidos: [Emanuelle]  
+  Confiança: 1.0  
+
+Tarefas  
+- id: T1  
+  Resumo: Gerar datasets sintéticos para testes do Rufas.  
+  Trecho da reunião utilizado na análise: "A gente vai gerar datasets, os meninos vão falar para a gente hoje sobre o que são os datasets sintéticos...".  
+  Participantes envolvidos: [SPEAKER_01]  
+  Confiança: 1.0  
+
+- id: T2  
+  Resumo: Desenvolver uma interface gráfica para o Rufas.  
+  Trecho da reunião utilizado na análise: "A gente já fez uma primeira interface gráfica...".  
+  Participantes envolvidos: [SPEAKER_01]  
+  Confiança: 1.0  
+
+Responsáveis  
+- id: RSP1  
+  Resumo: SPEAKER_01 e equipe são responsáveis pelo desenvolvimento da interface gráfica.  
+  Trecho da reunião utilizado na análise: "A gente vai gerar datasets...".  
+  Participantes envolvidos: [SPEAKER_01]  
+  Confiança: 1.0  
+
+Fatos  
+- id: F1  
+  Resumo: O Rufas simula fazendas de forma integral e contém dados de diversas áreas da ciência.  
+  Trecho da reunião utilizado na análise: "O Rufas simula fazendas de forma integral e contém dados de diversas áreas da ciência...".  
+  Participantes envolvidos: [Emanuelle]  
+  Confiança: 1.0  
+
+Decisões  
+- id: D1  
+  Resumo: Focar em experimentos com a ferramenta Rufas e desenvolver datasets sintéticos.  
+  Trecho da reunião utilizado na análise: "A gente vai focar em alguns experimentos da ferramenta...".  
+  Participantes envolvidos: [SPEAKER_01]  
+  Confiança: 1.0  
+
+Conteúdo argumentativo
+
+Justificativas  
+- id: J1  
+  Resumo: O Rufas é útil porque simula interações entre fatores da fazenda e fornece dados detalhados.  
+  Trecho da reunião utilizado na análise: "O Rufas simula fazendas de forma integral...".  
+  Participantes envolvidos: [Emanuelle]  
+  Confiança: 1.0  
+
+Argumentos favoráveis  
+- id: AF1  
+  Resumo: O Rufas é uma ferramenta aberta e permite simulações detalhadas.  
+  Trecho da reunião utilizado na análise: "Por ser open source, ele é uma ótima possibilidade...".  
+  Participantes envolvidos: [Emanuelle]  
+  Confiança: 1.0  
+
+Evidências  
+- id: E1  
+  Resumo: O Rufas fornece dados sobre emissões de gases de efeito estufa, amônia, qualidade da água e carbono do solo.  
+  Trecho da reunião utilizado na análise: "Ele oferece dados sobre o leite, sobre a carne...".  
+  Participantes envolvidos: [Emanuelle]  
+  Confiança: 1.0  
+
+Hipóteses  
+- id: H1  
+  Resumo: A interface gráfica do Rufas permitirá que produtores rurais tomem decisões mais precisas.  
+  Trecho da reunião utilizado na análise: "A ideia é a gente ter essa interface gráfica que o produtor rural possa utilizar...".  
+  Participantes envolvidos: [SPEAKER_01]  
+  Confiança: 1.0  
+
+Objeções  
+- id: O1  
+  Resumo: A falta de envolvimento de especialistas de outras áreas pode limitar a aplicação do Rufas.  
+  Trecho da reunião utilizado na análise: "Você vai chamar pessoas de outras áreas...".  
+  Participantes envolvidos: [Emanuelle]  
+  Confiança: 1.0  
+
+Consensos  
+- id: C1  
+  Resumo: O Rufas é uma ferramenta valiosa para simular fazendas e apoiar decisões sustentáveis.  
+  Trecho da reunião utilizado na análise: "O Rufas simula fazendas de forma integral...".  
+  Participantes envolvidos: [Emanuelle, SPEAKER_02]  
+  Confiança: 1.0  
+
+Divergências  
+- id: DV1  
+  Resumo: Divergência sobre a necessidade de envolver especialistas de outras áreas no projeto.  
+  Trecho da reunião utilizado na análise: "Você vai chamar pessoas de outras áreas...".  
+  Participantes envolvidos: [Emanuelle, SPEAKER_01]  
+  Confiança: 1.0  
+
+Conhecimento implícito
+
+Consequências  
+- id: CI1  
+  Resumo: A falta de estudos sobre emissões em novilhas pode limitar a eficácia do Rufas.  
+  Trecho da reunião utilizado na análise: "Existem vários estudos que visam reduzir a emissão de metano...".  
+  Participantes envolvidos: [Emanuelle]  
+  Confiança: 1.0  
+
+Causa e efeito  
+- id: CE1  
+  Resumo: A interdependência dos módulos do Rufas afeta a simulação de forma integrada.  
+  Trecho da reunião utilizado na análise: "Se você mudar em um desses módulos...".  
+  Participantes envolvidos: [SPEAKER_02]  
+  Confiança: 1.0  
+
+Dependências implícitas  
+- id: DI1  
+  Resumo: O desenvolvimento do Rufas depende da colaboração com especialistas de outras áreas.  
+  Trecho da reunião utilizado na análise: "Você vai chamar pessoas de outras áreas...".  
+  Participantes envolvidos: [Emanuelle]  
+  Confiança: 1.0  
+
+Informações pressupostas  
+- id: PP1  
+  Resumo: O Rufas já possui uma base de dados e uma interface funcional.  
+  Trecho da reunião utilizado na análise: "A gente já fez uma primeira interface gráfica...".  
+  Participantes envolvidos: [SPEAKER_01]  
+  Confiança: 1.0  
+
+Riscos  
+- id: RI1  
+  Resumo: A falta de envolvimento de especialistas pode limitar a aplicação do Rufas.  
+  Trecho da reunião utilizado na análise: "Você vai chamar pessoas de outras áreas...".  
+  Participantes envolvidos: [Emanuelle]  
+  Confiança: 1.0  
+
+Motivações  
+- id: M1  
+  Resumo: A motivação é melhorar a sustentabilidade da produção leiteira e facilitar a tomada de decisões.  
+  Trecho da reunião utilizado na análise: "O Rufas simula fazendas de forma integral...".  
+  Participantes envolvidos: [Emanuelle]  
+  Confiança: 1.0  
+
+Premissas implícitas  
+- id: PM1  
+  Resumo: A eficácia do Rufas depende da integração de dados de múltiplas áreas.  
+  Trecho da reunião utilizado na análise: "O Rufas simula fazendas de forma integral...".  
+  Participantes envolvidos: [Emanuelle]  
+  Confiança: 1.0  
+
+Restrições  
+- id: RE1  
+  Resumo: A equipe atual está focada em experimentos com a ferramenta e não em envolver especialistas externos.  
+  Trecho da reunião utilizado na análise: "Nesse momento agora, não...".  
+  Participantes envolvidos: [SPEAKER_01]  
+  Confiança: 1.0  
+
+Objetivos implícitos  
+- id: OI1  
+  Resumo: O objetivo é tornar o Rufas acessível e útil para produtores rurais.  
+  Trecho da reunião utilizado na análise: "A ideia é a gente ter essa interface gráfica que o produtor rural possa utilizar...".  
+  Participantes envolvidos: [SPEAKER_01]  
+  Confiança: 1.0  
+
+Lacunas
+
+Sem resposta  
+- id: SR1  
+  Resumo: Não foi respondida a pergunta sobre a necessidade de envolver especialistas de outras áreas.  
+  Trecho da reunião utilizado na análise: "Você vai chamar pessoas de outras áreas...".  
+  Participantes envolvidos: [Emanuelle, SPEAKER_01]  
+  Confiança: 1.0  
+
+Confirmação  
+- id: CF1  
+  Resumo: Não há confirmação sobre a eficácia do Rufas em simular emissões em novilhas.  
+  Trecho da reunião utilizado na análise: "Existem vários estudos que visam reduzir a emissão de metano...".  
+  Participantes envolvidos: [Emanuelle]  
+  Confiança: 1.0  
+
+Contradições  
+- id: CT1  
+  Resumo: Não há contradições explícitas mencionadas.  
+  Trecho da reunião utilizado na análise: Nenhum.  
+  Participantes envolvidos: Nenhum.  
+  Confiança: 1.0  
+
+Pontos vagos  
+- id: PV1  
+  Resumo: Não há prazo definido para o desenvolvimento da interface gráfica.  
+  Trecho da reunião utilizado na análise: "A gente já fez uma primeira interface gráfica...".  
+  Participantes envolvidos: [SPEAKER_01]  
+  Confiança: 1.0

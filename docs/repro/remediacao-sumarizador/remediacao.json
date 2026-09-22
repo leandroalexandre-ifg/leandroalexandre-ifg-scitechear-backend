@@ -1,0 +1,1010 @@
+{
+  "teto_segundos": 2100,
+  "corpus": [
+    {
+      "job_curto": "2e335c5c",
+      "job_id": "2e335c5c-7715-4e8f-b703-37f5f8d328ae",
+      "descricao": "R5 — reunião Ana/Bruno (o '30 de outubro')",
+      "n_segmentos": 18,
+      "duracao_audio_s": 79.6,
+      "sumario_v1_chars": 8024,
+      "sumario_v2_chars": 7711,
+      "sumarizacao_v1_s": 28.6,
+      "sumarizacao_v2_s": 23.3,
+      "execucoes": [
+        {
+          "condicao": "baseline",
+          "versao_implicitas": "v4",
+          "filtro": false,
+          "duracao_s": 13.7,
+          "erro": null,
+          "total": 15,
+          "perguntas": [
+            {
+              "id": "I1",
+              "text": "Quais são as possíveis consequências do tempo elevado de processamento da estação de perguntas no servidor novo?",
+              "source_segment_ids": [
+                "seg_0014"
+              ]
+            },
+            {
+              "id": "I2",
+              "text": "Como a validação do desempenho em reuniões longas pode impactar o cumprimento do prazo de 30 de outubro?",
+              "source_segment_ids": [
+                "seg_0009"
+              ]
+            },
+            {
+              "id": "I3",
+              "text": "Quais são os critérios para determinar se a redução do contexto de requisições é viável?",
+              "source_segment_ids": [
+                "seg_0016"
+              ]
+            },
+            {
+              "id": "I4",
+              "text": "Como a análise do tempo de processamento será utilizada para avaliar a otimização do contexto de requisições?",
+              "source_segment_ids": [
+                "seg_0014",
+                "seg_0016"
+              ]
+            },
+            {
+              "id": "I5",
+              "text": "Quais são os riscos associados à falta de validação do desempenho em reuniões longas antes do prazo final?",
+              "source_segment_ids": [
+                "seg_0009"
+              ]
+            },
+            {
+              "id": "I6",
+              "text": "Como a eficácia da redução do contexto de requisições será medida?",
+              "source_segment_ids": [
+                "seg_0016"
+              ]
+            },
+            {
+              "id": "I7",
+              "text": "Quais são as etapas necessárias para garantir que a validação do desempenho em reuniões longas seja concluída antes de 30 de outubro?",
+              "source_segment_ids": [
+                "seg_0009"
+              ]
+            },
+            {
+              "id": "I8",
+              "text": "Como a integração com o serviço de diarização afeta a validação do desempenho em reuniões longas?",
+              "source_segment_ids": [
+                "seg_0003",
+                "seg_0009"
+              ]
+            },
+            {
+              "id": "I9",
+              "text": "Quais são os impactos do tempo de processamento de 7 segundos na eficiência geral do sistema?",
+              "source_segment_ids": [
+                "seg_0014"
+              ]
+            },
+            {
+              "id": "I10",
+              "text": "Como a preparação do roteiro de teste com áudio de duas pessoas contribuirá para a otimização do contexto de requisições?",
+              "source_segment_ids": [
+                "seg_0011"
+              ]
+            },
+            {
+              "id": "I11",
+              "text": "Quais são as alternativas para reduzir o tempo de processamento da estação de perguntas, além de ajustar o contexto de requisições?",
+              "source_segment_ids": [
+                "seg_0014",
+                "seg_0016"
+              ]
+            },
+            {
+              "id": "I12",
+              "text": "Como a análise do tempo de processamento será integrada ao documento de performance para a próxima reunião?",
+              "source_segment_ids": [
+                "seg_0018"
+              ]
+            },
+            {
+              "id": "I13",
+              "text": "Quais são os critérios para definir se a validação do desempenho em reuniões longas será realizada com o mesmo modelo de linguagem (gagalo)?",
+              "source_segment_ids": [
+                "seg_0015"
+              ]
+            },
+            {
+              "id": "I14",
+              "text": "Como a redução do contexto de requisições pode afetar a qualidade da transcrição em reuniões longas?",
+              "source_segment_ids": [
+                "seg_0016"
+              ]
+            },
+            {
+              "id": "I15",
+              "text": "Quais são as etapas necessárias para garantir que a análise do tempo de processamento seja concluída antes da avaliação de otimização?",
+              "source_segment_ids": [
+                "seg_0014",
+                "seg_0016"
+              ]
+            }
+          ],
+          "resposta_bruta": "{\n  \"perguntas_implicitas\": [\n    {\n      \"id\": \"I1\",\n      \"pergunta\": \"Quais são as possíveis consequências do tempo elevado de processamento da estação de perguntas no servidor novo?\",\n      \"linhas_evidencia\": [14]\n    },\n    {\n      \"id\": \"I2\",\n      \"pergunta\": \"Como a validação do desempenho em reuniões longas pode impactar o cumprimento do prazo de 30 de outubro?\",\n      \"linhas_evidencia\": [9]\n    },\n    {\n      \"id\": \"I3\",\n      \"pergunta\": \"Quais são os critérios para determinar se a redução do contexto de requisições é viável?\",\n      \"linhas_evidencia\": [16]\n    },\n    {\n      \"id\": \"I4\",\n      \"pergunta\": \"Como a análise do tempo de processamento será utilizada para avaliar a otimização do contexto de requisições?\",\n      \"linhas_evidencia\": [14, 16]\n    },\n    {\n      \"id\": \"I5\",\n      \"pergunta\": \"Quais são os riscos associados à falta de validação do desempenho em reuniões longas antes do prazo final?\",\n      \"linhas_evidencia\": [9]\n    },\n    {\n      \"id\": \"I6\",\n      \"pergunta\": \"Como a eficácia da redução do contexto de requisições será medida?\",\n      \"linhas_evidencia\": [16]\n    },\n    {\n      \"id\": \"I7\",\n      \"pergunta\": \"Quais são as etapas necessárias para garantir que a validação do desempenho em reuniões longas seja concluída antes de 30 de outubro?\",\n      \"linhas_evidencia\": [9]\n    },\n    {\n      \"id\": \"I8\",\n      \"pergunta\": \"Como a integração com o serviço de diarização afeta a validação do desempenho em reuniões longas?\",\n      \"linhas_evidencia\": [3, 9]\n    },\n    {\n      \"id\": \"I9\",\n      \"pergunta\": \"Quais são os impactos do tempo de processamento de 7 segundos na eficiência geral do sistema?\",\n      \"linhas_evidencia\": [14]\n    },\n    {\n      \"id\": \"I10\",\n      \"pergunta\": \"Como a preparação do roteiro de teste com áudio de duas pessoas contribuirá para a otimização do contexto de requisições?\",\n      \"linhas_evidencia\": [11]\n    },\n    {\n      \"id\": \"I11\",\n      \"pergunta\": \"Quais são as alternativas para reduzir o tempo de processamento da estação de perguntas, além de ajustar o contexto de requisições?\",\n      \"linhas_evidencia\": [14, 16]\n    },\n    {\n      \"id\": \"I12\",\n      \"pergunta\": \"Como a análise do tempo de processamento será integrada ao documento de performance para a próxima reunião?\",\n      \"linhas_evidencia\": [18]\n    },\n    {\n      \"id\": \"I13\",\n      \"pergunta\": \"Quais são os critérios para definir se a validação do desempenho em reuniões longas será realizada com o mesmo modelo de linguagem (gagalo)?\",\n      \"linhas_evidencia\": [15]\n    },\n    {\n      \"id\": \"I14\",\n      \"pergunta\": \"Como a redução do contexto de requisições pode afetar a qualidade da transcrição em reuniões longas?\",\n      \"linhas_evidencia\": [16]\n    },\n    {\n      \"id\": \"I15\",\n      \"pergunta\": \"Quais são as etapas necessárias para garantir que a análise do tempo de processamento seja concluída antes da avaliação de otimização?\",\n      \"linhas_evidencia\": [14, 16]\n    }\n  ],\n  \"total_perguntas\": 15\n}",
+          "prompt_chars": 16148
+        },
+        {
+          "condicao": "baseline",
+          "versao_implicitas": "v6",
+          "filtro": false,
+          "duracao_s": 9.7,
+          "erro": null,
+          "total": 4,
+          "perguntas": [
+            {
+              "id": "I1",
+              "text": "Como a alta duração do processamento da estação de perguntas (7 segundos) pode ser mitigada para garantir a entrega dentro do prazo estabelecido (30 de outubro)?",
+              "source_segment_ids": []
+            },
+            {
+              "id": "I2",
+              "text": "Quais critérios serão utilizados para validar o desempenho do sistema em uma reunião longa antes do prazo final?",
+              "source_segment_ids": []
+            },
+            {
+              "id": "I3",
+              "text": "Qual será o impacto da redução do tamanho do contexto nas requisições sobre a eficiência geral do sistema, considerando a necessidade de otimização?",
+              "source_segment_ids": []
+            },
+            {
+              "id": "I4",
+              "text": "Como a análise do tempo de processamento (7 segundos) será integrada à avaliação de estratégias de otimização para evitar atrasos no cumprimento do prazo?",
+              "source_segment_ids": []
+            }
+          ],
+          "resposta_bruta": "1. Como a alta duração do processamento da estação de perguntas (7 segundos) pode ser mitigada para garantir a entrega dentro do prazo estabelecido (30 de outubro)?  \n2. Quais critérios serão utilizados para validar o desempenho do sistema em uma reunião longa antes do prazo final?  \n3. Qual será o impacto da redução do tamanho do contexto nas requisições sobre a eficiência geral do sistema, considerando a necessidade de otimização?  \n4. Como a análise do tempo de processamento (7 segundos) será integrada à avaliação de estratégias de otimização para evitar atrasos no cumprimento do prazo?",
+          "prompt_chars": 17884
+        },
+        {
+          "condicao": "corrigido",
+          "versao_implicitas": "v4",
+          "filtro": true,
+          "duracao_s": 11.5,
+          "erro": null,
+          "total": 15,
+          "perguntas": [
+            {
+              "id": "I1",
+              "text": "Quais são os critérios para definir se a redução do contexto em cada requisição resultará em melhorias significativas no desempenho?",
+              "source_segment_ids": [
+                "seg_0016"
+              ]
+            },
+            {
+              "id": "I2",
+              "text": "Como será garantida a validação do desempenho em uma reunião longa antes do prazo de 30 do mês?",
+              "source_segment_ids": [
+                "seg_0009"
+              ]
+            },
+            {
+              "id": "I3",
+              "text": "Quais são os impactos potenciais da redução do tamanho do contexto no modelo de linguagem em termos de precisão e recall?",
+              "source_segment_ids": [
+                "seg_0016"
+              ]
+            },
+            {
+              "id": "I4",
+              "text": "Qual será o método de seleção dos áudios para o roteiro de teste com duas pessoas?",
+              "source_segment_ids": [
+                "seg_0011"
+              ]
+            },
+            {
+              "id": "I5",
+              "text": "Como será medido o tempo de processamento em cada etapa do pipeline após a implementação da otimização?",
+              "source_segment_ids": [
+                "seg_0011"
+              ]
+            },
+            {
+              "id": "I6",
+              "text": "Quais são os riscos associados à dependência da conclusão da integração com o aplicativo para a validação do desempenho?",
+              "source_segment_ids": [
+                "seg_0009"
+              ]
+            },
+            {
+              "id": "I7",
+              "text": "Como será garantida a consistência dos resultados da medição do tempo de processamento em diferentes cenários?",
+              "source_segment_ids": [
+                "seg_0011"
+              ]
+            },
+            {
+              "id": "I8",
+              "text": "Quais são os critérios para definir se a estação de perguntas é o gargalo principal do processamento?",
+              "source_segment_ids": [
+                "seg_0014"
+              ]
+            },
+            {
+              "id": "I9",
+              "text": "Como será avaliada a eficácia da otimização do modelo de linguagem após sua implementação?",
+              "source_segment_ids": [
+                "seg_0016"
+              ]
+            },
+            {
+              "id": "I10",
+              "text": "Quais são os prazos intermediários para a conclusão das etapas de validação do desempenho?",
+              "source_segment_ids": [
+                "seg_0009"
+              ]
+            },
+            {
+              "id": "I11",
+              "text": "Como será garantida a integração dos resultados da medição do tempo de processamento com o documento de performance?",
+              "source_segment_ids": [
+                "seg_0018"
+              ]
+            },
+            {
+              "id": "I12",
+              "text": "Quais são os impactos da recálculo dos embedinos no tempo total de processamento?",
+              "source_segment_ids": [
+                "seg_0006"
+              ]
+            },
+            {
+              "id": "I13",
+              "text": "Como será definido o limite máximo de contexto que será enviado em cada requisição?",
+              "source_segment_ids": [
+                "seg_0016"
+              ]
+            },
+            {
+              "id": "I14",
+              "text": "Quais são os critérios para determinar se a validação do desempenho em uma reunião longa será realizada com sucesso?",
+              "source_segment_ids": [
+                "seg_0009"
+              ]
+            },
+            {
+              "id": "I15",
+              "text": "Como será garantida a replicabilidade dos testes de medição do tempo de processamento?",
+              "source_segment_ids": [
+                "seg_0011"
+              ]
+            }
+          ],
+          "resposta_bruta": "{\n  \"perguntas_implicitas\": [\n    {\n      \"id\": \"I1\",\n      \"pergunta\": \"Quais são os critérios para definir se a redução do contexto em cada requisição resultará em melhorias significativas no desempenho?\",\n      \"linhas_evidencia\": [16]\n    },\n    {\n      \"id\": \"I2\",\n      \"pergunta\": \"Como será garantida a validação do desempenho em uma reunião longa antes do prazo de 30 do mês?\",\n      \"linhas_evidencia\": [9]\n    },\n    {\n      \"id\": \"I3\",\n      \"pergunta\": \"Quais são os impactos potenciais da redução do tamanho do contexto no modelo de linguagem em termos de precisão e recall?\",\n      \"linhas_evidencia\": [16]\n    },\n    {\n      \"id\": \"I4\",\n      \"pergunta\": \"Qual será o método de seleção dos áudios para o roteiro de teste com duas pessoas?\",\n      \"linhas_evidencia\": [11]\n    },\n    {\n      \"id\": \"I5\",\n      \"pergunta\": \"Como será medido o tempo de processamento em cada etapa do pipeline após a implementação da otimização?\",\n      \"linhas_evidencia\": [11]\n    },\n    {\n      \"id\": \"I6\",\n      \"pergunta\": \"Quais são os riscos associados à dependência da conclusão da integração com o aplicativo para a validação do desempenho?\",\n      \"linhas_evidencia\": [9]\n    },\n    {\n      \"id\": \"I7\",\n      \"pergunta\": \"Como será garantida a consistência dos resultados da medição do tempo de processamento em diferentes cenários?\",\n      \"linhas_evidencia\": [11]\n    },\n    {\n      \"id\": \"I8\",\n      \"pergunta\": \"Quais são os critérios para definir se a estação de perguntas é o gargalo principal do processamento?\",\n      \"linhas_evidencia\": [14]\n    },\n    {\n      \"id\": \"I9\",\n      \"pergunta\": \"Como será avaliada a eficácia da otimização do modelo de linguagem após sua implementação?\",\n      \"linhas_evidencia\": [16]\n    },\n    {\n      \"id\": \"I10\",\n      \"pergunta\": \"Quais são os prazos intermediários para a conclusão das etapas de validação do desempenho?\",\n      \"linhas_evidencia\": [9]\n    },\n    {\n      \"id\": \"I11\",\n      \"pergunta\": \"Como será garantida a integração dos resultados da medição do tempo de processamento com o documento de performance?\",\n      \"linhas_evidencia\": [18]\n    },\n    {\n      \"id\": \"I12\",\n      \"pergunta\": \"Quais são os impactos da recálculo dos embedinos no tempo total de processamento?\",\n      \"linhas_evidencia\": [6]\n    },\n    {\n      \"id\": \"I13\",\n      \"pergunta\": \"Como será definido o limite máximo de contexto que será enviado em cada requisição?\",\n      \"linhas_evidencia\": [16]\n    },\n    {\n      \"id\": \"I14\",\n      \"pergunta\": \"Quais são os critérios para determinar se a validação do desempenho em uma reunião longa será realizada com sucesso?\",\n      \"linhas_evidencia\": [9]\n    },\n    {\n      \"id\": \"I15\",\n      \"pergunta\": \"Como será garantida a replicabilidade dos testes de medição do tempo de processamento?\",\n      \"linhas_evidencia\": [11]\n    }\n  ],\n  \"total_perguntas\": 15\n}",
+          "prompt_chars": 12910
+        },
+        {
+          "condicao": "corrigido",
+          "versao_implicitas": "v6",
+          "filtro": true,
+          "duracao_s": 14.4,
+          "erro": null,
+          "total": 3,
+          "perguntas": [
+            {
+              "id": "I1",
+              "text": "Como poderá ser implementada uma estratégia para reduzir o tempo de processamento da estação de perguntas, que atualmente consome quase metade do tempo total do processamento?",
+              "source_segment_ids": []
+            },
+            {
+              "id": "I2",
+              "text": "Quais são os critérios e metodologias necessários para validar o desempenho do sistema em uma reunião longa, considerando que essa validação ainda não foi realizada e é essencial para cumprir o prazo de 30 do mês?",
+              "source_segment_ids": []
+            },
+            {
+              "id": "I3",
+              "text": "Qual será o impacto da redução do tamanho do contexto enviado em cada requisição sobre a precisão e a completude dos resultados de transcrição, e quais fatores devem ser avaliados para garantir que essa otimização não comprometa a qualidade do sistema?",
+              "source_segment_ids": []
+            }
+          ],
+          "resposta_bruta": "1. Como poderá ser implementada uma estratégia para reduzir o tempo de processamento da estação de perguntas, que atualmente consome quase metade do tempo total do processamento?  \n2. Quais são os critérios e metodologias necessários para validar o desempenho do sistema em uma reunião longa, considerando que essa validação ainda não foi realizada e é essencial para cumprir o prazo de 30 do mês?  \n3. Qual será o impacto da redução do tamanho do contexto enviado em cada requisição sobre a precisão e a completude dos resultados de transcrição, e quais fatores devem ser avaliados para garantir que essa otimização não comprometa a qualidade do sistema?",
+          "prompt_chars": 14646
+        }
+      ]
+    },
+    {
+      "job_curto": "00c2ff18",
+      "job_id": "00c2ff18-eedd-470a-94a8-2e4a16092425",
+      "descricao": "Controle — ata de alinhamento, sem questão aberta",
+      "n_segmentos": 10,
+      "duracao_audio_s": 38.7,
+      "sumario_v1_chars": 4650,
+      "sumario_v2_chars": 7156,
+      "sumarizacao_v1_s": 15.5,
+      "sumarizacao_v2_s": 21.5,
+      "execucoes": [
+        {
+          "condicao": "baseline",
+          "versao_implicitas": "v4",
+          "filtro": false,
+          "duracao_s": 11.3,
+          "erro": null,
+          "total": 15,
+          "perguntas": [
+            {
+              "id": "I1",
+              "text": "Qual é o impacto da conclusão da integração com o servidor de processamento na revisão da metodologia?",
+              "source_segment_ids": [
+                "seg_0002",
+                "seg_0003"
+              ]
+            },
+            {
+              "id": "I2",
+              "text": "Como a validação das novas datas pelo coordenador afeta a atualização do cronograma?",
+              "source_segment_ids": [
+                "seg_0008"
+              ]
+            },
+            {
+              "id": "I3",
+              "text": "Quais são os critérios específicos para considerar a revisão do texto como concluída?",
+              "source_segment_ids": [
+                "seg_0006"
+              ]
+            },
+            {
+              "id": "I4",
+              "text": "Como a falta de especificação da data exata para a entrega revisada do texto pode impactar o cronograma?",
+              "source_segment_ids": [
+                "seg_0006"
+              ]
+            },
+            {
+              "id": "I5",
+              "text": "Quais são as consequências da não validação das novas datas pela coordenação?",
+              "source_segment_ids": [
+                "seg_0008"
+              ]
+            },
+            {
+              "id": "I6",
+              "text": "Como a revisão da metodologia influencia a atualização do cronograma?",
+              "source_segment_ids": [
+                "seg_0004",
+                "seg_0008"
+              ]
+            },
+            {
+              "id": "I7",
+              "text": "Quais são os prazos específicos para a conclusão da revisão do texto, considerando a data exata da semana?",
+              "source_segment_ids": [
+                "seg_0006"
+              ]
+            },
+            {
+              "id": "I8",
+              "text": "Como a atualização do cronograma está alinhada com as entregas previstas no projeto?",
+              "source_segment_ids": [
+                "seg_0008"
+              ]
+            },
+            {
+              "id": "I9",
+              "text": "Quais são as etapas necessárias para garantir que a revisão do texto esteja alinhada com os comentários recebidos?",
+              "source_segment_ids": [
+                "seg_0005"
+              ]
+            },
+            {
+              "id": "I10",
+              "text": "Como a coordenação foi envolvida no processo de definição das novas datas do cronograma?",
+              "source_segment_ids": [
+                "seg_0008"
+              ]
+            },
+            {
+              "id": "I11",
+              "text": "Quais são as implicações da dependência entre a revisão do texto e a atualização do cronograma?",
+              "source_segment_ids": [
+                "seg_0007",
+                "seg_0008"
+              ]
+            },
+            {
+              "id": "I12",
+              "text": "Como a falta de menção à data exata da reunião anterior com a coordenação pode afetar a validação das novas datas?",
+              "source_segment_ids": [
+                "seg_0008"
+              ]
+            },
+            {
+              "id": "I13",
+              "text": "Quais são os riscos associados à ambiguidade do prazo 'até o final desta semana' para a entrega revisada do texto?",
+              "source_segment_ids": [
+                "seg_0006"
+              ]
+            },
+            {
+              "id": "I14",
+              "text": "Como a atualização do cronograma está sendo monitorada para garantir o cumprimento das novas datas?",
+              "source_segment_ids": [
+                "seg_0008"
+              ]
+            },
+            {
+              "id": "I15",
+              "text": "Quais são as ações necessárias para assegurar que a revisão do texto esteja concluída antes da atualização do cronograma?",
+              "source_segment_ids": [
+                "seg_0005",
+                "seg_0007"
+              ]
+            }
+          ],
+          "resposta_bruta": "{\n  \"perguntas_implicitas\": [\n    {\n      \"id\": \"I1\",\n      \"pergunta\": \"Qual é o impacto da conclusão da integração com o servidor de processamento na revisão da metodologia?\",\n      \"linhas_evidencia\": [2, 3]\n    },\n    {\n      \"id\": \"I2\",\n      \"pergunta\": \"Como a validação das novas datas pelo coordenador afeta a atualização do cronograma?\",\n      \"linhas_evidencia\": [8]\n    },\n    {\n      \"id\": \"I3\",\n      \"pergunta\": \"Quais são os critérios específicos para considerar a revisão do texto como concluída?\",\n      \"linhas_evidencia\": [6]\n    },\n    {\n      \"id\": \"I4\",\n      \"pergunta\": \"Como a falta de especificação da data exata para a entrega revisada do texto pode impactar o cronograma?\",\n      \"linhas_evidencia\": [6]\n    },\n    {\n      \"id\": \"I5\",\n      \"pergunta\": \"Quais são as consequências da não validação das novas datas pela coordenação?\",\n      \"linhas_evidencia\": [8]\n    },\n    {\n      \"id\": \"I6\",\n      \"pergunta\": \"Como a revisão da metodologia influencia a atualização do cronograma?\",\n      \"linhas_evidencia\": [4, 8]\n    },\n    {\n      \"id\": \"I7\",\n      \"pergunta\": \"Quais são os prazos específicos para a conclusão da revisão do texto, considerando a data exata da semana?\",\n      \"linhas_evidencia\": [6]\n    },\n    {\n      \"id\": \"I8\",\n      \"pergunta\": \"Como a atualização do cronograma está alinhada com as entregas previstas no projeto?\",\n      \"linhas_evidencia\": [8]\n    },\n    {\n      \"id\": \"I9\",\n      \"pergunta\": \"Quais são as etapas necessárias para garantir que a revisão do texto esteja alinhada com os comentários recebidos?\",\n      \"linhas_evidencia\": [5]\n    },\n    {\n      \"id\": \"I10\",\n      \"pergunta\": \"Como a coordenação foi envolvida no processo de definição das novas datas do cronograma?\",\n      \"linhas_evidencia\": [8]\n    },\n    {\n      \"id\": \"I11\",\n      \"pergunta\": \"Quais são as implicações da dependência entre a revisão do texto e a atualização do cronograma?\",\n      \"linhas_evidencia\": [7, 8]\n    },\n    {\n      \"id\": \"I12\",\n      \"pergunta\": \"Como a falta de menção à data exata da reunião anterior com a coordenação pode afetar a validação das novas datas?\",\n      \"linhas_evidencia\": [8]\n    },\n    {\n      \"id\": \"I13\",\n      \"pergunta\": \"Quais são os riscos associados à ambiguidade do prazo 'até o final desta semana' para a entrega revisada do texto?\",\n      \"linhas_evidencia\": [6]\n    },\n    {\n      \"id\": \"I14\",\n      \"pergunta\": \"Como a atualização do cronograma está sendo monitorada para garantir o cumprimento das novas datas?\",\n      \"linhas_evidencia\": [8]\n    },\n    {\n      \"id\": \"I15\",\n      \"pergunta\": \"Quais são as ações necessárias para assegurar que a revisão do texto esteja concluída antes da atualização do cronograma?\",\n      \"linhas_evidencia\": [5, 7]\n    }\n  ],\n  \"total_perguntas\": 15\n}",
+          "prompt_chars": 11818
+        },
+        {
+          "condicao": "baseline",
+          "versao_implicitas": "v6",
+          "filtro": false,
+          "duracao_s": 8.9,
+          "erro": null,
+          "total": 2,
+          "perguntas": [
+            {
+              "id": "I1",
+              "text": "Como será garantida a validação das novas datas do cronograma pela coordenação, considerando que a atualização depende desse alinhamento?",
+              "source_segment_ids": []
+            },
+            {
+              "id": "I2",
+              "text": "Qual será a data exata da reunião anterior com a coordenação, que resultou nas novas datas acordadas?",
+              "source_segment_ids": []
+            }
+          ],
+          "resposta_bruta": "1. Como será garantida a validação das novas datas do cronograma pela coordenação, considerando que a atualização depende desse alinhamento?  \n2. Qual será a data exata da reunião anterior com a coordenação, que resultou nas novas datas acordadas?",
+          "prompt_chars": 13554
+        },
+        {
+          "condicao": "corrigido",
+          "versao_implicitas": "v4",
+          "filtro": true,
+          "duracao_s": 11.8,
+          "erro": null,
+          "total": 10,
+          "perguntas": [
+            {
+              "id": "I1",
+              "text": "Quais critérios serão utilizados para avaliar a qualidade da versão revisada do capítulo de metodologia?",
+              "source_segment_ids": [
+                "seg_0005",
+                "seg_0006"
+              ]
+            },
+            {
+              "id": "I2",
+              "text": "Como será garantida a pontualidade na entrega da versão revisada do capítulo de metodologia até o final da semana?",
+              "source_segment_ids": [
+                "seg_0006"
+              ]
+            },
+            {
+              "id": "I3",
+              "text": "Quais são as possíveis consequências de atrasos na entrega da versão revisada do capítulo de metodologia?",
+              "source_segment_ids": [
+                "seg_0006"
+              ]
+            },
+            {
+              "id": "I4",
+              "text": "Como a atualização do cronograma afeta as dependências entre as tarefas do projeto?",
+              "source_segment_ids": [
+                "seg_0008"
+              ]
+            },
+            {
+              "id": "I5",
+              "text": "Quais procedimentos serão adotados para verificar a conclusão bem-sucedida da integração com o servidor de processamento?",
+              "source_segment_ids": [
+                "seg_0002"
+              ]
+            },
+            {
+              "id": "I6",
+              "text": "Existem tarefas pendentes relacionadas à integração com o servidor de processamento que ainda precisam ser concluídas?",
+              "source_segment_ids": [
+                "seg_0002"
+              ]
+            },
+            {
+              "id": "I7",
+              "text": "Quais medidas serão tomadas para assegurar que os comentários de Carla Moreira sejam integralmente incorporados ao capítulo de metodologia?",
+              "source_segment_ids": [
+                "seg_0004",
+                "seg_0005"
+              ]
+            },
+            {
+              "id": "I8",
+              "text": "Qual será o processo de revisão da versão revisada do capítulo de metodologia antes de sua submissão final?",
+              "source_segment_ids": [
+                "seg_0006"
+              ]
+            },
+            {
+              "id": "I9",
+              "text": "Como será comunicada a atualização do cronograma aos demais stakeholders do projeto?",
+              "source_segment_ids": [
+                "seg_0008"
+              ]
+            },
+            {
+              "id": "I10",
+              "text": "Há riscos identificados de conflitos entre a nova data do cronograma e outros marcos do projeto?",
+              "source_segment_ids": [
+                "seg_0008"
+              ]
+            }
+          ],
+          "resposta_bruta": "{\n  \"perguntas_implicitas\": [\n    {\n      \"id\": \"I1\",\n      \"pergunta\": \"Quais critérios serão utilizados para avaliar a qualidade da versão revisada do capítulo de metodologia?\",\n      \"linhas_evidencia\": [5, 6]\n    },\n    {\n      \"id\": \"I2\",\n      \"pergunta\": \"Como será garantida a pontualidade na entrega da versão revisada do capítulo de metodologia até o final da semana?\",\n      \"linhas_evidencia\": [6]\n    },\n    {\n      \"id\": \"I3\",\n      \"pergunta\": \"Quais são as possíveis consequências de atrasos na entrega da versão revisada do capítulo de metodologia?\",\n      \"linhas_evidencia\": [6]\n    },\n    {\n      \"id\": \"I4\",\n      \"pergunta\": \"Como a atualização do cronograma afeta as dependências entre as tarefas do projeto?\",\n      \"linhas_evidencia\": [8]\n    },\n    {\n      \"id\": \"I5\",\n      \"pergunta\": \"Quais procedimentos serão adotados para verificar a conclusão bem-sucedida da integração com o servidor de processamento?\",\n      \"linhas_evidencia\": [2]\n    },\n    {\n      \"id\": \"I6\",\n      \"pergunta\": \"Existem tarefas pendentes relacionadas à integração com o servidor de processamento que ainda precisam ser concluídas?\",\n      \"linhas_evidencia\": [2]\n    },\n    {\n      \"id\": \"I7\",\n      \"pergunta\": \"Quais medidas serão tomadas para assegurar que os comentários de Carla Moreira sejam integralmente incorporados ao capítulo de metodologia?\",\n      \"linhas_evidencia\": [4, 5]\n    },\n    {\n      \"id\": \"I8\",\n      \"pergunta\": \"Qual será o processo de revisão da versão revisada do capítulo de metodologia antes de sua submissão final?\",\n      \"linhas_evidencia\": [6]\n    },\n    {\n      \"id\": \"I9\",\n      \"pergunta\": \"Como será comunicada a atualização do cronograma aos demais stakeholders do projeto?\",\n      \"linhas_evidencia\": [8]\n    },\n    {\n      \"id\": \"I10\",\n      \"pergunta\": \"Há riscos identificados de conflitos entre a nova data do cronograma e outros marcos do projeto?\",\n      \"linhas_evidencia\": [8]\n    }\n  ],\n  \"total_perguntas\": 10\n}",
+          "prompt_chars": 9972
+        },
+        {
+          "condicao": "corrigido",
+          "versao_implicitas": "v6",
+          "filtro": true,
+          "duracao_s": 2.5,
+          "erro": null,
+          "total": 0,
+          "perguntas": [],
+          "resposta_bruta": "Não possui",
+          "prompt_chars": 11708
+        }
+      ]
+    },
+    {
+      "job_curto": "6150ce54",
+      "job_id": "6150ce54-cde7-46de-bd1a-84dbecc938ef",
+      "descricao": "Controle de confabulação — conversa trivial real",
+      "n_segmentos": 21,
+      "duracao_audio_s": 56.2,
+      "sumario_v1_chars": 2193,
+      "sumario_v2_chars": 3538,
+      "sumarizacao_v1_s": 10.7,
+      "sumarizacao_v2_s": 17.9,
+      "execucoes": [
+        {
+          "condicao": "baseline",
+          "versao_implicitas": "v4",
+          "filtro": false,
+          "duracao_s": 3.7,
+          "erro": null,
+          "total": 0,
+          "perguntas": [],
+          "resposta_bruta": "{\n  \"perguntas_implicitas\": [],\n  \"total_perguntas\": 0\n}",
+          "prompt_chars": 9514
+        },
+        {
+          "condicao": "baseline",
+          "versao_implicitas": "v6",
+          "filtro": false,
+          "duracao_s": 2.6,
+          "erro": null,
+          "total": 0,
+          "perguntas": [],
+          "resposta_bruta": "Não possui",
+          "prompt_chars": 11250
+        },
+        {
+          "condicao": "corrigido",
+          "versao_implicitas": "v4",
+          "filtro": true,
+          "duracao_s": 8.9,
+          "erro": null,
+          "total": 0,
+          "perguntas": [],
+          "resposta_bruta": "{\n  \"perguntas_implicitas\": [],\n  \"total_perguntas\": 0\n}",
+          "prompt_chars": 8875
+        },
+        {
+          "condicao": "corrigido",
+          "versao_implicitas": "v6",
+          "filtro": true,
+          "duracao_s": 2.5,
+          "erro": null,
+          "total": 0,
+          "perguntas": [],
+          "resposta_bruta": "Não possui",
+          "prompt_chars": 10611
+        }
+      ]
+    },
+    {
+      "job_curto": "50098d37",
+      "job_id": "50098d37-b468-4434-ab3a-c0cfb4f23839",
+      "descricao": "Reunião acadêmica real (RUFAS), 12 min",
+      "n_segmentos": 117,
+      "duracao_audio_s": 736.9,
+      "sumario_v1_chars": 8942,
+      "sumario_v2_chars": 8640,
+      "sumarizacao_v1_s": 29.9,
+      "sumarizacao_v2_s": 29.6,
+      "execucoes": [
+        {
+          "condicao": "baseline",
+          "versao_implicitas": "v4",
+          "filtro": false,
+          "duracao_s": 16.2,
+          "erro": null,
+          "total": 15,
+          "perguntas": [
+            {
+              "id": "I1",
+              "text": "Como será abordada a lacuna de estudos sobre emissões de metano em novilhas e subprodutos na implementação do Rufas?",
+              "source_segment_ids": [
+                "seg_0032",
+                "seg_0033",
+                "seg_0034",
+                "seg_0035",
+                "seg_0036"
+              ]
+            },
+            {
+              "id": "I2",
+              "text": "Quais critérios serão utilizados para validar a qualidade dos datasets sintéticos gerados?",
+              "source_segment_ids": [
+                "seg_0095",
+                "seg_0096"
+              ]
+            },
+            {
+              "id": "I3",
+              "text": "Qual será o prazo estimado para a conclusão da interface gráfica e sua implementação no Rufas?",
+              "source_segment_ids": [
+                "seg_0093",
+                "seg_0094",
+                "seg_0097",
+                "seg_0098",
+                "seg_0101"
+              ]
+            },
+            {
+              "id": "I4",
+              "text": "Como será garantida a integração de novos dados (como informações de geógrafos e químicos) no Rufas no futuro?",
+              "source_segment_ids": [
+                "seg_0089",
+                "seg_0090",
+                "seg_0091",
+                "seg_0092"
+              ]
+            },
+            {
+              "id": "I5",
+              "text": "Quais são os principais desafios técnicos na simulação de interações entre os módulos do Rufas?",
+              "source_segment_ids": [
+                "seg_0052",
+                "seg_0053",
+                "seg_0054",
+                "seg_0055",
+                "seg_0056",
+                "seg_0057",
+                "seg_0058"
+              ]
+            },
+            {
+              "id": "I6",
+              "text": "Como será abordada a necessidade de estudos mais detalhados sobre fatores interligados nas fazendas leiteiras?",
+              "source_segment_ids": [
+                "seg_0027",
+                "seg_0028"
+              ]
+            },
+            {
+              "id": "I7",
+              "text": "Quais são os critérios para definir a prioridade de implementação de novos módulos no Rufas?",
+              "source_segment_ids": [
+                "seg_0040",
+                "seg_0041",
+                "seg_0042",
+                "seg_0043",
+                "seg_0044"
+              ]
+            },
+            {
+              "id": "I8",
+              "text": "Como será garantida a usabilidade da interface gráfica para produtores rurais com diferentes níveis de familiaridade com tecnologia?",
+              "source_segment_ids": [
+                "seg_0097",
+                "seg_0098",
+                "seg_0101"
+              ]
+            },
+            {
+              "id": "I9",
+              "text": "Quais são os riscos associados à dependência de datasets sintéticos para o desenvolvimento do Rufas?",
+              "source_segment_ids": [
+                "seg_0095",
+                "seg_0096"
+              ]
+            },
+            {
+              "id": "I10",
+              "text": "Como será abordada a necessidade de envolver especialistas de outras áreas (como geógrafos) no projeto, considerando o foco atual em experimentos?",
+              "source_segment_ids": [
+                "seg_0089",
+                "seg_0090",
+                "seg_0091",
+                "seg_0092",
+                "seg_0093",
+                "seg_0094"
+              ]
+            },
+            {
+              "id": "I11",
+              "text": "Quais são os critérios para avaliar a eficácia da interface gráfica em facilitar a tomada de decisões pelos produtores?",
+              "source_segment_ids": [
+                "seg_0101"
+              ]
+            },
+            {
+              "id": "I12",
+              "text": "Como será garantida a atualização contínua dos dados do Rufas com novas pesquisas e informações científicas?",
+              "source_segment_ids": [
+                "seg_0040",
+                "seg_0041",
+                "seg_0042",
+                "seg_0043",
+                "seg_0044"
+              ]
+            },
+            {
+              "id": "I13",
+              "text": "Quais são os desafios de implementação da interface gráfica em ambientes com recursos tecnológicos limitados?",
+              "source_segment_ids": [
+                "seg_0024",
+                "seg_0025",
+                "seg_0026"
+              ]
+            },
+            {
+              "id": "I14",
+              "text": "Como será abordada a necessidade de estudos sobre a influência de fatores como clima e tipo de solo na simulação do Rufas?",
+              "source_segment_ids": [
+                "seg_0016",
+                "seg_0017",
+                "seg_0018"
+              ]
+            },
+            {
+              "id": "I15",
+              "text": "Quais são os critérios para definir a escala de adoção do Rufas em diferentes regiões do Brasil?",
+              "source_segment_ids": [
+                "seg_0021",
+                "seg_0022",
+                "seg_0023"
+              ]
+            }
+          ],
+          "resposta_bruta": "{\n  \"perguntas_implicitas\": [\n    {\n      \"id\": \"I1\",\n      \"pergunta\": \"Como será abordada a lacuna de estudos sobre emissões de metano em novilhas e subprodutos na implementação do Rufas?\",\n      \"linhas_evidencia\": [32, 33, 34, 35, 36]\n    },\n    {\n      \"id\": \"I2\",\n      \"pergunta\": \"Quais critérios serão utilizados para validar a qualidade dos datasets sintéticos gerados?\",\n      \"linhas_evidencia\": [95, 96]\n    },\n    {\n      \"id\": \"I3\",\n      \"pergunta\": \"Qual será o prazo estimado para a conclusão da interface gráfica e sua implementação no Rufas?\",\n      \"linhas_evidencia\": [93, 94, 97, 98, 101]\n    },\n    {\n      \"id\": \"I4\",\n      \"pergunta\": \"Como será garantida a integração de novos dados (como informações de geógrafos e químicos) no Rufas no futuro?\",\n      \"linhas_evidencia\": [89, 90, 91, 92]\n    },\n    {\n      \"id\": \"I5\",\n      \"pergunta\": \"Quais são os principais desafios técnicos na simulação de interações entre os módulos do Rufas?\",\n      \"linhas_evidencia\": [52, 53, 54, 55, 56, 57, 58]\n    },\n    {\n      \"id\": \"I6\",\n      \"pergunta\": \"Como será abordada a necessidade de estudos mais detalhados sobre fatores interligados nas fazendas leiteiras?\",\n      \"linhas_evidencia\": [27, 28]\n    },\n    {\n      \"id\": \"I7\",\n      \"pergunta\": \"Quais são os critérios para definir a prioridade de implementação de novos módulos no Rufas?\",\n      \"linhas_evidencia\": [40, 41, 42, 43, 44]\n    },\n    {\n      \"id\": \"I8\",\n      \"pergunta\": \"Como será garantida a usabilidade da interface gráfica para produtores rurais com diferentes níveis de familiaridade com tecnologia?\",\n      \"linhas_evidencia\": [97, 98, 101]\n    },\n    {\n      \"id\": \"I9\",\n      \"pergunta\": \"Quais são os riscos associados à dependência de datasets sintéticos para o desenvolvimento do Rufas?\",\n      \"linhas_evidencia\": [95, 96]\n    },\n    {\n      \"id\": \"I10\",\n      \"pergunta\": \"Como será abordada a necessidade de envolver especialistas de outras áreas (como geógrafos) no projeto, considerando o foco atual em experimentos?\",\n      \"linhas_evidencia\": [89, 90, 91, 92, 93, 94]\n    },\n    {\n      \"id\": \"I11\",\n      \"pergunta\": \"Quais são os critérios para avaliar a eficácia da interface gráfica em facilitar a tomada de decisões pelos produtores?\",\n      \"linhas_evidencia\": [101]\n    },\n    {\n      \"id\": \"I12\",\n      \"pergunta\": \"Como será garantida a atualização contínua dos dados do Rufas com novas pesquisas e informações científicas?\",\n      \"linhas_evidencia\": [40, 41, 42, 43, 44]\n    },\n    {\n      \"id\": \"I13\",\n      \"pergunta\": \"Quais são os desafios de implementação da interface gráfica em ambientes com recursos tecnológicos limitados?\",\n      \"linhas_evidencia\": [24, 25, 26]\n    },\n    {\n      \"id\": \"I14\",\n      \"pergunta\": \"Como será abordada a necessidade de estudos sobre a influência de fatores como clima e tipo de solo na simulação do Rufas?\",\n      \"linhas_evidencia\": [16, 17, 18]\n    },\n    {\n      \"id\": \"I15\",\n      \"pergunta\": \"Quais são os critérios para definir a escala de adoção do Rufas em diferentes regiões do Brasil?\",\n      \"linhas_evidencia\": [21, 22, 23]\n    }\n  ],\n  \"total_perguntas\": 15\n}",
+          "prompt_chars": 27933
+        },
+        {
+          "condicao": "baseline",
+          "versao_implicitas": "v6",
+          "filtro": false,
+          "duracao_s": 7.0,
+          "erro": null,
+          "total": 5,
+          "perguntas": [
+            {
+              "id": "I1",
+              "text": "Como a ausência de estudos sobre emissões de metano em novilhas e subprodutos pode impactar a precisão e a utilidade do Rufas para a tomada de decisões na produção sustentável de leite?",
+              "source_segment_ids": []
+            },
+            {
+              "id": "I2",
+              "text": "Quais são as implicações da decisão de não envolver especialistas de outras áreas (como geógrafos e químicos) no desenvolvimento do Rufas, considerando a complexidade interdisciplinar da sustentabilidade na agropecuária?",
+              "source_segment_ids": []
+            },
+            {
+              "id": "I3",
+              "text": "Como a geração de datasets sintéticos será validada para garantir sua adequação ao uso do Rufas e à representação fiel dos dados reais da produção leiteira?",
+              "source_segment_ids": []
+            },
+            {
+              "id": "I4",
+              "text": "Quais são os riscos associados à dependência da interface gráfica em relação à geração de datasets sintéticos, considerando a falta de prazos definidos para o desenvolvimento dessa etapa?",
+              "source_segment_ids": []
+            },
+            {
+              "id": "I5",
+              "text": "Como a falta de estudos sobre emissões de metano em novilhas e subprodutos pode limitar a capacidade do Rufas de simular variáveis críticas para a redução da pegada ecológica nas fazendas leiteiras?",
+              "source_segment_ids": []
+            }
+          ],
+          "resposta_bruta": "1. Como a ausência de estudos sobre emissões de metano em novilhas e subprodutos pode impactar a precisão e a utilidade do Rufas para a tomada de decisões na produção sustentável de leite?  \n2. Quais são as implicações da decisão de não envolver especialistas de outras áreas (como geógrafos e químicos) no desenvolvimento do Rufas, considerando a complexidade interdisciplinar da sustentabilidade na agropecuária?  \n3. Como a geração de datasets sintéticos será validada para garantir sua adequação ao uso do Rufas e à representação fiel dos dados reais da produção leiteira?  \n4. Quais são os riscos associados à dependência da interface gráfica em relação à geração de datasets sintéticos, considerando a falta de prazos definidos para o desenvolvimento dessa etapa?  \n5. Como a falta de estudos sobre emissões de metano em novilhas e subprodutos pode limitar a capacidade do Rufas de simular variáveis críticas para a redução da pegada ecológica nas fazendas leiteiras?",
+          "prompt_chars": 29669
+        },
+        {
+          "condicao": "corrigido",
+          "versao_implicitas": "v4",
+          "filtro": true,
+          "duracao_s": 13.2,
+          "erro": null,
+          "total": 15,
+          "perguntas": [
+            {
+              "id": "I1",
+              "text": "Quais estratégias serão adotadas para abordar a lacuna de estudos sobre emissões de metano em novilhas e subprodutos?",
+              "source_segment_ids": [
+                "seg_0032",
+                "seg_0035"
+              ]
+            },
+            {
+              "id": "I2",
+              "text": "Como será garantida a qualidade e a representatividade dos datasets sintéticos gerados para testes do Rufas?",
+              "source_segment_ids": [
+                "seg_0095"
+              ]
+            },
+            {
+              "id": "I3",
+              "text": "Quais funcionalidades específicas a interface gráfica do Rufas deve conter para ser utilizável por produtores rurais?",
+              "source_segment_ids": [
+                "seg_0097",
+                "seg_0101"
+              ]
+            },
+            {
+              "id": "I4",
+              "text": "Como será estruturada a colaboração com especialistas de outras áreas (geógrafos, químicos) para aprimorar o Rufas?",
+              "source_segment_ids": [
+                "seg_0089",
+                "seg_0092"
+              ]
+            },
+            {
+              "id": "I5",
+              "text": "Quais são os desafios técnicos e logísticos associados à implementação de uma interface gráfica acessível para usuários não técnicos?",
+              "source_segment_ids": [
+                "seg_0098",
+                "seg_0105"
+              ]
+            },
+            {
+              "id": "I6",
+              "text": "Como o Rufas será integrado à base de dados existente do Farmer para garantir compatibilidade e utilidade prática?",
+              "source_segment_ids": [
+                "seg_0107",
+                "seg_0110"
+              ]
+            },
+            {
+              "id": "I7",
+              "text": "Quais são os critérios para definir quais módulos do Rufas serão priorizados no desenvolvimento futuro?",
+              "source_segment_ids": [
+                "seg_0050",
+                "seg_0053"
+              ]
+            },
+            {
+              "id": "I8",
+              "text": "Como será avaliada a eficácia do Rufas em simular interações complexas entre os fatores da fazenda?",
+              "source_segment_ids": [
+                "seg_0040",
+                "seg_0054"
+              ]
+            },
+            {
+              "id": "I9",
+              "text": "Quais são os impactos esperados da utilização do Rufas na tomada de decisões por parte dos produtores rurais?",
+              "source_segment_ids": [
+                "seg_0015",
+                "seg_0036"
+              ]
+            },
+            {
+              "id": "I10",
+              "text": "Como o modelo open source do Rufas influenciará a capacidade de contribuições externas e a evolução do projeto?",
+              "source_segment_ids": [
+                "seg_0042",
+                "seg_0070"
+              ]
+            },
+            {
+              "id": "I11",
+              "text": "Quais são os desafios de escala no uso do Rufas para fazendas com diferentes condições climáticas e de solo?",
+              "source_segment_ids": [
+                "seg_0016",
+                "seg_0021"
+              ]
+            },
+            {
+              "id": "I12",
+              "text": "Como será garantida a atualização contínua dos dados e algoritmos do Rufas para refletir novas pesquisas e tecnologias?",
+              "source_segment_ids": [
+                "seg_0023",
+                "seg_0025"
+              ]
+            },
+            {
+              "id": "I13",
+              "text": "Quais são os indicadores de sucesso para a implementação da interface gráfica e sua adoção pelos usuários?",
+              "source_segment_ids": [
+                "seg_0101",
+                "seg_0105"
+              ]
+            },
+            {
+              "id": "I14",
+              "text": "Como o Rufas será adaptado para atender a necessidades específicas de diferentes regiões produtoras de leite no Brasil?",
+              "source_segment_ids": [
+                "seg_0021",
+                "seg_0022"
+              ]
+            },
+            {
+              "id": "I15",
+              "text": "Quais são os riscos associados à dependência de datasets sintéticos para o desenvolvimento e validação do Rufas?",
+              "source_segment_ids": [
+                "seg_0095",
+                "seg_0096"
+              ]
+            }
+          ],
+          "resposta_bruta": "{\n  \"perguntas_implicitas\": [\n    {\n      \"id\": \"I1\",\n      \"pergunta\": \"Quais estratégias serão adotadas para abordar a lacuna de estudos sobre emissões de metano em novilhas e subprodutos?\",\n      \"linhas_evidencia\": [32, 35]\n    },\n    {\n      \"id\": \"I2\",\n      \"pergunta\": \"Como será garantida a qualidade e a representatividade dos datasets sintéticos gerados para testes do Rufas?\",\n      \"linhas_evidencia\": [95]\n    },\n    {\n      \"id\": \"I3\",\n      \"pergunta\": \"Quais funcionalidades específicas a interface gráfica do Rufas deve conter para ser utilizável por produtores rurais?\",\n      \"linhas_evidencia\": [97, 101]\n    },\n    {\n      \"id\": \"I4\",\n      \"pergunta\": \"Como será estruturada a colaboração com especialistas de outras áreas (geógrafos, químicos) para aprimorar o Rufas?\",\n      \"linhas_evidencia\": [89, 92]\n    },\n    {\n      \"id\": \"I5\",\n      \"pergunta\": \"Quais são os desafios técnicos e logísticos associados à implementação de uma interface gráfica acessível para usuários não técnicos?\",\n      \"linhas_evidencia\": [98, 105]\n    },\n    {\n      \"id\": \"I6\",\n      \"pergunta\": \"Como o Rufas será integrado à base de dados existente do Farmer para garantir compatibilidade e utilidade prática?\",\n      \"linhas_evidencia\": [107, 110]\n    },\n    {\n      \"id\": \"I7\",\n      \"pergunta\": \"Quais são os critérios para definir quais módulos do Rufas serão priorizados no desenvolvimento futuro?\",\n      \"linhas_evidencia\": [50, 53]\n    },\n    {\n      \"id\": \"I8\",\n      \"pergunta\": \"Como será avaliada a eficácia do Rufas em simular interações complexas entre os fatores da fazenda?\",\n      \"linhas_evidencia\": [40, 54]\n    },\n    {\n      \"id\": \"I9\",\n      \"pergunta\": \"Quais são os impactos esperados da utilização do Rufas na tomada de decisões por parte dos produtores rurais?\",\n      \"linhas_evidencia\": [15, 36]\n    },\n    {\n      \"id\": \"I10\",\n      \"pergunta\": \"Como o modelo open source do Rufas influenciará a capacidade de contribuições externas e a evolução do projeto?\",\n      \"linhas_evidencia\": [42, 70]\n    },\n    {\n      \"id\": \"I11\",\n      \"pergunta\": \"Quais são os desafios de escala no uso do Rufas para fazendas com diferentes condições climáticas e de solo?\",\n      \"linhas_evidencia\": [16, 21]\n    },\n    {\n      \"id\": \"I12\",\n      \"pergunta\": \"Como será garantida a atualização contínua dos dados e algoritmos do Rufas para refletir novas pesquisas e tecnologias?\",\n      \"linhas_evidencia\": [23, 25]\n    },\n    {\n      \"id\": \"I13\",\n      \"pergunta\": \"Quais são os indicadores de sucesso para a implementação da interface gráfica e sua adoção pelos usuários?\",\n      \"linhas_evidencia\": [101, 105]\n    },\n    {\n      \"id\": \"I14\",\n      \"pergunta\": \"Como o Rufas será adaptado para atender a necessidades específicas de diferentes regiões produtoras de leite no Brasil?\",\n      \"linhas_evidencia\": [21, 22]\n    },\n    {\n      \"id\": \"I15\",\n      \"pergunta\": \"Quais são os riscos associados à dependência de datasets sintéticos para o desenvolvimento e validação do Rufas?\",\n      \"linhas_evidencia\": [95, 96]\n    }\n  ],\n  \"total_perguntas\": 15\n}",
+          "prompt_chars": 24044
+        },
+        {
+          "condicao": "corrigido",
+          "versao_implicitas": "v6",
+          "filtro": true,
+          "duracao_s": 9.6,
+          "erro": null,
+          "total": 7,
+          "perguntas": [
+            {
+              "id": "I1",
+              "text": "Como a ausência de estudos sobre emissões de metano em novilhas e subprodutos pode impactar a eficácia da simulação do Rufas em contextos reais de produção leiteira?",
+              "source_segment_ids": []
+            },
+            {
+              "id": "I2",
+              "text": "Quais são os desafios técnicos e metodológicos associados à geração de datasets sintéticos para testes do Rufas, considerando a complexidade dos fatores interligados nas fazendas?",
+              "source_segment_ids": []
+            },
+            {
+              "id": "I3",
+              "text": "Como a falta de envolvimento de especialistas de outras áreas (como geógrafos e químicos) pode limitar a aplicação do Rufas em cenários de produção leiteira diversificados?",
+              "source_segment_ids": []
+            },
+            {
+              "id": "I4",
+              "text": "Quais são as estratégias para garantir que a interface gráfica do Rufas seja intuitiva e funcional para produtores rurais com diferentes níveis de familiaridade com tecnologias digitais?",
+              "source_segment_ids": []
+            },
+            {
+              "id": "I5",
+              "text": "Como a dependência de dados fornecidos por produtores rurais, conforme descrito no PDF da base do Farmer, pode afetar a qualidade e a precisão das simulações realizadas com o Rufas?",
+              "source_segment_ids": []
+            },
+            {
+              "id": "I6",
+              "text": "Quais são as implicações da decisão de priorizar o desenvolvimento da ferramenta Rufas e a geração de datasets sintéticos, em vez de envolver imediatamente especialistas de outras áreas, para a abrangência e aplicabilidade do modelo?",
+              "source_segment_ids": []
+            },
+            {
+              "id": "I7",
+              "text": "Como a hipótese de que a interface gráfica do Rufas permitirá decisões mais precisas pelos produtores rurais pode ser validada com base em testes práticos ou estudos de caso?",
+              "source_segment_ids": []
+            }
+          ],
+          "resposta_bruta": "1. Como a ausência de estudos sobre emissões de metano em novilhas e subprodutos pode impactar a eficácia da simulação do Rufas em contextos reais de produção leiteira?  \n2. Quais são os desafios técnicos e metodológicos associados à geração de datasets sintéticos para testes do Rufas, considerando a complexidade dos fatores interligados nas fazendas?  \n3. Como a falta de envolvimento de especialistas de outras áreas (como geógrafos e químicos) pode limitar a aplicação do Rufas em cenários de produção leiteira diversificados?  \n4. Quais são as estratégias para garantir que a interface gráfica do Rufas seja intuitiva e funcional para produtores rurais com diferentes níveis de familiaridade com tecnologias digitais?  \n5. Como a dependência de dados fornecidos por produtores rurais, conforme descrito no PDF da base do Farmer, pode afetar a qualidade e a precisão das simulações realizadas com o Rufas?  \n6. Quais são as implicações da decisão de priorizar o desenvolvimento da ferramenta Rufas e a geração de datasets sintéticos, em vez de envolver imediatamente especialistas de outras áreas, para a abrangência e aplicabilidade do modelo?  \n7. Como a hipótese de que a interface gráfica do Rufas permitirá decisões mais precisas pelos produtores rurais pode ser validada com base em testes práticos ou estudos de caso?",
+          "prompt_chars": 25780
+        }
+      ]
+    }
+  ],
+  "duracao_total_s": 324.5
+}

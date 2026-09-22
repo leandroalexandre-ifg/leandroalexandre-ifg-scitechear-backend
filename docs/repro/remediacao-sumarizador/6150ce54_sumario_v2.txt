@@ -1,0 +1,161 @@
+Contexto
+
+Objetivo da reunião:  
+Nenhum elemento identificado.
+
+Tipo da reunião:  
+Nenhum elemento identificado.
+
+Participantes e papéis:  
+- Daniel: Participante da conversa.  
+- SPEAKER_01: Participante da conversa.  
+
+Tópicos principais:  
+- Conversa casual sobre o dia, atividades e escola.  
+
+Estrutura da discussão
+
+Mudanças de tópico:  
+Nenhum elemento identificado.
+
+Relações entre tópicos:  
+Nenhum elemento identificado.
+
+Ordem temporal:  
+Nenhum elemento identificado.
+
+Dependências:  
+Nenhum elemento identificado.
+
+Conteúdo explícito
+
+Problemas:  
+Nenhum elemento identificado.
+
+Pendências:  
+Nenhum elemento identificado.
+
+Tarefas:  
+Nenhum elemento identificado.
+
+Responsáveis:  
+Nenhum elemento identificado.
+
+Prazos:  
+Nenhum elemento identificado.
+
+Fatos:  
+- id: F1  
+  Resumo: Daniel está gostando do dia.  
+  Trecho da reunião utilizado na análise: "Você está gostando do dia hoje?" / "Estou gostando muito do dia, Daniel."  
+  Participantes envolvidos: [SPEAKER_01, Daniel]  
+  Confiança: 1.0  
+
+- id: F2  
+  Resumo: Daniel adora o dia e considera todos os dias lindos.  
+  Trecho da reunião utilizado na análise: "Eu adoro esse dia." / "Eu adoro todos os dias que são lindos."  
+  Participantes envolvidos: [Daniel]  
+  Confiança: 1.0  
+
+- id: F3  
+  Resumo: Daniel gosta de jogar Roblox.  
+  Trecho da reunião utilizado na análise: "Eu gosto de Roblox." / "Joga Roblox."  
+  Participantes envolvidos: [Daniel]  
+  Confiança: 1.0  
+
+- id: F4  
+  Resumo: Daniel assistiu televisão, comeu e jogou no celular.  
+  Trecho da reunião utilizado na análise: "Eu assisti televisão." / "Eu comi." / "Eu joguei no celular."  
+  Participantes envolvidos: [Daniel]  
+  Confiança: 1.0  
+
+- id: F5  
+  Resumo: Daniel foi para a escola hoje.  
+  Trecho da reunião utilizado na análise: "Sim." / "É, eu gosto muito de escola."  
+  Participantes envolvidos: [Daniel, SPEAKER_01]  
+  Confiança: 1.0  
+
+- id: F6  
+  Resumo: Daniel não aprendeu nada até agora.  
+  Trecho da reunião utilizado na análise: "É, não aprendi nada, até agora nada."  
+  Participantes envolvidos: [Daniel]  
+  Confiança: 1.0  
+
+Decisões:  
+Nenhum elemento identificado.
+
+Conteúdo argumentativo
+
+Justificativas:  
+Nenhum elemento identificado.
+
+Argumentos favoráveis:  
+Nenhum elemento identificado.
+
+Argumentos contrários:  
+Nenhum elemento identificado.
+
+Evidências utilizadas:  
+Nenhum elemento identificado.
+
+Hipóteses:  
+Nenhum elemento identificado.
+
+Suposições:  
+Nenhum elemento identificado.
+
+Objeções:  
+Nenhum elemento identificado.
+
+Consensos:  
+Nenhum elemento identificado.
+
+Divergências:  
+Nenhum elemento identificado.
+
+Conhecimento implícito
+
+Consequências:  
+Nenhum elemento identificado.
+
+Causa e efeito:  
+Nenhum elemento identificado.
+
+Dependências implícitas:  
+Nenhum elemento identificado.
+
+Informações pressupostas:  
+Nenhum elemento identificado.
+
+Riscos:  
+Nenhum elemento identificado.
+
+Motivações:  
+Nenhum elemento identificado.
+
+Premissas implícitas:  
+Nenhum elemento identificado.
+
+Restrições:  
+Nenhum elemento identificado.
+
+Objetivos implícitos:  
+Nenhum elemento identificado.
+
+Lacunas
+
+O que ficou sem resposta:  
+Nenhum elemento identificado.
+
+O que precisa de confirmação:  
+Nenhum elemento identificado.
+
+Informações contraditórias:  
+Nenhum elemento identificado.
+
+Pontos vagos:  
+- id: PV1  
+  Resumo: "não aprendi nada, até agora nada" é uma afirmação genérica e incompleta.  
+  Trecho da reunião utilizado na análise: "É, não aprendi nada, até agora nada."  
+  Participantes envolvidos: [Daniel]  
+  Confiança: 1.0

@@ -1,0 +1,18 @@
+1 -> seg_0001 -> [Ana Ribeiro]: Bom dia, Bruno.
+2 -> seg_0002 -> [Ana Ribeiro]: Vamos revisar o andamento do módulo de transcrição antes de fechar o relatório da semana.
+3 -> seg_0003 -> [Ana Ribeiro]: Eu terminei a integração com o serviço de diarização na sexta-feira e os testes automatizados estão passando sem nenhuma FA.
+4 -> seg_0004 -> [Bruno Teixeira]: Bom dia, Ana.
+5 -> seg_0005 -> [Bruno Teixeira]: Do meu lado, o cadastro de perfis de voz já está funcionando com três participantes reais.
+6 -> seg_0006 -> [Bruno Teixeira]: Levei mais tempo do que o previsto porque precisei recalcular os embedinos a cada nova amostra enviada pelo aplicativo.
+7 -> seg_0007 -> [Ana Ribeiro]: Qual é o prazo final para entregar a integração completa com o aplicativo?
+8 -> seg_0008 -> [Bruno Teixeira]: O prazo combinado com a coordenação é o dia 30 deste mês.
+9 -> seg_0009 -> [Bruno Teixeira]: Ainda precisamos validar o desempenho em uma reunião longa antes desta data.
+10 -> seg_0010 -> [Ana Ribeiro]: Entendi.
+11 -> seg_0011 -> [Ana Ribeiro]: Vou preparar um roteiro de teste com áudio de duas pessoas para medir o tempo de cada etapa do processamento.
+12 -> seg_0012 -> [Bruno Teixeira]: Você já conseguiu medir quanto tempo leva a estação de perguntas no servidor novo?
+13 -> seg_0013 -> [Ana Ribeiro]: Medi ontem à tarde.
+14 -> seg_0014 -> [Ana Ribeiro]: A estação levou aproximadamente 7 segundos em um áudio oculto, o que representa quase metade do tempo total do processamento.
+15 -> seg_0015 -> [Bruno Teixeira]: Então o gagalo continua sendo um modelo de linguagem.
+16 -> seg_0016 -> [Bruno Teixeira]: Precisamos avaliar se vale a pena reduzir o tamanho do contexto que enviamos em cada requisição.
+17 -> seg_0017 -> [Ana Ribeiro]: Concordo com você.
+18 -> seg_0018 -> [Ana Ribeiro]: Vou registrar essa análise no documento de performance e trazer os números consolidados na próxima reunião do grupo.

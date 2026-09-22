@@ -1,0 +1,21 @@
+1 -> seg_0001 -> [Daniel]: Olá, Samuel.
+2 -> seg_0002 -> [Daniel]: Você está gostando do dia hoje?
+3 -> seg_0003 -> [SPEAKER_01]: Estou gostando muito do dia, Daniel.
+4 -> seg_0004 -> [SPEAKER_01]: Boa noite.
+5 -> seg_0005 -> [SPEAKER_01]: Como você está se sentindo hoje?
+6 -> seg_0006 -> [Daniel]: Muito bom.
+7 -> seg_0007 -> [Daniel]: Eu adoro esse dia.
+8 -> seg_0008 -> [Daniel]: É muito lindo.
+9 -> seg_0009 -> [Daniel]: Eu adoro todos os dias que são lindos.
+10 -> seg_0010 -> [Daniel]: Eu gosto de Roblox.
+11 -> seg_0011 -> [Daniel]: Joga Roblox.
+12 -> seg_0012 -> [SPEAKER_01]: O que você fez hoje?
+13 -> seg_0013 -> [Daniel]: Eu assisti televisão.
+14 -> seg_0014 -> [Daniel]: Eu comi.
+15 -> seg_0015 -> [Daniel]: Eu joguei no celular.
+16 -> seg_0016 -> [SPEAKER_01]: Você foi para a escola hoje?
+17 -> seg_0017 -> [Daniel]: Sim.
+18 -> seg_0018 -> [Daniel]: É, eu gosto muito de escola.
+19 -> seg_0019 -> [SPEAKER_01]: E o que você aprendeu hoje?
+20 -> seg_0020 -> [Daniel]: É, não aprendi nada, até agora nada.
+21 -> seg_0021 -> [Daniel]: É, os dias que estão passando, mas eu estou passando hoje.
