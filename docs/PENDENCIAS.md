@@ -903,6 +903,21 @@ E2E sintético + 1 real). Até lá **não reabrir** — a causa é estrutural e 
 resultado tende a se repetir. Código, testes e a análise completa estão na
 branch; nada disso está em `main` além deste registro.
 
+**Reimplementado com cohort por usuário (22/09/2026), flag ainda
+desligada:** reaberto por decisão explícita, do zero, na branch
+`feat/voice-asnorm-cohort-usuario`. Agora o cohort é **o banco inteiro de
+perfis do usuário** (menos o candidato), e não os participantes da reunião.
+A normalização passou a ser S-norm simétrico, e abaixo de
+`VOICE_ASNORM_MIN_COHORT=8` a decisão volta ao threshold fixo. Medido contra
+o fixture, simulando um banco crescido com as outras identidades TTS (ver
+`docs/ASNORM_COHORT_USUARIO.md`):
+grandma/grandpa **deixam de ser falsos positivos** a partir de cohort de 4,
+rejeitados pelo próprio score normalizado. **Reed/Eddy continua:** o par é
+quase idêntico no espaço do ECAPA. Sem Reed cadastrado, Reed passa como
+Eddy. Com Reed cadastrado, as genuínas de Eddy passam a ser rejeitadas. O
+critério para ligar a flag continua o mesmo: 8-10 perfis de **voz humana**
+e impostor humano medido. `ENABLE_VOICE_ASNORM=false` em todo ambiente.
+
 **Primeira medição com voz humana real em condição de produção
 (07/09/2026):** no E2E com o app (`docs/E2E_APP_2026-09-07.md`), um falante
 com **uma única amostra** cadastrada foi identificado com `confidence`
