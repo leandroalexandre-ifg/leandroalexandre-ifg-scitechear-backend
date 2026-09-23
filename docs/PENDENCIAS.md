@@ -6,6 +6,44 @@ antes de considerar algo definitivamente resolvido, etc. Diferente de
 `docs/BASELINE.md` (retrato pontual da Fase 0): este arquivo é atualizado ao
 longo do projeto.
 
+## Aberta — Perguntas implícitas ligadas em produção com sumário v2 + prompt v6: observar
+
+**Onde:** `.env` de produção (não versionado): `ENABLE_IMPLICIT_QUESTIONS=true`,
+`MEETING_SUMMARY_PROMPT_VERSION=v2` e `IMPLICIT_QUESTIONS_PROMPT_VERSION=v6`.
+O filtro estrutural fica no default (`ENABLE_SUMMARY_FILTER=true`) e o
+refinador segue desligado. Os defaults do código **não mudaram**: continuam
+`false`, `v1` e `v4`.
+
+**Decidido em:** 23/09/2026, por decisão do usuário. API e worker foram
+reiniciados às 18:09 UTC, sem job em andamento. O `/proc/<pid>/environ` dos
+dois processos confirma as três variáveis.
+
+**Por que esta combinação.** Das três possíveis ao ligar a etapa, é a única
+medida com 0 perguntas nos dois controles e o menor total (10, contra 40 do
+v4 com o mesmo insumo; ver `docs/COMPARATIVO_REMEDIACAO.md`). Só ligar a flag
+rodaria v1 + v4, combinação nunca medida junta, que traz de volta o fato
+inventado do sumário v1 (que o filtro não alcança) e o teto de ~15 perguntas
+do v4.
+
+**O que se aceita ao ligar, e fica em observação:**
+
+- Duas pendências abertas deste arquivo passam a valer em produção sem
+  terem sido fechadas: o default do `meeting_summary_v2` (4 jobs de corpus) e a
+  taxa própria de confabulação do v6.
+- O v6 não pede evidência. Toda pergunta implícita sai com
+  `source_segment_ids` vazio, sem a validação programática do v4.
+- Custo: no R5, o job passou de 15,1 s para 56,4 s com a etapa ligada
+  (`docs/PERFORMANCE.md`). A sumarização é a maior parte.
+
+**Reverter:** voltar as três linhas do `.env` para `false`, `v1` e `v4` e
+reiniciar a API e o worker.
+
+**Status:** aberta. Revisar as implícitas das primeiras reuniões reais do
+piloto contra a transcrição, pelo mesmo critério do comparativo: premissa sem
+lastro, controle que deveria dar zero.
+
+---
+
 ## Aberta — Experimento candidato: o formato da transcrição entregue ao LLM
 
 **Onde:** `TranscriptFormatter.render()` (`app/services/transcript_formatter.py`).
@@ -138,6 +176,9 @@ trivial se confirma e importa.
 **Status:** aberta, não bloqueia nada. Trocar é uma linha de `.env`, e o v1
 continua intacto no repositório.
 
+**Em produção desde 23/09/2026** por `.env`, sem mudar o default do código.
+Ver a pendência "Perguntas implícitas ligadas em produção" no topo.
+
 ---
 
 ## Aberta — Prompt v6 de perguntas implícitas: implementado, ainda não avaliado
@@ -199,6 +240,10 @@ abaixo, que é o bloqueio de verdade.
 **Status:** aberta, aguardando o saneamento do sumarizador para repetir o
 comparativo com insumo limpo. Não bloqueia nada: com o default `v4`, o
 comportamento do sistema é idêntico ao de antes desta branch.
+
+**Em produção desde 23/09/2026** por `.env` (`IMPLICIT_QUESTIONS_PROMPT_VERSION=v6`),
+sem mudar o default do código. Ver a pendência "Perguntas implícitas ligadas
+em produção" no topo.
 
 ---
 
