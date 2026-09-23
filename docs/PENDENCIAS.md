@@ -918,6 +918,17 @@ Eddy. Com Reed cadastrado, as genuínas de Eddy passam a ser rejeitadas. O
 critério para ligar a flag continua o mesmo: 8-10 perfis de **voz humana**
 e impostor humano medido. `ENABLE_VOICE_ASNORM=false` em todo ambiente.
 
+**Limiares do AS-Norm sem calibração (auditoria de 23/09/2026):**
+`VOICE_ASNORM_THRESHOLD=3.0` e `VOICE_ASNORM_MIN_MARGIN=1.0` não têm
+justificativa documentada além de terem sido os valores usados na medição
+de 22/09 (`docs/ASNORM_COHORT_USUARIO.md`: "Os três limiares **não estão
+calibrados**"). Também não há registro de por que substituíram os 2.0 e 0.5
+do protótipo da `feat/voice-asnorm-decision`. Essa medição usou vozes TTS e
+um banco simulado. Antes de qualquer ativação em produção, os dois valores
+precisam ser **recalibrados com dados reais**: voz humana e banco de 8-10+
+pessoas, com impostor humano medido. Não podem ser herdados sem revisão. O
+piso bruto (`VOICE_ASNORM_MIN_RAW_SCORE=0.40`) está na mesma situação.
+
 **Primeira medição com voz humana real em condição de produção
 (07/09/2026):** no E2E com o app (`docs/E2E_APP_2026-09-07.md`), um falante
 com **uma única amostra** cadastrada foi identificado com `confidence`
